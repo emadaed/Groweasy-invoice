@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  digireceipt:
+    build: .
+    container_name: digireceipt_app
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    restart: unless-stopped
