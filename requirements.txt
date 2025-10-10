@@ -1,0 +1,9 @@
+Flask
+python-dotenv
+reportlab
+Pillow
+pytest
+qrcode
+SQLAlchemy
+gunicorn
+
