@@ -151,10 +151,10 @@ Phase 1 solidified the **foundation** for scalable DevOps and team collaboration
 Phase 2 will enable **full CI/CD automation**, **containerization**, and **deployment readiness**.  
 This aligns the project with **Silicon Valley DevOps culture**: automation-first, documentation-driven, and security-embedded.
 
-> “Infrastructure as Code, Documentation as Culture, and Automation as a Habit.”  
+> “Infrastructure as Code, Documentation as Culture, and Automation as a Habit.”
+ 
 > — GrowEasy Engineering Manifesto
 
 ---
 
-
-[See DigiReceipt Engineering Blueprint](/docs/DigiReceipt_Engineering_Blueprint_2025-2030.md)
+[See DigiReceipt Engineering Blueprint →](./DigiReceipt_Engineering_Blueprint_2025-2030.md)
