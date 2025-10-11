@@ -155,6 +155,5 @@ This aligns the project with **Silicon Valley DevOps culture**: automation-first
 > — GrowEasy Engineering Manifesto
 
 ---
-[See DigiReceipt Engineering Blueprint →](.docs/DigiReceipt_Engineering_Blueprint_2025-2030.md)
-
+[See DigiReceipt Engineering Blueprint 2025-2030 →]( docs/DigiReceipt_Engineering_Blueprint_2025-2030.md )
 
