@@ -9,5 +9,6 @@ def client():
 def test_index_route(client):
     """Basic smoke test for index route"""
     response = client.get("/")
+    print(response.data)  # Debug output
     assert response.status_code == 200
     assert b"DigiReceipt" in response.data
