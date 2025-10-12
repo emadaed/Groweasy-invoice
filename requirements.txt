@@ -7,3 +7,11 @@ qrcode
 SQLAlchemy
 gunicorn
 pytest-cov==5.0.0
+
+
+
+
+
+
+
+
