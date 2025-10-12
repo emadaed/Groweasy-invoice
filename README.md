@@ -19,3 +19,4 @@ GrowEasy-Invoice automates invoicing for small businesses and indigenous entrepr
 | 1 | GitHub + DevOps Setup | ✅ Done |
 | 2 | CI/CD Automation | 🟡 In Progress |
 | 3 | Deployment Layer | 🔜 |
+ 
