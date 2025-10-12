@@ -1,6 +1,6 @@
 # 🚀 GrowEasy-Invoice
 
-[![CI](https://github.com/USERNAME/Groweasy-invoice/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/Groweasy-invoice/actions/workflows/ci.yml)
+[![CI](https://github.com/emadaed/Groweasy-invoice/actions/workflows/ci.yml/badge.svg)](https://github.com/emadaed/Groweasy-invoice/actions/workflows/ci.yml)
 
 ### 🧾 Overview
 GrowEasy-Invoice automates invoicing for small businesses and indigenous entrepreneurs under **Jugnu Social Welfare Organization**.
