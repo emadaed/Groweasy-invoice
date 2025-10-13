@@ -1,3 +1,4 @@
+black
 Flask
 python-dotenv
 reportlab
