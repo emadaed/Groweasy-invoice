@@ -1,3 +1,5 @@
+black
+flake8>=7.0.0
 Flask
 python-dotenv
 reportlab
@@ -7,7 +9,7 @@ qrcode
 SQLAlchemy
 gunicorn
 pytest-cov==5.0.0
-flake8>=7.0.0
+
 
 
 
