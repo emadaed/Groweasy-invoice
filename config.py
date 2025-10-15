@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "static/uploads")
@@ -11,6 +12,7 @@ class Config:
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
     ENV = os.getenv("FLASK_ENV", "development")
     DEBUG = ENV == "development"
+
 
 def init_app(app):
     """Apply the configuration to a Flask app instance."""
