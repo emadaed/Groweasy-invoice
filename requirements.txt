@@ -1,8 +1,5 @@
 black
-<<<<<<< HEAD
 flake8>=7.0.0
-=======
->>>>>>> 130a183805bf9fc712b6756f24f5f989c4d28e4b
 Flask
 python-dotenv
 reportlab
@@ -12,7 +9,6 @@ qrcode
 SQLAlchemy
 gunicorn
 pytest-cov==5.0.0
-
 
 
 
