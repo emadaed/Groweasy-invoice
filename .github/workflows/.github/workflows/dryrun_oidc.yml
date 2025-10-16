@@ -1,0 +1,32 @@
+name: OIDC Dry Run — AWS Auth Test
+
+on:
+  workflow_dispatch:  # manual trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Verify AWS Identity
+        run: |
+          echo "🔍 Running AWS OIDC dry run..."
+          aws sts get-caller-identity
+          echo "✅ AWS OIDC authentication succeeded."
+
+      - name: List Elastic Beanstalk environments (read-only)
+        run: |
+          aws elasticbeanstalk describe-environments --region ${{ secrets.AWS_REGION }} --no-paginate
+          echo "✅ Read-only EB API call succeeded."
