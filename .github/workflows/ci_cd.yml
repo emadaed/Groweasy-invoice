@@ -30,16 +30,16 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Build and Package (SOP-safe)
         shell: bash
         run: |
           set -euo pipefail
+          echo "===== BUILD & PACKAGE START ====="
 
           if [ -z "${APP_NAME:-}" ] || [[ "$APP_NAME" =~ ^[*]+$ ]]; then
-            echo "⚠️ APP_NAME is empty or masked, using fallback"
+            echo "⚠️ APP_NAME is empty or masked; using fallback"
             APP_NAME="groweasy-invoice-app"
           fi
 
@@ -49,40 +49,58 @@ jobs:
           ARTIFACT_PATH="dist/$ZIP_NAME"
           ARTIFACT_KEY="$ZIP_NAME"
 
-          echo "Packaging artifact: $ZIP_NAME"
+          echo "✅ App: $APP_NAME"
+          echo "✅ Artifact: $ARTIFACT_KEY"
           mkdir -p dist
           zip -r "$ARTIFACT_PATH" . -x "*.git*" "dist/*"
 
           echo "Uploading to s3://$S3_BUCKET/$ARTIFACT_KEY ..."
           aws s3 cp "$ARTIFACT_PATH" "s3://$S3_BUCKET/$ARTIFACT_KEY"
+
+          echo "✅ Uploaded successfully"
           printf "ARTIFACT_KEY=%s\n" "$ARTIFACT_KEY" >> "$GITHUB_ENV"
 
       - name: Diagnostic Preflight (S3 + IAM)
         run: |
-          echo "Checking artifact visibility and IAM identity"
+          set -euo pipefail
+          echo "===== PREFLIGHT ====="
           aws sts get-caller-identity
           aws s3 ls "s3://$S3_BUCKET/$ARTIFACT_KEY"
           aws s3api head-object --bucket "$S3_BUCKET" --key "$ARTIFACT_KEY"
+          echo "===== PREFLIGHT COMPLETE ====="
 
       - name: Create new EB Application Version
+        shell: bash
         run: |
+          set -euo pipefail
+          echo "===== CREATING EB APPLICATION VERSION ====="
           VERSION_LABEL="v$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
-          echo "Creating EB app version: $VERSION_LABEL"
+          echo "VERSION_LABEL=$VERSION_LABEL" >> "$GITHUB_ENV"
+          echo "Version Label: $VERSION_LABEL"
           aws elasticbeanstalk create-application-version \
             --application-name "$APP_NAME" \
             --version-label "$VERSION_LABEL" \
             --source-bundle S3Bucket="$S3_BUCKET",S3Key="$ARTIFACT_KEY"
+          echo "✅ EB Application version created."
 
       - name: Deploy to EB Environment
+        shell: bash
         run: |
-          echo "Deploying version to environment: $EB_ENV_NAME"
+          set -euo pipefail
+          echo "===== DEPLOY TO ENVIRONMENT ====="
+          echo "Using version: $VERSION_LABEL"
           aws elasticbeanstalk update-environment \
             --environment-name "$EB_ENV_NAME" \
             --version-label "$VERSION_LABEL"
+          echo "✅ Deployment initiated."
 
       - name: Validate Deployment
+        shell: bash
         run: |
+          set -euo pipefail
+          echo "===== VALIDATING ENVIRONMENT ====="
           aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENV_NAME"
           aws elasticbeanstalk describe-environments \
             --environment-names "$EB_ENV_NAME" \
             --query "Environments[0].Status"
+          echo "✅ Environment update complete."
