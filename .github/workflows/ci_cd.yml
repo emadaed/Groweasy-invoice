@@ -2,6 +2,134 @@ name: CI/CD — Build, Package & Deploy to AWS Elastic Beanstalk
 
 on:
   push:
+    branches: [ "main" ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  S3_BUCKET: ${{ secrets.S3_BUCKET }}
+  APP_NAME: ${{ secrets.APP_NAME }}
+  EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}
+
+jobs:
+  build-package-deploy:
+    name: Build, Package & Deploy to Elastic Beanstalk
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (if any)
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Build & package artifact
+        env:
+          S3_BUCKET: ${{ env.S3_BUCKET }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          APP_NAME: ${{ env.APP_NAME }}
+        run: |
+          chmod +x scripts/build_and_package.sh
+          ./scripts/build_and_package.sh
+        # The script must write the artifact key into dist/artifact_key.txt
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read artifact key and prepare version label
+        id: prepare
+        run: |
+          if [ ! -f dist/artifact_key.txt ]; then
+            echo "dist/artifact_key.txt not found. Printing dist/ for debugging."
+            ls -la dist || true
+            exit 1
+          fi
+          ARTIFACT_KEY=$(cat dist/artifact_key.txt)
+          echo "artifact_key=$ARTIFACT_KEY" >> $GITHUB_OUTPUT
+          # Version label: v<run_number>-<shortsha>
+          SHORT_SHA=${GITHUB_SHA::8}
+          VERSION_LABEL="v${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
+          echo "version_label=$VERSION_LABEL" >> $GITHUB_OUTPUT
+          echo "Preparing to deploy artifact: $ARTIFACT_KEY as version: $VERSION_LABEL"
+
+      - name: Create Elastic Beanstalk Application Version
+        id: create_app_version
+        env:
+          S3_BUCKET: ${{ env.S3_BUCKET }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          APP_NAME: ${{ env.APP_NAME }}
+        run: |
+          ARTIFACT_KEY="${{ steps.prepare.outputs.artifact_key }}"
+          VERSION_LABEL="${{ steps.prepare.outputs.version_label }}"
+          echo "Creating application version $VERSION_LABEL from s3://$S3_BUCKET/$ARTIFACT_KEY"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$APP_NAME" \
+            --version-label "$VERSION_LABEL" \
+            --source-bundle S3Bucket="$S3_BUCKET",S3Key="$ARTIFACT_KEY" \
+            --region "$AWS_REGION"
+          echo "created_version=$VERSION_LABEL" >> $GITHUB_OUTPUT
+
+      - name: Update Elastic Beanstalk Environment
+        id: update_env
+        env:
+          EB_ENV_NAME: ${{ env.EB_ENV_NAME }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          VERSION="${{ steps.create_app_version.outputs.created_version }}"
+          echo "Updating environment $EB_ENV_NAME to version $VERSION"
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENV_NAME" \
+            --version-label "$VERSION" \
+            --region "$AWS_REGION"
+
+      - name: Wait & validate deployment (poll EB)
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          EB_ENV_NAME: ${{ env.EB_ENV_NAME }}
+        run: |
+          chmod +x scripts/eb_wait_and_validate.sh
+          ./scripts/eb_wait_and_validate.sh
+
+      - name: Optional: Notify Slack on success
+        if: ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          VERSION: ${{ steps.create_app_version.outputs.created_version }}
+          GITHUB_RUN_URL: ${{ github.run_url }}
+        run: |
+          payload=$(jq -n --arg txt "GrowEasy: Deployment succeeded for $VERSION. See run: $GITHUB_RUN_URL" '{text:$txt}')
+          curl -s -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
+
+name: CI/CD — Build, Package & Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
     branches: [ "main", "master" ]
     tags:
       - 'v*'
