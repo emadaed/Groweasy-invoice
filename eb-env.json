@@ -1,0 +1,17 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "SECRET_KEY",
+    "Value": "(generate one in Git Bash)"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "DB_PASSWORD",
+    "Value": "Temp1234!"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "DATABASE_URL",
+    "Value": "(no spaces)"
+  }
+]

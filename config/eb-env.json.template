@@ -1,0 +1,22 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "APP_ENV",
+    "Value": "{{APP_ENV}}"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "DATABASE_URL",
+    "Value": "{{DATABASE_URL}}"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "S3_BUCKET",
+    "Value": "{{S3_BUCKET}}"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "SECRET_KEY",
+    "Value": "{{SECRET_KEY}}"
+  }
+]
