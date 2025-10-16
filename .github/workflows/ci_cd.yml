@@ -46,7 +46,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # ✅ Moved up — Credentials configured BEFORE build/upload
+      # ✅ Credentials configured BEFORE build/upload
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -71,8 +71,17 @@ jobs:
             ls -la dist || true
             exit 1
           fi
-          ARTIFACT_KEY=$(cat dist/artifact_key.txt)
+
+          # Read and sanitize artifact key
+          RAW_KEY=$(cat dist/artifact_key.txt | tr -d '\r\n')
+          # Remove any leading dashes or spaces
+          ARTIFACT_KEY=$(echo "$RAW_KEY" | sed 's/^[- ]*//')
+          echo "Artifact key resolved to: $ARTIFACT_KEY"
+
+          # Export to GitHub outputs safely
           echo "artifact_key=$ARTIFACT_KEY" >> $GITHUB_OUTPUT
+
+          # Generate version label: v<run_number>-<shortsha>
           SHORT_SHA=${GITHUB_SHA::8}
           VERSION_LABEL="v${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
           echo "version_label=$VERSION_LABEL" >> $GITHUB_OUTPUT
@@ -115,3 +124,16 @@ jobs:
         run: |
           chmod +x scripts/eb_wait_and_validate.sh
           ./scripts/eb_wait_and_validate.sh
+
+      # ✅ Optional: print deployed EB version summary
+      - name: Verify current Elastic Beanstalk environment version
+        if: always()
+        env:
+          EB_ENV_NAME: ${{ env.EB_ENV_NAME }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          echo "🔍 Fetching current environment deployment info..."
+          aws elasticbeanstalk describe-environments \
+            --environment-names "$EB_ENV_NAME" \
+            --region "$AWS_REGION" \
+            --query "Environments[0].VersionLabel"
