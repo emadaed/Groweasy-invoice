@@ -36,7 +36,8 @@ jobs:
       - name: Build and Package
         run: |
           mkdir -p dist
-          ZIP_NAME="${APP_NAME}-build-$(date +'%Y%m%d%H%M%S').zip"
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          ZIP_NAME="${APP_NAME}-build-${TIMESTAMP}.zip"
           ARTIFACT_PATH="dist/$ZIP_NAME"
           ARTIFACT_KEY="$ZIP_NAME"
           echo "Building artifact: $ARTIFACT_KEY"
