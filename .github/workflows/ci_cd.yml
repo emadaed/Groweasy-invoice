@@ -1,139 +1,82 @@
-name: CI/CD — Build, Package & Deploy to AWS Elastic Beanstalk
+name: CI/CD Pipeline to AWS Elastic Beanstalk
 
 on:
   push:
-    branches: [ "main" ]
-    tags:
-      - 'v*'
-  workflow_dispatch:
+    branches:
+      - main
 
 permissions:
-  contents: read
   id-token: write
-
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  S3_BUCKET: ${{ secrets.S3_BUCKET }}
-  APP_NAME: ${{ secrets.APP_NAME }}
-  EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}
+  contents: read
 
 jobs:
-  build-package-deploy:
-    name: Build, Package & Deploy to Elastic Beanstalk
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      APP_NAME: ${{ secrets.APP_NAME }}
+      EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          python-version: '3.11'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies (if any)
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      # ✅ Credentials configured BEFORE build/upload
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Build & package artifact
-        env:
-          S3_BUCKET: ${{ env.S3_BUCKET }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-          APP_NAME: ${{ env.APP_NAME }}
+      - name: Install dependencies
         run: |
-          chmod +x scripts/build_and_package.sh
-          ./scripts/build_and_package.sh
-        # The script writes dist/artifact_key.txt
+          pip install -r requirements.txt
 
-      - name: Read artifact key and prepare version label
-        id: prepare
+      - name: Build and Package
         run: |
-          if [ ! -f dist/artifact_key.txt ]; then
-            echo "dist/artifact_key.txt not found. Printing dist/ for debugging."
-            ls -la dist || true
-            exit 1
-          fi
+          mkdir -p dist
+          ZIP_NAME="${APP_NAME}-build-$(date +'%Y%m%d%H%M%S').zip"
+          ARTIFACT_PATH="dist/$ZIP_NAME"
+          ARTIFACT_KEY="$ZIP_NAME"
+          echo "Building artifact: $ARTIFACT_KEY"
+          zip -r "$ARTIFACT_PATH" . -x "*.git*" "dist/*"
+          echo "Uploading to S3..."
+          aws s3 cp "$ARTIFACT_PATH" "s3://$S3_BUCKET/$ARTIFACT_KEY"
+          echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
-          # Read and sanitize artifact key
-          RAW_KEY=$(cat dist/artifact_key.txt | tr -d '\r\n')
-          # Remove any leading dashes or spaces
-          ARTIFACT_KEY=$(echo "$RAW_KEY" | sed 's/^[- ]*//')
-          echo "Artifact key resolved to: $ARTIFACT_KEY"
-
-          # Export to GitHub outputs safely
-          echo "artifact_key=$ARTIFACT_KEY" >> $GITHUB_OUTPUT
-
-          # Generate version label: v<run_number>-<shortsha>
-          SHORT_SHA=${GITHUB_SHA::8}
-          VERSION_LABEL="v${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
-          echo "version_label=$VERSION_LABEL" >> $GITHUB_OUTPUT
-          echo "Preparing to deploy artifact: $ARTIFACT_KEY as version: $VERSION_LABEL"
-
-      - name: Create Elastic Beanstalk Application Version
-        id: create_app_version
-        env:
-          S3_BUCKET: ${{ env.S3_BUCKET }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-          APP_NAME: ${{ env.APP_NAME }}
+      - name: Diagnostic Preflight (Visibility Test)
         run: |
-          ARTIFACT_KEY="${{ steps.prepare.outputs.artifact_key }}"
-          VERSION_LABEL="${{ steps.prepare.outputs.version_label }}"
-          echo "Creating application version $VERSION_LABEL from s3://$S3_BUCKET/$ARTIFACT_KEY"
+          echo "Verifying artifact presence before EB upload..."
+          echo "Using key: $ARTIFACT_KEY"
+          aws sts get-caller-identity
+          aws s3 ls s3://$S3_BUCKET/ | grep "$ARTIFACT_KEY" || echo "⚠️ Artifact not listed!"
+          aws s3api head-object --bucket $S3_BUCKET --key "$ARTIFACT_KEY" || echo "⚠️ HeadObject failed!"
+
+      - name: Create new EB application version
+        run: |
+          VERSION_LABEL="v$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
+          echo "Creating EB Application Version: $VERSION_LABEL"
           aws elasticbeanstalk create-application-version \
             --application-name "$APP_NAME" \
             --version-label "$VERSION_LABEL" \
-            --source-bundle S3Bucket="$S3_BUCKET",S3Key="$ARTIFACT_KEY" \
-            --region "$AWS_REGION"
-          echo "created_version=$VERSION_LABEL" >> $GITHUB_OUTPUT
+            --source-bundle S3Bucket="$S3_BUCKET",S3Key="$ARTIFACT_KEY"
 
-      - name: Update Elastic Beanstalk Environment
-        id: update_env
-        env:
-          EB_ENV_NAME: ${{ env.EB_ENV_NAME }}
-          AWS_REGION: ${{ env.AWS_REGION }}
+      - name: Deploy new version to environment
         run: |
-          VERSION="${{ steps.create_app_version.outputs.created_version }}"
-          echo "Updating environment $EB_ENV_NAME to version $VERSION"
+          VERSION_LABEL=$(aws elasticbeanstalk describe-application-versions \
+            --application-name "$APP_NAME" \
+            --query "ApplicationVersions[-1].VersionLabel" \
+            --output text)
+          echo "Deploying version $VERSION_LABEL to $EB_ENV_NAME..."
           aws elasticbeanstalk update-environment \
             --environment-name "$EB_ENV_NAME" \
-            --version-label "$VERSION" \
-            --region "$AWS_REGION"
+            --version-label "$VERSION_LABEL"
 
-      - name: Wait & validate deployment (poll EB)
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          EB_ENV_NAME: ${{ env.EB_ENV_NAME }}
+      - name: Validate environment health
         run: |
-          chmod +x scripts/eb_wait_and_validate.sh
-          ./scripts/eb_wait_and_validate.sh
-
-      # ✅ Optional: print deployed EB version summary
-      - name: Verify current Elastic Beanstalk environment version
-        if: always()
-        env:
-          EB_ENV_NAME: ${{ env.EB_ENV_NAME }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-        run: |
-          echo "🔍 Fetching current environment deployment info..."
+          echo "Validating EB health status..."
+          aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENV_NAME"
           aws elasticbeanstalk describe-environments \
             --environment-names "$EB_ENV_NAME" \
-            --region "$AWS_REGION" \
-            --query "Environments[0].VersionLabel"
+            --query "Environments[0].Status"
