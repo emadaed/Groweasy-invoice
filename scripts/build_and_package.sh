@@ -9,7 +9,8 @@ echo "────────────────────────�
 # === CONFIG ===
 APP_NAME="${APP_NAME:-groweasy-invoice-app}"
 BUILD_DIR="dist"
-ZIP_NAME="${APP_NAME}-build-$(date +'%Y%m%d%H%M%S').zip"
+TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+ZIP_NAME="${APP_NAME}-build-${TIMESTAMP}.zip"
 S3_BUCKET="${S3_BUCKET:?S3_BUCKET not set}"
 AWS_REGION="${AWS_REGION:?AWS_REGION not set}"
 
@@ -17,8 +18,7 @@ AWS_REGION="${AWS_REGION:?AWS_REGION not set}"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
-# === DEFINE FILES TO INCLUDE ===
-# Adjust these paths if your structure changes
+# === COLLECT FILES ===
 echo "📦 Collecting app files..."
 zip -r9 "$BUILD_DIR/$ZIP_NAME" \
   app/ \
@@ -39,13 +39,23 @@ echo "✅ Build artifact created: $BUILD_DIR/$ZIP_NAME"
 echo "☁️ Uploading artifact to S3: s3://$S3_BUCKET/$ZIP_NAME"
 aws s3 cp "$BUILD_DIR/$ZIP_NAME" "s3://$S3_BUCKET/$ZIP_NAME" --region "$AWS_REGION"
 
-echo "✅ Upload complete."
+# === VERIFY UPLOAD ===
+echo "🔍 Verifying upload..."
+if aws s3 ls "s3://$S3_BUCKET/$ZIP_NAME" --region "$AWS_REGION" > /dev/null; then
+  echo "✅ Upload complete and verified."
+else
+  echo "❌ Upload verification failed. Artifact not found in S3."
+  exit 1
+fi
 
-# === RECORD ARTIFACT PATH ===
+# === WRITE ARTIFACT KEY ===
 ARTIFACT_KEY="$ZIP_NAME"
 echo "$ARTIFACT_KEY" > "$BUILD_DIR/artifact_key.txt"
-
 echo "✅ Artifact key written to $BUILD_DIR/artifact_key.txt"
+
+# === FINAL SUMMARY ===
 echo "──────────────────────────────────────────────"
 echo "🎯 Build and package stage completed successfully."
+echo "📦 Artifact: $ARTIFACT_KEY"
+echo "☁️ S3 Location: s3://$S3_BUCKET/$ARTIFACT_KEY"
 echo "──────────────────────────────────────────────"
