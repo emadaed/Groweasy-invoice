@@ -1,4 +1,4 @@
-name: CI/CD Pipeline to AWS Elastic Beanstalk
+name: CI/CD to AWS Elastic Beanstalk
 
 on:
   push:
@@ -33,51 +33,90 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Build and Package
+      - name: Build and Package (Safe)
+        shell: bash
         run: |
-          mkdir -p dist
+          set -euo pipefail
+
+          echo "===== BUILD AND PACKAGE START ====="
+
+          # 1️⃣ Ensure APP_NAME is defined (fallback if empty or masked)
+          if [ -z "${APP_NAME:-}" ] || [[ "$APP_NAME" =~ ^[*]+$ ]]; then
+            echo "⚠️ APP_NAME is empty or invalid. Using fallback: groweasy-invoice"
+            APP_NAME="groweasy-invoice"
+          fi
+
+          # 2️⃣ Clean APP_NAME to remove bad characters
+          APP_NAME=$(echo "$APP_NAME" | tr -cd '[:alnum:]-_')
+          APP_NAME=${APP_NAME##[-_]}
+
+          # 3️⃣ Build artifact safely
           TIMESTAMP=$(date +'%Y%m%d%H%M%S')
           ZIP_NAME="${APP_NAME}-build-${TIMESTAMP}.zip"
           ARTIFACT_PATH="dist/$ZIP_NAME"
           ARTIFACT_KEY="$ZIP_NAME"
-          echo "Building artifact: $ARTIFACT_KEY"
+
+          echo "✅ App name: $APP_NAME"
+          echo "✅ Artifact key: $ARTIFACT_KEY"
+
+          mkdir -p dist
           zip -r "$ARTIFACT_PATH" . -x "*.git*" "dist/*"
+
           echo "Uploading to S3..."
           aws s3 cp "$ARTIFACT_PATH" "s3://$S3_BUCKET/$ARTIFACT_KEY"
-          echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
-      - name: Diagnostic Preflight (Visibility Test)
+          echo "✅ Uploaded to s3://$S3_BUCKET/$ARTIFACT_KEY"
+          echo "===== EXPORTING ENV VAR ====="
+          printf "ARTIFACT_KEY=%s\n" "$ARTIFACT_KEY" >> "$GITHUB_ENV"
+
+      - name: Diagnostic Preflight (S3 Visibility)
+        shell: bash
         run: |
-          echo "Verifying artifact presence before EB upload..."
-          echo "Using key: $ARTIFACT_KEY"
+          set -euo pipefail
+          echo "===== DIAGNOSTIC PREFLIGHT ====="
+          echo "Verifying S3 artifact and IAM caller..."
           aws sts get-caller-identity
-          aws s3 ls s3://$S3_BUCKET/ | grep "$ARTIFACT_KEY" || echo "⚠️ Artifact not listed!"
-          aws s3api head-object --bucket $S3_BUCKET --key "$ARTIFACT_KEY" || echo "⚠️ HeadObject failed!"
+          echo "Checking artifact in S3..."
+          aws s3 ls "s3://$S3_BUCKET/$ARTIFACT_KEY" || echo "⚠️ Artifact not listed!"
+          aws s3api head-object --bucket "$S3_BUCKET" --key "$ARTIFACT_KEY" || echo "⚠️ HeadObject failed!"
+          echo "===== PREFLIGHT COMPLETE ====="
 
-      - name: Create new EB application version
+      - name: Create new EB Application Version
+        shell: bash
         run: |
+          set -euo pipefail
           VERSION_LABEL="v$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
-          echo "Creating EB Application Version: $VERSION_LABEL"
+          echo "===== CREATING EB APPLICATION VERSION ====="
+          echo "Version Label: $VERSION_LABEL"
+          echo "S3 Source: s3://$S3_BUCKET/$ARTIFACT_KEY"
           aws elasticbeanstalk create-application-version \
             --application-name "$APP_NAME" \
             --version-label "$VERSION_LABEL" \
             --source-bundle S3Bucket="$S3_BUCKET",S3Key="$ARTIFACT_KEY"
+          echo "✅ EB Application version created."
 
-      - name: Deploy new version to environment
+      - name: Deploy to EB Environment
+        shell: bash
         run: |
+          set -euo pipefail
+          echo "===== DEPLOYING TO ENVIRONMENT ====="
           VERSION_LABEL=$(aws elasticbeanstalk describe-application-versions \
             --application-name "$APP_NAME" \
             --query "ApplicationVersions[-1].VersionLabel" \
             --output text)
-          echo "Deploying version $VERSION_LABEL to $EB_ENV_NAME..."
+          echo "Deploying version $VERSION_LABEL to environment $EB_ENV_NAME..."
           aws elasticbeanstalk update-environment \
             --environment-name "$EB_ENV_NAME" \
             --version-label "$VERSION_LABEL"
+          echo "✅ Deployment initiated."
 
-      - name: Validate environment health
+      - name: Validate Deployment
+        shell: bash
         run: |
-          echo "Validating EB health status..."
+          set -euo pipefail
+          echo "===== VALIDATING ENVIRONMENT ====="
           aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENV_NAME"
           aws elasticbeanstalk describe-environments \
             --environment-names "$EB_ENV_NAME" \
             --query "Environments[0].Status"
+          echo "✅ Environment update complete."
