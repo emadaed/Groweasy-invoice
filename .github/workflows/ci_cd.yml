@@ -21,8 +21,8 @@ jobs:
   build-package-deploy:
     name: Build, Package & Deploy to Elastic Beanstalk
     runs-on: ubuntu-latest
-    steps:
 
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -46,6 +46,13 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      # ✅ Moved up — Credentials configured BEFORE build/upload
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Build & package artifact
         env:
           S3_BUCKET: ${{ env.S3_BUCKET }}
@@ -54,13 +61,7 @@ jobs:
         run: |
           chmod +x scripts/build_and_package.sh
           ./scripts/build_and_package.sh
-        # The script must write the artifact key into dist/artifact_key.txt
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
+        # The script writes dist/artifact_key.txt
 
       - name: Read artifact key and prepare version label
         id: prepare
@@ -72,7 +73,6 @@ jobs:
           fi
           ARTIFACT_KEY=$(cat dist/artifact_key.txt)
           echo "artifact_key=$ARTIFACT_KEY" >> $GITHUB_OUTPUT
-          # Version label: v<run_number>-<shortsha>
           SHORT_SHA=${GITHUB_SHA::8}
           VERSION_LABEL="v${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
           echo "version_label=$VERSION_LABEL" >> $GITHUB_OUTPUT
