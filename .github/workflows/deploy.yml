@@ -1,103 +1,84 @@
-# ===============================================================
-# GrowEasy-Invoice — Production Deployment Workflow (Phase 3 CD)
-# ---------------------------------------------------------------
-# Purpose: Safely deploy application to AWS Elastic Beanstalk (us-east-2)
-# Trigger: Manual only (workflow_dispatch)
-# Author: Learn With Misham / Jugnu Social Welfare Organization
-# ===============================================================
-
 name: Deploy GrowEasy-Invoice to AWS Elastic Beanstalk
 
-on:
-  workflow_dispatch:  # Manual trigger only (prevents duplicate runs with ci_cd.yml)
+on:   
+  workflow_dispatch:
 
 env:
   EB_APP_NAME: groweasy-invoice-app
-  EB_ENV_NAME: groweasy-invoice-app-env
+  EB_ENV_NAME: groweasy-invoice-python-env
   AWS_REGION: us-east-2
   S3_BUCKET: groweasy-invoice-artifacts
 
 jobs:
   deploy:
-    name: Deploy Application to Elastic Beanstalk
     runs-on: ubuntu-latest
 
     steps:
-      # ----------------------------------------------------------
-      # Step 1: Checkout source code
-      # ----------------------------------------------------------
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # ----------------------------------------------------------
-      # Step 2: Set up Python (for pip install, if needed)
-      # ----------------------------------------------------------
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # ----------------------------------------------------------
-      # Step 3: Install dependencies (if requirements.txt exists)
-      # ----------------------------------------------------------
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # ----------------------------------------------------------
-      # Step 4: Package the application (exclude unnecessary files)
-      # ----------------------------------------------------------
-      - name: Package application bundle
+      - name: Create application bundle
         run: |
           mkdir -p build
           zip -r build/app.zip . -x '*.git*' '*.github*' '__pycache__*' '*.pytest_cache*' 'build/*'
-          echo "✅ Created build/app.zip"
+          echo "Created build/app.zip"
 
-      # ----------------------------------------------------------
-      # Step 5: Configure AWS credentials
-      # ----------------------------------------------------------
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ----------------------------------------------------------
-      # Step 6: Upload artifact to S3
-      # ----------------------------------------------------------
-      - name: Upload application bundle to S3
+      - name: Wait for Elastic Beanstalk environment to be Ready
+        run: |
+          echo "🔄 Checking environment status..."
+          for i in {1..10}; do
+            STATUS=$(aws elasticbeanstalk describe-environments \
+              --application-name "${{ env.EB_APP_NAME }}" \
+              --environment-names "${{ env.EB_ENV_NAME }}" \
+              --query "Environments[0].Status" \
+              --output text)
+            echo "Current status: $STATUS"
+            if [ "$STATUS" == "Ready" ]; then
+              echo "✅ Environment is ready for deployment."
+              break
+            fi
+            if [ "$i" -eq 10 ]; then
+              echo "❌ Environment not ready after 10 checks. Exiting."
+              exit 1
+            fi
+            echo "⏳ Retrying in 30 seconds..."
+            sleep 30
+          done
+
+      - name: Upload bundle to S3
         run: |
           ARTIFACT_KEY="${{ github.run_id }}-app.zip"
           aws s3 cp build/app.zip s3://${{ env.S3_BUCKET }}/${ARTIFACT_KEY}
           echo "artifact_key=$ARTIFACT_KEY" >> $GITHUB_ENV
-          echo "✅ Uploaded bundle to s3://${{ env.S3_BUCKET }}/${ARTIFACT_KEY}"
 
-      # ----------------------------------------------------------
-      # Step 7: Create new EB application version & deploy
-      # ----------------------------------------------------------
-      - name: Deploy to AWS Elastic Beanstalk
+      - name: Deploy to Elastic Beanstalk
         run: |
           VERSION_LABEL="build-${{ github.run_id }}"
-          echo "🚀 Starting deployment of version: $VERSION_LABEL"
-
+          echo "Deploying version: $VERSION_LABEL"
           aws elasticbeanstalk create-application-version \
             --application-name "${{ env.EB_APP_NAME }}" \
             --version-label $VERSION_LABEL \
-            --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=${{ env.artifact_key }} \
-            --auto-create-application || true
-
+            --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=${{ env.artifact_key }}
           aws elasticbeanstalk update-environment \
             --environment-name "${{ env.EB_ENV_NAME }}" \
             --version-label $VERSION_LABEL
 
-          echo "✅ Deployment triggered successfully."
-
-      # ----------------------------------------------------------
-      # Step 8: Deployment confirmation
-      # ----------------------------------------------------------
       - name: Notify Deployment Success
-        run: |
-          echo "🎯 GrowEasy-Invoice successfully deployed!"
-          echo "🌐 Visit: http://${{ env.EB_ENV_NAME }}.${{ env.AWS_REGION }}.elasticbeanstalk.com"
+        run: echo "✅ Deployment successful! App is live at your Elastic Beanstalk environment."
