@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GrowEasy Invoice Generator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>GrowEasy Invoice Generator</h1>
+    <form action="/generate" method="post">
+      <label>Customer Name:</label><br>
+      <input name="customer_name" required><br><br>
+
+      <h4>Items</h4>
+      <div class="item-row">
+        <input name="item1" placeholder="Item 1">
+        <input name="qty1" type="number" placeholder="Qty">
+        <input name="price1" type="number" step="0.01" placeholder="Price">
+      </div>
+      <div class="item-row">
+        <input name="item2" placeholder="Item 2">
+        <input name="qty2" type="number" placeholder="Qty">
+        <input name="price2" type="number" step="0.01" placeholder="Price">
+      </div>
+      <br>
+      <button type="submit">Generate PDF</button>
+    </form>
+  </div>
+</body>
+</html>

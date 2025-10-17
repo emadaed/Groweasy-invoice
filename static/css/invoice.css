@@ -1,0 +1,9 @@
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f7f9fa; margin: 30px; }
+.container { max-width: 600px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+.invoice-container { width: 90%; margin: auto; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+h1, h3 { text-align: center; color: #333; }
+button { background: #2f8d46; color: white; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; }
+button:hover { background: #256e39; }
+footer { text-align: center; margin-top: 40px; font-size: 12px; color: #555; }
