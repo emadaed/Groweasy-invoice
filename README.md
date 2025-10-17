@@ -1,22 +1,40 @@
-# 🚀 GrowEasy-Invoice
+# GrowEasy Invoice
 
-[![CI](https://github.com/emadaed/Groweasy-invoice/actions/workflows/ci.yml/badge.svg)](https://github.com/emadaed/Groweasy-invoice/actions/workflows/ci.yml)
+GrowEasy Invoice is a cloud-native invoicing platform designed to simplify billing, record-keeping, and financial transparency for small and medium businesses.
 
-### 🧾 Overview
-GrowEasy-Invoice automates invoicing for small businesses and indigenous entrepreneurs under **Jugnu Social Welfare Organization**.
+## 🚀 Overview
+- **Backend:** Python (Flask)
+- **Frontend:** HTML + TailwindCSS
+- **Database:** Amazon RDS (PostgreSQL)
+- **Hosting:** AWS Elastic Beanstalk
+- **Storage:** Amazon S3
+- **CI/CD:** GitHub Actions → AWS OIDC
+- **Monitoring:** AWS CloudWatch + EB Health
 
-### 🧠 Current Phase
-**Phase 2 — Automation Layer (CI/CD setup)**
+## 📂 Repository Structure
+```
+Groweasy-invoice/
+│
+├── app/                  # Flask application code
+├── config/               # Environment configuration
+├── static/               # Frontend assets
+├── templates/            # Jinja templates
+├── scripts/              # Deployment and helper scripts
+├── docs/                 # Engineering & investor documentation
+└── .github/workflows/    # CI/CD pipelines
+```
 
-### 📁 Structure
-- `.github/workflows/` → CI/CD pipelines  
-- `tests/` → Unit + smoke tests  
-- `docs/` → Architecture notes  
+## 📘 Key Documentation
+| File | Description |
+|------|--------------|
+| [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) | Full system architecture |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | AWS deployment instructions |
+| [docs/PHASE3_ENGINEERING_REPORT.md](docs/PHASE3_ENGINEERING_REPORT.md) | Phase 3 CI/CD report |
+| [docs/LESSONS_LEARNED_PHASE3.md](docs/LESSONS_LEARNED_PHASE3.md) | Lessons & improvements |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Project roadmap |
 
-### 🧭 Roadmap
-| Phase | Title | Status |
-|:------|:------|:-------|
-| 1 | GitHub + DevOps Setup | ✅ Done |
-| 2 | CI/CD Automation | 🟡 In Progress |
-| 3 | Deployment Layer | 🔜 |
- 
+## 🌐 Live Environment
+- **Production:** [Elastic Beanstalk URL](http://your-env.elasticbeanstalk.com)
+
+## 📜 License
+Licensed under the MIT License. See [LICENSE](LICENSE) for details.
