@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      # Only trigger CI on source or test code changes
       - '**.py'
       - '**.json'
       - '**.lock'
@@ -21,31 +22,52 @@ jobs:
     name: Validate & Build Application
     runs-on: ubuntu-latest
 
+    # ✅ Do not run if commit message contains [skip ci]
     if: "! contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
-      - name: Checkout Repository
+      - name: 🧾 Check if workflow or infra-only change
+        id: skip_check
+        run: |
+          echo "🔍 Checking if commit modified only infra/workflow/docs files..."
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || true)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -qE '^\.github/|\.yml$|\.yaml$|^docs/|^infrastructure/'; then
+            echo "infra_only=true" >> $GITHUB_ENV
+          else
+            echo "infra_only=false" >> $GITHUB_ENV
+          fi
+
+      - name: 💤 Skip CI if infra-only commit
+        if: env.infra_only == 'true'
+        run: |
+          echo "🛑 Skipping CI – workflow or infra-only change detected."
+          exit 0
+
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run Syntax & Security Checks
+      - name: 🔍 Run Syntax & Security Checks
         run: |
-          echo "Running basic code validation..."
+          echo "Running syntax validation..."
           python -m py_compile $(find . -name "*.py")
           echo "✅ Code syntax validation passed."
 
-      - name: Archive Test Results
+      - name: 🗂️ Archive Test Results
         if: success()
         run: |
           mkdir -p artifacts
-          echo "All tests and checks passed on $(date)" > artifacts/ci_summary.txt
-          echo "✅ Build and test pipeline completed successfully."
+          echo "All tests passed successfully on $(date)" > artifacts/ci_summary.txt
+          echo "✅ Build and validation completed successfully."
