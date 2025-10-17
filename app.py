@@ -352,6 +352,13 @@ def create_interactive_qr(data, logo_path=None):
         print(f"QR generation error: {e}")
         return None
 
+# --- AWS Elastic Beanstalk Health Check ---
+@app.route("/health")
+def health():
+    return "OK", 200
 
+
+# --- Production Entrypoint ---
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Local development mode
+    app.run(host="0.0.0.0", port=80)
