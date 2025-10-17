@@ -1,0 +1,65 @@
+name: Deploy GrowEasy-Invoice to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  EB_APP_NAME: groweasy-invoice-app
+  EB_ENV_NAME: groweasy-invoice-app-env
+  AWS_REGION: us-east-2
+  S3_BUCKET: groweasy-invoice-artifacts
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Create application bundle
+        run: |
+          mkdir -p build
+          zip -r build/app.zip . -x '*.git*' '*.github*' '__pycache__*' '*.pytest_cache*' 'build/*'
+          echo "Created build/app.zip"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload bundle to S3
+        run: |
+          ARTIFACT_KEY="${{ github.run_id }}-app.zip"
+          aws s3 cp build/app.zip s3://${{ env.S3_BUCKET }}/${ARTIFACT_KEY}
+          echo "artifact_key=$ARTIFACT_KEY" >> $GITHUB_ENV
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          VERSION_LABEL="build-${{ github.run_id }}"
+          aws elasticbeanstalk create-application-version \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --version-label $VERSION_LABEL \
+            --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=${{ env.artifact_key }}
+
+          aws elasticbeanstalk update-environment \
+            --environment-name "${{ env.EB_ENV_NAME }}" \
+            --version-label $VERSION_LABEL
+
+      - name: Notify Deployment Success
+        run: echo "✅ Deployment successful! App is now live at EB environment."
