@@ -1,7 +1,7 @@
 name: Deploy GrowEasy-Invoice to AWS Elastic Beanstalk
 
-on:   
-  workflow_dispatch:
+on:
+  workflow_dispatch:  # manual trigger only
 
 env:
   EB_APP_NAME: groweasy-invoice-app
@@ -11,6 +11,7 @@ env:
 
 jobs:
   deploy:
+    name: Deploy to AWS Elastic Beanstalk
     runs-on: ubuntu-latest
 
     steps:
