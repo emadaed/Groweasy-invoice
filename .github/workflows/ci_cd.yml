@@ -4,16 +4,14 @@ on:
   push:
     branches:
       - main
-    # Do NOT run CI if only infra/docs/workflow files were changed
-    paths-ignore:
-      - '.github/workflows/**'
-      - 'infrastructure/**'
-      - 'docs/**'
-      - 'monitoring/**'
-      - '*.md'
-      - '*.txt'
-      - '*.yml'
-      - '*.yaml'
+    paths:
+      - '**.py'
+      - '**.json'
+      - '**.lock'
+      - 'src/**'
+      - 'app/**'
+      - 'tests/**'
+      - 'requirements.txt'
   pull_request:
     branches:
       - main
@@ -22,6 +20,8 @@ jobs:
   build:
     name: Validate & Build Application
     runs-on: ubuntu-latest
+
+    if: "! contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
       - name: Checkout Repository
