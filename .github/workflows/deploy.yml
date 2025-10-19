@@ -7,7 +7,7 @@ env:
   EB_APP_NAME: groweasy-invoice-app
   EB_ENV_NAME: groweasy-invoice-python-env
   AWS_REGION: us-east-2
-  S3_BUCKET: groweasy-invoice-artifacts
+  S3_BUCKET: groweasy-invoice-artifacts-us-east-2
 
 jobs:
   deploy:
