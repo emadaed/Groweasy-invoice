@@ -8,3 +8,8 @@ dist/
 *.sqlite3
 .aws/
 eb-env.json
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

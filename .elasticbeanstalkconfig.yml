@@ -1,0 +1,9 @@
+branch-defaults:
+  main:
+    environment: groweasy-invoice-python-env
+global:
+  application_name: groweasy-invoice-app
+  default_region: us-east-2
+  profile: default
+  platform: Python 3.13 running on 64bit Amazon Linux 2023
+  sc: git
