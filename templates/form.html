@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Invoice</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>GrowEasy Invoice Generator</h1>
+
+    <form id="invoiceForm" method="POST" action="/preview" enctype="multipart/form-data" onsubmit="return prepareSubmit()">
+      <label>Invoice Number (optional)</label>
+      <input type="text" name="invoice_number" id="invoice_number" placeholder="Leave blank to auto-generate">
+
+      <label>Client Name</label>
+      <input type="text" name="client_name" id="client_name" required>
+
+      <label>Client Email</label>
+      <input type="email" name="client_email" id="client_email">
+
+      <label>Client Address</label>
+      <input type="text" name="client_address" id="client_address">
+
+      <label>Tax Rate (%)</label>
+      <input type="number" name="tax_rate" id="tax_rate" value="10" step="0.01">
+
+      <label>Discount (%)</label>
+      <input type="number" name="discount_pct" id="discount_pct" value="0" step="0.01">
+
+      <label>Upload Company Logo</label>
+      <input type="file" name="logo" accept="image/*">
+
+      <h3>Items</h3>
+      <div id="items">
+        <div class="item-row" data-index="0">
+          <input type="text" name="item_code[]" class="item-code" placeholder="Item code (text only)" required>
+          <input type="text" name="item_name[]" class="item-name" placeholder="Item description">
+          <input type="number" name="quantity[]" class="item-qty" placeholder="Qty" step="1" min="1" required>
+          <input type="number" name="price[]" class="item-price" placeholder="Price" step="0.01" min="0" required>
+          <button type="button" class="remove-btn" onclick="removeRow(this)">Remove</button>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <button type="button" onclick="addItem()">Add another item</button>
+      </div>
+
+      <div style="margin-top:15px;">
+        <strong>Subtotal:</strong> <span id="subtotal_display">0.00</span>
+        &nbsp;&nbsp;
+        <strong>Discount:</strong> <span id="discount_display">0.00</span>
+        &nbsp;&nbsp;
+        <strong>Tax:</strong> <span id="tax_display">0.00</span>
+        &nbsp;&nbsp;
+        <strong>Total:</strong> <span id="total_display">0.00</span>
+      </div>
+
+      <div style="margin-top:20px;">
+        <button type="submit">Preview Invoice</button>
+      </div>
+    </form>
+  </div>
+
+<script>
+let idx = 1;
+
+function sanitizeCode(val) {
+  return (val || '').trim();
+}
+
+function addItem() {
+  const container = document.getElementById('items');
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.setAttribute('data-index', idx);
+  row.innerHTML = `
+    <input type="text" name="item_code[]" class="item-code" placeholder="Item code (text only)" required>
+    <input type="text" name="item_name[]" class="item-name" placeholder="Item description">
+    <input type="number" name="quantity[]" class="item-qty" placeholder="Qty" step="1" min="1" required>
+    <input type="number" name="price[]" class="item-price" placeholder="Price" step="0.01" min="0" required>
+    <button type="button" class="remove-btn" onclick="removeRow(this)">Remove</button>
+  `;
+  container.appendChild(row);
+  idx++;
+  attachListeners();
+}
+
+function removeRow(btn) {
+  const row = btn.closest('.item-row');
+  row.remove();
+  recalcTotals();
+}
+
+function attachListeners() {
+  document.querySelectorAll('.item-code').forEach(el => {
+    el.onblur = () => {
+      // prevent duplicates on blur
+      const codes = Array.from(document.querySelectorAll('.item-code')).map(i => sanitizeCode(i.value).toLowerCase()).filter(Boolean);
+      const duplicates = codes.filter((c,i,a) => a.indexOf(c) !== i);
+      if (duplicates.length) {
+        alert("Duplicate item code: " + duplicates[0] + ". Please change or merge quantities.");
+        el.focus();
+      }
+    };
+  });
+
+  document.querySelectorAll('.item-qty, .item-price').forEach(el => {
+    el.oninput = recalcTotals;
+  });
+  document.getElementById('tax_rate').oninput = recalcTotals;
+  document.getElementById('discount_pct').oninput = recalcTotals;
+}
+
+function recalcTotals() {
+  const rows = document.querySelectorAll('.item-row');
+  let subtotal = 0;
+  rows.forEach(r => {
+    const qty = parseFloat(r.querySelector('.item-qty').value || 0);
+    const price = parseFloat(r.querySelector('.item-price').value || 0);
+    subtotal += qty * price;
+  });
+  const discountPct = parseFloat(document.getElementById('discount_pct').value || 0);
+  const discountAmt = subtotal * (discountPct/100);
+  const afterDiscount = subtotal - discountAmt;
+  const taxRate = parseFloat(document.getElementById('tax_rate').value || 0);
+  const tax = afterDiscount * (taxRate/100);
+  const total = afterDiscount + tax;
+
+  document.getElementById('subtotal_display').innerText = subtotal.toFixed(2);
+  document.getElementById('discount_display').innerText = discountAmt.toFixed(2);
+  document.getElementById('tax_display').innerText = tax.toFixed(2);
+  document.getElementById('total_display').innerText = total.toFixed(2);
+}
+
+// Before submit: ensure no duplicate codes and required fields present
+function prepareSubmit() {
+  const codes = Array.from(document.querySelectorAll('.item-code')).map(i => sanitizeCode(i.value).toLowerCase()).filter(Boolean);
+  const hasDup = codes.some((c,i,a) => a.indexOf(c)!==i);
+  if (hasDup) {
+    alert('Duplicate item codes found. Either remove or merge rows.');
+    return false;
+  }
+
+  // ensure all item rows with code have qty & price
+  const rows = document.querySelectorAll('.item-row');
+  for (let r of rows) {
+    const code = sanitizeCode(r.querySelector('.item-code').value);
+    const qty = r.querySelector('.item-qty').value;
+    const price = r.querySelector('.item-price').value;
+    if (code && (!qty || !price)) {
+      alert('All items must have quantity and price.');
+      return false;
+    }
+  }
+
+  // allow submit
+  return true;
+}
+
+// init
+attachListeners();
+recalcTotals();
+</script>
+</body>
+</html>

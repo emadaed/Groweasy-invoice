@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Environments
+.env
+venv/
+.venv/
+
+# Editors
+.vscode/
+.idea/
+
+# Logs / Artifacts
+*.log
+*.pdf
+*.zip
+generated_pdfs/
+
+# OS
+.DS_Store
+Thumbs.db
