@@ -1,0 +1,8 @@
+<div class="text-center mt-4">
+  {% if qr_b64 %}
+  <div class="qr mb-3">
+    <img src="data:image/png;base64,{{ qr_b64 }}" style="width:100px;height:100px;">
+  </div>
+  {% endif %}
+  <p class="text-muted small mb-0">Thank you for choosing <strong>GrowEasy</strong>.</p>
+</div>

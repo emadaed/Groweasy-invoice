@@ -1,0 +1,12 @@
+<div class="row">
+  <div class="col-md-6 offset-md-6">
+    <table class="table">
+      <tr><td>Subtotal</td><td class="text-end">{{ '%.2f' % data.subtotal }}</td></tr>
+      {% if data.discount_amount > 0 %}
+      <tr><td>Discount</td><td class="text-end text-danger">-{{ '%.2f' % data.discount_amount }}</td></tr>
+      {% endif %}
+      <tr><td>Tax</td><td class="text-end">{{ '%.2f' % (data.tax_rate/100*data.subtotal) }}</td></tr>
+      <tr class="table-success fw-bold"><td>Total</td><td class="text-end">{{ '%.2f' % data.total }}</td></tr>
+    </table>
+  </div>
+</div>

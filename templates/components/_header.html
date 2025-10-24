@@ -1,0 +1,9 @@
+<div class="invoice-header text-center mb-4">
+  {% if data.logo_b64 %}
+    <img src="data:image/png;base64,{{ data.logo_b64 }}" class="logo" style="max-height:80px;">
+  {% else %}
+    <img src="{{ url_for('static', filename='assets/logo.png') }}" class="logo" style="max-height:80px;">
+  {% endif %}
+  <h3 class="text-success mt-2">Invoice #{{ data.invoice_number }}</h3>
+  <p class="text-muted">{{ data.invoice_date }}</p>
+</div>

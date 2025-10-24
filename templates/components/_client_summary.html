@@ -1,0 +1,15 @@
+<div class="row mb-3">
+  <div class="col-md-6">
+    <div class="card"><div class="card-body">
+      <h6 class="text-success">Client Info</h6>
+      <p><strong>{{ data.client_name }}</strong><br>{{ data.client_email }}<br>{{ data.client_address }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card"><div class="card-body">
+      <h6 class="text-success">Summary</h6>
+      <p>Tax Rate: {{ data.tax_rate }}%<br>Discount: {{ data.discount_pct }}%</p>
+      <p><strong>Total: {{ '%.2f' % data.total }}</strong></p>
+    </div></div>
+  </div>
+</div>

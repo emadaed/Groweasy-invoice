@@ -1,0 +1,18 @@
+<div class="card"><div class="card-body">
+  <h6 class="text-success mb-3">Items</h6>
+  <table class="table table-bordered align-middle">
+    <thead class="table-light">
+      <tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for item in data.get('items', []) %}
+      <tr>
+        <td>{{ item.name or item.code or '—' }}</td>
+        <td class="text-end">{{ item.qty }}</td>
+        <td class="text-end">{{ '%.2f' % item.price }}</td>
+        <td class="text-end">{{ '%.2f' % item.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
