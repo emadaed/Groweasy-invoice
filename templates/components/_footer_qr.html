@@ -1,8 +1,12 @@
-<div class="text-center mt-4">
+<hr class="mt-4 mb-3">
+
+<div class="text-center invoice-footer">
   {% if qr_b64 %}
-  <div class="qr mb-3">
-    <img src="data:image/png;base64,{{ qr_b64 }}" style="width:100px;height:100px;">
-  </div>
+    <div class="qr-wrapper mb-2">
+      <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" class="qr-footer">
+    </div>
   {% endif %}
-  <p class="text-muted small mb-0">Thank you for choosing <strong>GrowEasy</strong>.</p>
+  <p class="text-muted small mb-0">
+    Powered by <strong>GrowEasy Invoice</strong> — A Jugnu Social Welfare Initiative
+  </p>
 </div>

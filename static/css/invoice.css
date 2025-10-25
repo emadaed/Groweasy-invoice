@@ -1,91 +1,78 @@
-/* invoice.css - print and WeasyPrint-friendly rules */
+/* ------------------------------------------------------------
+   GrowEasy Invoice — Unified Style (Phase 5-B.7 Alive Edition)
+   ------------------------------------------------------------ */
 
-/* page size and default margins for WeasyPrint */
-@page {
-  size: A4;
-  margin: 20mm;
-}
-
-/* container */
-.invoice-container {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  color: #222;
-  background: #fff;
+:root {
+  --groweasy-green: #28a745;
+  --groweasy-orange: #ff8c00;
+  --groweasy-muted: #f8f9fa;
+  --groweasy-dark: #212529;
+  --groweasy-font: "Poppins","Segoe UI",Roboto,sans-serif;
 }
 
-/* header/logo */
-.invoice-header .logo {
-  max-width: 120px;
+body {
+  background-color: var(--groweasy-muted);
+  font-family: var(--groweasy-font);
+  color: var(--groweasy-dark);
+  position: relative;
 }
 
-/* table */
-table.items {
-  width: 100%;
-  border-collapse: collapse;
-  page-break-inside: auto;
+/* 🌿 Floating watermark — visible on screen only */
+#groweasy-watermark {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: rgba(40,167,69,0.15);
+  user-select: none;
+  pointer-events: none;
+  animation: watermarkPulse 6s ease-in-out infinite;
+  z-index: 0;
 }
-table.items thead {
-  display: table-header-group; /* repeat header on page breaks */
-}
-table.items tfoot {
-  display: table-footer-group;
-}
-table.items tr {
-  page-break-inside: avoid;
-  page-break-after: auto;
-}
-table.items td, table.items th {
-  padding: 6px 8px;
-  vertical-align: top;
+@keyframes watermarkPulse {
+  0%,100% { opacity: 0.25; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.1); }
 }
 
-/* prevent footer from being orphaned on separate page */
-.invoice-footer, .qr {
-  page-break-inside: avoid;
-}
+/* Header / Footer polish */
+.invoice-header img.logo { width: 90px; height: auto; margin-bottom: .5rem; }
+.invoice-header h3 { color: var(--groweasy-green); }
+.invoice-footer { text-align: center; margin-top: 2rem; }
+.invoice-footer .qr img { width: 120px; height: 120px; }
 
-/* QR sizing and placement */
-.invoice-footer .qr img {
-  max-width: 120px;
-  height: auto;
-  display: block;
-  margin-right: 8px;
-}
+/* Table aesthetics */
+.table thead th { background: var(--groweasy-green); color: #fff; }
+.table td, .table th { vertical-align: middle; }
 
-/* print view tweaks */
+/* Print layout (A4) */
+@media print {
+  #groweasy-watermark { display: none !important; }
+  body { background: white; margin: 0; }
+  .container { max-width: 100%; padding: 0 20px; }
+  .btn, .navbar, .alert { display: none !important; }
+}
 @media print {
   body {
-    background: #fff;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
-  .container {
-    width: auto;
-    margin: 0;
+  .invoice-header img.logo-top {
+    max-height: 70px;
+    margin-bottom: 0.5rem;
   }
-}
-
-/* small screens */
-@media (max-width: 576px) {
-  .invoice-header h2 { font-size: 1.25rem; }
-  .invoice-footer .qr img { max-width: 90px; }
-}
-/* --- GrowEasy Phase 4.5 PDF Styling Fix --- */
-@media print {
-  body {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .card, .row, .container {
+  .qr-footer {
+    max-height: 100px;
     page-break-inside: avoid;
   }
   .invoice-footer {
-    page-break-before: always;
-    text-align: center;
-    margin-top: 2rem;
+    page-break-before: avoid;
   }
-  .qr img {
-    display: block;
-    margin: 0 auto;
-    width: 120px;
-    height: 120px;
+  .card, table {
+    page-break-inside: avoid;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
   }
 }

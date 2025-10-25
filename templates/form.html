@@ -36,7 +36,8 @@
     <hr>
     <button type="submit" class="btn btn-success">Preview Invoice</button>
   </form>
-  <script src="{{ url_for('static', filename='js/form.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/form_items.js') }}?v={{ config['APP_VERSION'] if config.get('APP_VERSION') else 5 }}"></script>
+
 </div>
 
 <script>
