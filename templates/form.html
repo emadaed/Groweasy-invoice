@@ -1,55 +1,186 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="card p-4 shadow-sm">
-  <h4 class="text-success mb-3">Create New Invoice</h4>
-  <form method="POST" action="/preview" enctype="multipart/form-data" id="invoiceForm">
-    <div class="row g-3">
-      <div class="col-md-6">
-        <label>Client Name</label>
-        <input type="text" name="client_name" class="form-control" required>
-      </div>
-      <div class="col-md-6">
-        <label>Client Email</label>
-        <input type="email" name="client_email" class="form-control">
-      </div>
-      <div class="col-md-12">
-        <label>Client Address</label>
-        <textarea name="client_address" class="form-control"></textarea>
-      </div>
-      <div class="col-md-6">
-        <label>Tax Rate (%)</label>
-        <input type="number" name="tax" class="form-control" step="0.1">
-      </div>
-      <div class="col-md-6">
-        <label>Discount (%)</label>
-        <input type="number" name="discount" class="form-control" step="0.1">
-      </div>
-      <div class="col-md-12">
-        <label>Upload Company Logo</label>
-        <input type="file" name="logo" class="form-control">
-      </div>
-    </div>
-    <hr>
-    <h5 class="text-success">Items</h5>
-    <div id="itemsContainer"></div>
-    <button type="button" class="btn btn-outline-success mt-2" id="addItemBtn">➕ Add Item</button>
-    <hr>
-    <button type="submit" class="btn btn-success">Preview Invoice</button>
-  </form>
-  <script src="{{ url_for('static', filename='js/form_items.js') }}?v={{ config['APP_VERSION'] if config.get('APP_VERSION') else 5 }}"></script>
 
+{% block title %}Create Professional Invoice{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">🧾 Create Professional Invoice</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('preview_invoice') }}" enctype="multipart/form-data">
+                        
+                        <!-- Professional Business Information -->
+                        <div class="card mb-4 border-success">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 text-success">🏢 Your Business Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Company Name *</label>
+                                        <input type="text" name="company_name" class="form-control" value="Your Company Name" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Tax ID (Optional)</label>
+                                        <input type="text" name="company_tax_id" class="form-control" placeholder="Tax ID / VAT Number">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Company Address</label>
+                                        <input type="text" name="company_address" class="form-control" value="123 Business Street, City, State 12345">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Phone</label>
+                                        <input type="text" name="company_phone" class="form-control" value="+1 (555) 123-4567">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Email</label>
+                                        <input type="email" name="company_email" class="form-control" value="hello@company.com">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Client Information -->
+                        <div class="card mb-4 border-primary">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 text-primary">👤 Client Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Client Name *</label>
+                                        <input type="text" name="client_name" class="form-control" placeholder="Client or Company Name" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Client Email</label>
+                                        <input type="email" name="client_email" class="form-control" placeholder="client@email.com">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Client Phone</label>
+                                        <input type="text" name="client_phone" class="form-control" placeholder="+1 (555) 123-4567">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Invoice Number *</label>
+                                        <input type="text" name="invoice_number" class="form-control" placeholder="INV-001" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Invoice Date *</label>
+                                        <input type="date" name="invoice_date" class="form-control" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Due Date</label>
+                                        <input type="date" name="due_date" class="form-control">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Client Address</label>
+                                        <textarea name="client_address" class="form-control" rows="2" placeholder="Street, City, State, ZIP Code"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Items Section -->
+                        <div class="card mb-4 border-warning">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 text-warning">📦 Items & Services</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="itemsContainer">
+                                    <div class="row g-2 align-items-end mb-2 item-row">
+                                        <div class="col-md-6">
+                                            <label class="form-label small">Item/Service Name</label>
+                                            <input type="text" name="item_name[]" class="form-control" placeholder="e.g., Web Development, Consultation" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Quantity</label>
+                                            <input type="number" name="item_qty[]" class="form-control" placeholder="Qty" required min="1" value="1">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small">Price ($)</label>
+                                            <input type="number" name="item_price[]" class="form-control" placeholder="0.00" required min="0" step="0.01">
+                                        </div>
+                                        <div class="col-md-1 text-end">
+                                            <button type="button" class="btn btn-light removeItemBtn mt-3" title="Remove" disabled>&times;</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-start mt-3">
+                                    <button type="button" id="addItemBtn" class="btn btn-outline-success btn-sm">
+                                        ➕ Add Another Item
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Financial Details -->
+                        <div class="card mb-4 border-info">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 text-info">💰 Financial Details</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Tax Rate (%)</label>
+                                        <input type="number" name="tax_rate" class="form-control" value="0" min="0" max="50" step="0.1">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Discount Rate (%)</label>
+                                        <input type="number" name="discount_rate" class="form-control" value="0" min="0" max="100" step="0.1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Information -->
+                        <div class="card mb-4 border-dark">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">💳 Payment Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Payment Terms</label>
+                                        <input type="text" name="payment_terms" class="form-control" value="Due upon receipt">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Payment Methods</label>
+                                        <input type="text" name="payment_methods" class="form-control" value="Bank Transfer, Credit Card">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Notes (Optional)</label>
+                                        <textarea name="notes" class="form-control" rows="3" placeholder="Thank you note, special instructions, or terms..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Logo Upload -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">🖼️ Company Logo (Optional)</h5>
+                            </div>
+                            <div class="card-body">
+                                <input type="file" name="logo" class="form-control" accept="image/*">
+                                <div class="form-text">Upload your company logo for professional branding</div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="text-center">
+                            <button type="submit" class="btn btn-success btn-lg px-5">
+                                👁️ Preview Professional Invoice
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<script>
-document.getElementById("addItemBtn").addEventListener("click", function(){
-  const div = document.createElement("div");
-  div.className = "row g-2 align-items-end mb-2";
-  div.innerHTML = `
-    <div class="col-md-6"><input type="text" name="item_name[]" class="form-control" placeholder="Item name" required></div>
-    <div class="col-md-3"><input type="number" name="item_qty[]" class="form-control" placeholder="Qty" required></div>
-    <div class="col-md-3"><input type="number" name="item_price[]" class="form-control" placeholder="Price" required></div>
-  `;
-  document.getElementById("itemsContainer").appendChild(div);
-});
-</script>
+<script src="{{ url_for('static', filename='js/form_items.js') }}"></script>
 {% endblock %}

@@ -35,8 +35,16 @@ def preview_invoice():
 @app.route("/download", methods=["POST"])
 def download_invoice():
     try:
-        data = json.loads(request.form.get("data"))
-        html = render_template("invoice.html", data=data, preview=False, qr_b64=data.get("qr_b64"))
+        # Handle both JSON string and direct form data
+        data_json = request.form.get("data")
+        if data_json:
+            data = json.loads(data_json)
+        else:
+            data = request.form.to_dict()
+            
+        qr_b64 = request.form.get("qr_b64")
+        
+        html = render_template("invoice.html", data=data, preview=False, qr_b64=qr_b64)
         pdf_bytes = generate_pdf(html)
         return send_file(io.BytesIO(pdf_bytes),
                          mimetype="application/pdf",

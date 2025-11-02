@@ -1,36 +1,189 @@
 {% extends "base.html" %}
 
-{% block title %}Invoice Preview{% endblock %}
+{% block title %}Professional Invoice{% endblock %}
 
 {% block content %}
-{% include "components/_header.html" %}
-{% include "components/_client_summary.html" %}
-{% include "components/_items_table.html" %}
-{% include "components/_totals.html" %}
+<div class="invoice-container">
+    <!-- Compact Header: Company + Invoice Details -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+        <tr>
+            <!-- Company Info -->
+            <td width="60%" valign="top">
+                <table cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td valign="top" style="padding-right: 12px;">
+                            {% if data.logo_b64 %}
+                            <img src="data:image/png;base64,{{ data.logo_b64 }}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px;" alt="{{ data.company_name }}">
+                            {% else %}
+                            <img src="{{ url_for('static', filename='assets/logo.png') }}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px;" alt="{{ data.company_name }}" onerror="this.style.display='none'">
+                            {% endif %}
+                        </td>
+                        <td valign="top">
+                            <h1 style="margin: 0 0 4px 0; font-size: 18px; color: #2c5aa0; font-weight: bold;">{{ data.company_name }}</h1>
+                            <p style="margin: 1px 0; font-size: 10px; color: #666;">{{ data.company_address }}</p>
+                            <p style="margin: 1px 0; font-size: 10px; color: #666;">
+                                {{ data.company_phone }} | {{ data.company_email }}
+                            </p>
+                            {% if data.company_tax_id %}
+                            <p style="margin: 1px 0; font-size: 10px; color: #666;"><strong>Tax ID:</strong> {{ data.company_tax_id }}</p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+            
+            <!-- Invoice Number & Title -->
+            <td width="40%" valign="top" align="right">
+                <h2 style="margin: 0 0 8px 0; font-size: 20px; color: #2c5aa0; text-align: right;">INVOICE</h2>
+                <table cellpadding="2" cellspacing="0" border="0" style="font-size: 11px;">
+                    <tr>
+                        <td align="right" style="padding: 1px 5px 1px 0;"><strong>Invoice #:</strong></td>
+                        <td style="padding: 1px 0;">{{ data.invoice_number }}</td>
+                    </tr>
+                    <tr>
+                        <td align="right" style="padding: 1px 5px 1px 0;"><strong>Date:</strong></td>
+                        <td style="padding: 1px 0;">{{ data.invoice_date }}</td>
+                    </tr>
+                    {% if data.due_date %}
+                    <tr>
+                        <td align="right" style="padding: 1px 5px 1px 0;"><strong>Due Date:</strong></td>
+                        <td style="padding: 1px 0;">{{ data.due_date }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Separator -->
+    <hr style="margin: 12px 0; border: none; border-top: 2px solid #2c5aa0;">
+
+    <!-- Compact Client & Payment Info Side-by-Side -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+        <tr>
+            <!-- Bill To (Compact) -->
+            <td width="48%" valign="top">
+                <h3 style="margin: 0 0 6px 0; font-size: 12px; color: #2c5aa0; font-weight: bold;">BILL TO</h3>
+                <p style="margin: 2px 0; font-size: 11px; font-weight: bold;">{{ data.client_name }}</p>
+                {% if data.client_email %}
+                <p style="margin: 1px 0; font-size: 10px; color: #666;">{{ data.client_email }}</p>
+                {% endif %}
+                {% if data.client_phone %}
+                <p style="margin: 1px 0; font-size: 10px; color: #666;">{{ data.client_phone }}</p>
+                {% endif %}
+                {% if data.client_address %}
+                <p style="margin: 1px 0 0 0; font-size: 9px; color: #666;">{{ data.client_address }}</p>
+                {% endif %}
+            </td>
+            
+            <!-- Payment Info (Compact) -->
+            <td width="4%"><!-- Spacer --></td>
+            
+            <td width="48%" valign="top">
+                <h3 style="margin: 0 0 6px 0; font-size: 12px; color: #28a745; font-weight: bold;">PAYMENT INFO</h3>
+                <p style="margin: 2px 0; font-size: 10px;"><strong>Terms:</strong> {{ data.payment_terms }}</p>
+                <p style="margin: 2px 0; font-size: 10px;"><strong>Methods:</strong> {{ data.payment_methods }}</p>
+                <p style="margin: 4px 0 0 0; font-size: 9px; color: #666;">
+                    Include invoice #{{ data.invoice_number }}
+                </p>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Items Table -->
+    <h3 style="margin: 0 0 8px 0; font-size: 12px; color: #2c5aa0; font-weight: bold;">ITEMS & SERVICES</h3>
+    
+    <table width="100%" cellpadding="6" cellspacing="0" border="1" style="border-collapse: collapse; border: 1px solid #2c5aa0; margin: 0 0 15px 0; font-size: 10px;">
+        <thead>
+            <tr style="background-color: #2c5aa0; color: white;">
+                <th align="left" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">DESCRIPTION</th>
+                <th width="10%" align="center" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">QTY</th>
+                <th width="18%" align="right" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">UNIT PRICE</th>
+                <th width="18%" align="right" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">AMOUNT</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in data.get('items', []) %}
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">{{ item.name or item.code or '—' }}</td>
+                <td align="center" style="border: 1px solid #ddd; padding: 8px;">{{ item.qty }}</td>
+                <td align="right" style="border: 1px solid #ddd; padding: 8px;">${{ "%.2f"|format(item.price) }}</td>
+                <td align="right" style="border: 1px solid #ddd; padding: 8px;"><strong>${{ "%.2f"|format(item.total) }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Totals & Footer in Single Row -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+            <!-- Notes & Terms -->
+            <td width="55%" valign="top">
+                {% if data.notes %}
+                <div style="background: #fff3cd; padding: 6px; border-radius: 4px; border-left: 3px solid #ffc107; margin-bottom: 8px;">
+                    <p style="margin: 0; font-size: 9px; color: #856404;"><strong>Note:</strong> {{ data.notes }}</p>
+                </div>
+                {% endif %}
+                
+                <!-- Terms & Conditions -->
+                <div style="font-size: 8px; color: #666; line-height: 1.2;">
+                    <p style="margin: 2px 0;"><strong>Terms:</strong> Payment due upon receipt. Late payments subject to 1.5% monthly interest.</p>
+                    <p style="margin: 2px 0;">This is an computer generated invoice and requires no signature.</p>
+                </div>
+            </td>
+            
+            <!-- Totals -->
+            <td width="45%" valign="top">
+                <table width="100%" cellpadding="5" cellspacing="0" border="0" style="background: #f8f9fa; border-radius: 4px;">
+                    <tr>
+                        <td style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;"><strong>Subtotal:</strong></td>
+                        <td align="right" style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;">${{ "%.2f"|format(data.subtotal) }}</td>
+                    </tr>
+                    {% if data.discount_rate > 0 %}
+                    <tr>
+                        <td style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;"><strong>Discount ({{ "%.1f"|format(data.discount_rate) }}%):</strong></td>
+                        <td align="right" style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;">-${{ "%.2f"|format(data.discount_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if data.tax_rate > 0 %}
+                    <tr>
+                        <td style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;"><strong>Tax ({{ "%.1f"|format(data.tax_rate) }}%):</strong></td>
+                        <td align="right" style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;">${{ "%.2f"|format(data.tax_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr style="background: #2c5aa0; color: white;">
+                        <td style="padding: 8px 4px; font-size: 12px; font-weight: bold;">TOTAL DUE:</td>
+                        <td align="right" style="padding: 8px 4px; font-size: 12px; font-weight: bold;">${{ "%.2f"|format(data.grand_total) }}</td>
+                    </tr>
+                </table>
+                
+                <!-- QR Code Compact -->
+                <div style="text-align: center; margin-top: 8px;">
+                    {% if qr_b64 %}
+                    <img src="data:image/png;base64,{{ qr_b64 }}" style="width: 50px; height: 50px;" alt="QR Code">
+                    {% endif %}
+                    <p style="margin: 2px 0; font-size: 8px; color: #666;">Scan to pay</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Compact Footer -->
+    <div style="margin-top: 15px; padding-top: 8px; border-top: 1px solid #ddd; text-align: center;">
+        <p style="margin: 2px 0; font-size: 9px; color: #2c5aa0; font-weight: bold;">Thank you for your business!</p>
+        <p style="margin: 0; font-size: 8px; color: #666;">Generated via GrowEasy Invoice • www.groweasy.com</p>
+    </div>
+</div>
 
 {% if preview %}
 <div class="text-center my-4">
-  <form id="downloadForm" action="{{ url_for('download_invoice') }}" method="POST">
-    <input type="hidden" name="data" id="downloadDataField">
-    <button type="button" id="downloadBtn" class="btn btn-success px-4 py-2">
-      ⬇️ Download PDF
-    </button>
-  </form>
+    <form id="downloadForm" action="{{ url_for('download_invoice') }}" method="POST">
+        <input type="hidden" name="data" value='{{ data | tojson }}'>
+        <input type="hidden" name="qr_b64" value="{{ qr_b64 }}">
+        <button type="submit" class="btn btn-success btn-lg px-5">
+            ⬇️ Download Enterprise PDF
+        </button>
+    </form>
 </div>
-
-<script>
-(function() {
-  const btn = document.getElementById('downloadBtn');
-  const payload = {{ data | tojson | safe }};
-  const qr = {{ qr_b64 | tojson | safe }};
-  btn.addEventListener('click', function() {
-    if (qr) payload.qr_b64 = qr;
-    document.getElementById('downloadDataField').value = JSON.stringify(payload);
-    document.getElementById('downloadForm').submit();
-  });
-})();
-</script>
 {% endif %}
-
-{% include "components/_footer_qr.html" %}
 {% endblock %}

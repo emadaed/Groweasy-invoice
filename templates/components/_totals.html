@@ -1,12 +1,30 @@
-<div class="row">
-  <div class="col-md-6 offset-md-6">
-    <table class="table">
-      <tr><td>Subtotal</td><td class="text-end">{{ '%.2f' % data.subtotal }}</td></tr>
-      {% if data.discount_amount > 0 %}
-      <tr><td>Discount</td><td class="text-end text-danger">-{{ '%.2f' % data.discount_amount }}</td></tr>
-      {% endif %}
-      <tr><td>Tax</td><td class="text-end">{{ '%.2f' % (data.tax_rate/100*data.subtotal) }}</td></tr>
-      <tr class="table-success fw-bold"><td>Total</td><td class="text-end">{{ '%.2f' % data.total }}</td></tr>
-    </table>
-  </div>
+<div class="card mt-4 border-0">
+    <div class="card-body p-0">
+        <div class="row justify-content-end">
+            <div class="col-md-6">
+                <table class="table table-borderless table-sm mb-0">
+                    <tr>
+                        <td class="text-end"><strong>Subtotal:</strong></td>
+                        <td class="text-end" width="35%">${{ "%.2f"|format(data.subtotal) }}</td>
+                    </tr>
+                    {% if data.discount_rate > 0 %}
+                    <tr>
+                        <td class="text-end"><strong>Discount ({{ "%.1f"|format(data.discount_rate) }}%):</strong></td>
+                        <td class="text-end">-${{ "%.2f"|format(data.discount_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if data.tax_rate > 0 %}
+                    <tr>
+                        <td class="text-end"><strong>Tax ({{ "%.1f"|format(data.tax_rate) }}%):</strong></td>
+                        <td class="text-end">${{ "%.2f"|format(data.tax_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="border-top border-2">
+                        <td class="text-end"><strong>TOTAL:</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(data.grand_total) }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
