@@ -31,4 +31,4 @@ RUN pip install --upgrade pip setuptools wheel && \
 
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "app:app"]
