@@ -4,8 +4,7 @@
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8080
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
@@ -29,6 +28,7 @@ COPY . .
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8080
+EXPOSE $PORT
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "app:app"]
+# Use shell form to properly expand environment variable
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 app:app
