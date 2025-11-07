@@ -28,7 +28,7 @@ COPY . .
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-EXPOSE $PORT
+EXPOSE 8080
 
-# Use shell form to properly expand environment variable
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 app:app"]
+# Use port 8080 directly (Railway's default)
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "app:app"]
