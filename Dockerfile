@@ -31,4 +31,4 @@ RUN pip install --upgrade pip setuptools wheel && \
 EXPOSE $PORT
 
 # Use shell form to properly expand environment variable
-CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 app:app
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 app:app"]
