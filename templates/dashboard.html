@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - GrowEasy Invoice{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Welcome, {{ user_email }}! 👋</h2>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">Logout</a>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5>📝 Create Invoice</h5>
+                            <p>Create a new professional invoice</p>
+                            <a href="{{ url_for('home') }}" class="btn btn-success">Get Started</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5>💝 Support Us</h5>
+                            <p>Help us improve the service</p>
+                            <a href="{{ url_for('donate') }}" class="btn btn-primary">Donate</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5>⚙️ Settings</h5>
+                            <p>Manage your account</p>
+                            <a href="#" class="btn btn-outline-secondary">Coming Soon</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
