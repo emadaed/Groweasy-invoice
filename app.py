@@ -63,6 +63,11 @@ def logout():
 def donate():
     return render_template("donate.html")
 
+@app.route('/sw.js')
+def service_worker():
+    return send_from_directory('static', 'sw.js'), 200, {'Content-Type': 'application/javascript'}
+
+
 # Your existing routes below (preview_invoice, download_invoice)...
 
 @app.route("/preview", methods=["POST"])
