@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block title %}Support Us - GrowEasy Invoice{% endblock %}
@@ -5,57 +6,404 @@
 {% block content %}
 <div class="container py-5">
     <div class="row justify-content-center">
-        <div class="col-lg-8">
+        <div class="col-lg-10">
             <div class="card shadow">
                 <div class="card-header bg-warning text-dark">
                     <h4 class="mb-0">💝 Support Our Mission</h4>
                 </div>
-                <div class="card-body text-center">
-                    <p class="lead">We provide <strong>free professional invoices</strong> to help small businesses and NGOs.</p>
-                    <p>Your support helps us cover server costs and develop new features like FBR integration.</p>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <p class="lead">We provide <strong>free professional invoices</strong> to help small businesses and NGOs.</p>
+                        <p>Your support helps us cover server costs and develop new features like FBR integration.</p>
+                    </div>
                     
-                    <div class="row mt-4">
-                        <div class="col-md-4 mb-3">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h5>☕ Coffee Support</h5>
-                                    <h3 class="text-success">$5</h3>
-                                    <p>Help with server costs</p>
-                                    <button class="btn btn-outline-success">Donate $5</button>
-                                </div>
-                            </div>
+                    <!-- Jazz Cash Donation -->
+                    <div class="card mb-4 border-success">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">📱 Jazz Cash Donations</h5>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h5>🚀 Feature Development</h5>
-                                    <h3 class="text-primary">$20</h3>
-                                    <p>Speed up new features</p>
-                                    <button class="btn btn-outline-primary">Donate $20</button>
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6>Send donations via Jazz Cash:</h6>
+                                    <div class="bg-light p-3 rounded">
+                                        <h4 class="text-success mb-2">+92 346 4499599</h4>
+                                        <p class="mb-1"><strong>Account Name:</strong> GrowEasy Invoice</p>
+                                        <p class="mb-2"><small class="text-muted">Include your email in transaction message for receipt</small></p>
+                                        
+                                        <!-- Jazz Cash Action Buttons -->
+                                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                                            <button class="btn btn-success btn-sm" onclick="openJazzCash()">
+                                                📱 Open Jazz Cash App
+                                            </button>
+                                            <button class="btn btn-outline-success btn-sm" onclick="copyJazzCashNumber()">
+                                                📋 Copy Number
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h5>🏢 Business Support</h5>
-                                    <h3 class="text-warning">$100</h3>
-                                    <p>Major features & FBR integration</p>
-                                    <button class="btn btn-outline-warning">Donate $100</button>
+                                <div class="col-md-4 text-center">
+                                    <div class="bg-white p-3 rounded border">
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Jazz_logo.svg/1200px-Jazz_logo.svg.png" alt="Jazz Cash" style="height: 60px;" class="mb-2">
+                                        <p class="small text-muted mb-0">Instant Transfer</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="mt-4 p-3 bg-light rounded">
-                        <h6>Other Ways to Support:</h6>
-                        <p class="mb-2">• Share with other businesses</p>
-                        <p class="mb-2">• Give us feedback</p>
-                        <p class="mb-0">• Suggest new features</p>
+
+                    <!-- EasyPaisa Donation -->
+                    <div class="card mb-4 border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">💙 EasyPaisa Donations</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6>Send donations via EasyPaisa:</h6>
+                                    <div class="bg-light p-3 rounded">
+                                        <h4 class="text-primary mb-2">0346 4499599</h4>
+                                        <p class="mb-1"><strong>Account Name:</strong> GrowEasy Invoice</p>
+                                        <p class="mb-2"><small class="text-muted">Send via EasyPaisa App or Agent</small></p>
+                                        
+                                        <!-- EasyPaisa Action Buttons -->
+                                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                                            <button class="btn btn-primary btn-sm" onclick="openEasyPaisa()">
+                                                💙 Open EasyPaisa App
+                                            </button>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="copyEasyPaisaNumber()">
+                                                📋 Copy Number
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="bg-white p-3 rounded border">
+                                        <img src="https://www.easypaisa.com.pk/static/images/logo.svg" alt="EasyPaisa" style="height: 60px;" class="mb-2">
+                                        <p class="small text-muted mb-0">Instant Transfer</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bank Transfer -->
+                    <div class="card mb-4 border-info">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">🏦 Bank Transfer</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Bank Account Details:</h6>
+                                    <div class="bg-light p-3 rounded">
+                                        <p class="mb-1"><strong>Bank Name:</strong> HBL</p>
+                                        <p class="mb-1"><strong>Account Title:</strong> GrowEasy Invoice</p>
+                                        <p class="mb-1"><strong>Account Number:</strong> 1234-5678901-234</p>
+                                        <p class="mb-1"><strong>IBAN:</strong> PK36HABB0012345678901234</p>
+                                        <p class="mb-2"><strong>Branch Code:</strong> 1234</p>
+                                        
+                                        <!-- Bank Action Buttons -->
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-info btn-sm" onclick="copyBankDetails()">
+                                                🏦 Copy Bank Details
+                                            </button>
+                                            <button class="btn btn-outline-info btn-sm" onclick="copyIBAN()">
+                                                📋 Copy IBAN Only
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Contact for Assistance:</h6>
+                                    <div class="bg-light p-3 rounded">
+                                        <p class="mb-2"><strong>Email Support:</strong></p>
+                                        <button class="btn btn-warning btn-sm w-100 mb-2" onclick="openEmailSupport()">
+                                            📧 Email Support Team
+                                        </button>
+                                        
+                                        <p class="mb-2"><strong>WhatsApp Support:</strong></p>
+                                        <button class="btn btn-success btn-sm w-100" onclick="openWhatsApp()">
+                                            💬 WhatsApp Support
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Donation Amounts -->
+                    <div class="card mb-4 border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">💰 Quick Donation Amounts</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5>☕ Coffee</h5>
+                                            <h3 class="text-success">Rs 500</h3>
+                                            <p>Help with server costs</p>
+                                            <button class="btn btn-outline-success btn-sm" onclick="donateAmount(500)">
+                                                Donate Rs 500
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5>🚀 Features</h5>
+                                            <h3 class="text-primary">Rs 2,000</h3>
+                                            <p>Speed up new features</p>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="donateAmount(2000)">
+                                                Donate Rs 2,000
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5>🏢 Business</h5>
+                                            <h3 class="text-warning">Rs 5,000</h3>
+                                            <p>Major feature development</p>
+                                            <button class="btn btn-outline-warning btn-sm" onclick="donateAmount(5000)">
+                                                Donate Rs 5,000
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5>❤️ Custom</h5>
+                                            <h3 class="text-danger">Any Amount</h3>
+                                            <p>Your generous support</p>
+                                            <button class="btn btn-outline-danger btn-sm" onclick="showCustomAmount()">
+                                                Enter Amount
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Custom Amount Input -->
+                            <div id="customAmountSection" class="mt-3 p-3 bg-light rounded" style="display: none;">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Enter Custom Amount (Rs)</label>
+                                        <input type="number" id="customAmount" class="form-control" placeholder="Enter amount in PKR" min="100">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button class="btn btn-success mt-3" onclick="donateCustomAmount()">Donate This Amount</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Donation Instructions -->
+                    <div class="card border-secondary">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">📋 Donation Instructions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>After Donating:</h6>
+                                    <ol class="small">
+                                        <li>Take a screenshot of transaction</li>
+                                        <li>Email it to: <strong>donations@groweasy.com</strong></li>
+                                        <li>Include your name/email for receipt</li>
+                                        <li>We'll send confirmation within 24 hours</li>
+                                    </ol>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Other Ways to Support:</h6>
+                                    <ul class="small">
+                                        <li>Share with other businesses</li>
+                                        <li>Give us feedback</li>
+                                        <li>Suggest new features</li>
+                                        <li>Rate our service</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Donation amounts and contact information
+const DONATION_INFO = {
+    jazzCash: '+923464499599',
+    easyPaisa: '03464499599',
+    bankAccount: '1234-5678901-234',
+    iban: 'PK36HABB0012345678901234',
+    bankName: 'HBL',
+    accountTitle: 'GrowEasy Invoice',
+    email: 'obaid_16@yahoo.com',
+    whatsapp: '+923464499599',
+    supportEmail: 'obaid_16@yahoo.com'
+};
+
+// Jazz Cash Functions
+function openJazzCash() {
+    // Jazz Cash app deep link (if available) or fallback to copy
+    const jazzCashUrl = `jazzcash://send?number=${DONATION_INFO.jazzCash}`;
+    window.location.href = jazzCashUrl;
+    setTimeout(() => {
+        copyJazzCashNumber(); // Fallback to copy if app doesn't open
+    }, 1000);
+}
+
+function copyJazzCashNumber() {
+    navigator.clipboard.writeText(DONATION_INFO.jazzCash).then(() => {
+        showToast('✅ Jazz Cash number copied!', '#28a745');
+    }).catch(err => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = DONATION_INFO.jazzCash;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('✅ Jazz Cash number copied!', '#28a745');
+    });
+}
+
+// EasyPaisa Functions
+function openEasyPaisa() {
+    // EasyPaisa app deep link (if available) or fallback to copy
+    const easyPaisaUrl = `easypaisa://send?number=${DONATION_INFO.easyPaisa}`;
+    window.location.href = easyPaisaUrl;
+    setTimeout(() => {
+        copyEasyPaisaNumber(); // Fallback to copy if app doesn't open
+    }, 1000);
+}
+
+function copyEasyPaisaNumber() {
+    navigator.clipboard.writeText(DONATION_INFO.easyPaisa).then(() => {
+        showToast('✅ EasyPaisa number copied!', '#007bff');
+    }).catch(err => {
+        const textArea = document.createElement('textarea');
+        textArea.value = DONATION_INFO.easyPaisa;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('✅ EasyPaisa number copied!', '#007bff');
+    });
+}
+
+// Bank Functions
+function copyBankDetails() {
+    const bankDetails = `Bank Name: ${DONATION_INFO.bankName}\nAccount Title: ${DONATION_INFO.accountTitle}\nAccount Number: ${DONATION_INFO.bankAccount}\nIBAN: ${DONATION_INFO.iban}`;
+    navigator.clipboard.writeText(bankDetails).then(() => {
+        showToast('✅ Bank details copied!', '#17a2b8');
+    });
+}
+
+function copyIBAN() {
+    navigator.clipboard.writeText(DONATION_INFO.iban).then(() => {
+        showToast('✅ IBAN copied!', '#17a2b8');
+    });
+}
+
+// Contact Functions
+function openEmailSupport() {
+    const subject = 'Donation Support - GrowEasy Invoice';
+    const body = 'Hello GrowEasy Team,\n\nI need assistance with making a donation.\n\nBest regards,';
+    const mailtoUrl = `mailto:${DONATION_INFO.supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+}
+
+function openWhatsApp() {
+    const message = 'Hello! I need assistance with making a donation to GrowEasy Invoice.';
+    const whatsappUrl = `https://wa.me/${DONATION_INFO.whatsapp}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+}
+
+// Donation Amount Functions
+function donateAmount(amount) {
+    showToast(`🎉 Thank you! Please send Rs ${amount} via Jazz Cash or EasyPaisa`, '#28a745');
+    // You can also pre-fill the amount in the app if deep linking supports it
+    setTimeout(() => {
+        const choice = confirm(`Donate Rs ${amount}?\n\nClick OK for Jazz Cash or Cancel for EasyPaisa instructions.`);
+        if (choice) {
+            copyJazzCashNumber();
+        } else {
+            copyEasyPaisaNumber();
+        }
+    }, 1000);
+}
+
+function showCustomAmount() {
+    document.getElementById('customAmountSection').style.display = 'block';
+}
+
+function donateCustomAmount() {
+    const amount = document.getElementById('customAmount').value;
+    if (!amount || amount < 100) {
+        showToast('⚠️ Please enter an amount of Rs 100 or more', '#ffc107');
+        return;
+    }
+    donateAmount(parseInt(amount));
+}
+
+// Toast notification function
+function showToast(message, backgroundColor = '#28a745') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, backgroundColor);
+    } else {
+        // Fallback toast
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${backgroundColor};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 4px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+}
+
+// Auto-hide custom amount section after 30 seconds
+setTimeout(() => {
+    const customSection = document.getElementById('customAmountSection');
+    if (customSection && customSection.style.display === 'block') {
+        customSection.style.display = 'none';
+        document.getElementById('customAmount').value = '';
+    }
+}, 30000);
+</script>
+
+<style>
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-2px);
+}
+.btn {
+    transition: all 0.2s ease-in-out;
+}
+.btn:hover {
+    transform: scale(1.05);
+}
+</style>
 {% endblock %}

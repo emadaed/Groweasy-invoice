@@ -12,11 +12,20 @@ app.secret_key = 'your-secret-key-change-in-production'  # Change this!
 # Initialize database
 init_db()
 
-@app.route("/")
+@app.route('/')
 def home():
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    return render_template("form.html")
+    """Home page - show invoice creation form"""
+    return render_template('form.html')
+
+@app.route('/debug')
+def debug():
+    """Debug route to check what's working"""
+    debug_info = {
+        'session': dict(session),
+        'routes': [str(rule) for rule in app.url_map.iter_rules()],
+        'user_authenticated': bool(session.get('user_id'))
+    }
+    return jsonify(debug_info)
 
 @app.route("/login", methods=['GET', 'POST'])
 def login():

@@ -49,7 +49,7 @@
       display: none;
     }
     
-    /* Navigation for authenticated users */
+    /* Navigation for all users */
     .user-nav {
       background: linear-gradient(135deg, #28a745, #20c997);
       padding: 1rem 0;
@@ -59,25 +59,34 @@
   </style>
 </head>
 <body class="bg-light">
-  <!-- Navigation for logged-in users -->
-  {% if session.get('user_id') %}
+  <!-- Navigation for ALL users -->
   <nav class="user-nav">
     <div class="container">
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <span class="text-white fw-bold">GrowEasy Invoice</span>
-          <small class="text-white-50 ms-2">Welcome, {{ session.get('user_email', 'User') }}</small>
+          {% if session.get('user_id') %}
+            <small class="text-white-50 ms-2">Welcome, {{ session.get('user_email', 'User') }}</small>
+          {% endif %}
         </div>
         <div>
-          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
-          <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">New Invoice</a>
-          <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">💝 Donate</a>
-          <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+          {% if session.get('user_id') %}
+            <!-- Logged in user menu -->
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
+            <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">New Invoice</a>
+            <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">💝 Donate</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+          {% else %}
+            <!-- Guest user menu -->
+            <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">Create Invoice</a>
+            <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-sm me-2">Login</a>
+            <a href="{{ url_for('register') }}" class="btn btn-success btn-sm me-2">Register</a>
+            <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">💝 Donate</a>
+          {% endif %}
         </div>
       </div>
     </div>
   </nav>
-  {% endif %}
 
   <main class="container-main">
     {% with messages = get_flashed_messages() %}
