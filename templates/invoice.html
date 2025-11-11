@@ -3,29 +3,29 @@
 {% block title %}Professional Invoice{% endblock %}
 
 {% block content %}
-<div class="invoice-container">
+<div class="invoice-container" style="font-family: Arial, sans-serif; font-size: 10px; line-height: 1.2;">
     <!-- Compact Header: Company + Invoice Details -->
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 12px;">
         <tr>
             <!-- Company Info -->
             <td width="60%" valign="top">
                 <table cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                        <td valign="top" style="padding-right: 12px;">
+                        <td valign="top" style="padding-right: 8px;">
                             {% if data.logo_b64 %}
-                            <img src="data:image/png;base64,{{ data.logo_b64 }}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px;" alt="{{ data.company_name }}">
+                            <img src="data:image/png;base64,{{ data.logo_b64 }}" style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;" alt="{{ data.company_name }}">
                             {% else %}
-                            <img src="{{ url_for('static', filename='assets/logo.png') }}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px;" alt="{{ data.company_name }}" onerror="this.style.display='none'">
+                            <img src="{{ url_for('static', filename='assets/logo.png') }}" style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;" alt="{{ data.company_name }}" onerror="this.style.display='none'">
                             {% endif %}
                         </td>
                         <td valign="top">
-                            <h1 style="margin: 0 0 4px 0; font-size: 18px; color: #2c5aa0; font-weight: bold;">{{ data.company_name }}</h1>
-                            <p style="margin: 1px 0; font-size: 10px; color: #666;">{{ data.company_address }}</p>
-                            <p style="margin: 1px 0; font-size: 10px; color: #666;">
+                            <h1 style="margin: 0 0 3px 0; font-size: 16px; color: #2c5aa0; font-weight: bold;">{{ data.company_name }}</h1>
+                            <p style="margin: 1px 0; font-size: 8px; color: #666;">{{ data.company_address }}</p>
+                            <p style="margin: 1px 0; font-size: 8px; color: #666;">
                                 {{ data.company_phone }} | {{ data.company_email }}
                             </p>
                             {% if data.company_tax_id %}
-                            <p style="margin: 1px 0; font-size: 10px; color: #666;"><strong>Tax ID:</strong> {{ data.company_tax_id }}</p>
+                            <p style="margin: 1px 0; font-size: 8px; color: #666;"><strong>Tax ID:</strong> {{ data.company_tax_id }}</p>
                             {% endif %}
                         </td>
                     </tr>
@@ -34,19 +34,19 @@
             
             <!-- Invoice Number & Title -->
             <td width="40%" valign="top" align="right">
-                <h2 style="margin: 0 0 8px 0; font-size: 20px; color: #2c5aa0; text-align: right;">INVOICE</h2>
-                <table cellpadding="2" cellspacing="0" border="0" style="font-size: 11px;">
+                <h2 style="margin: 0 0 6px 0; font-size: 18px; color: #2c5aa0; text-align: right;">INVOICE</h2>
+                <table cellpadding="1" cellspacing="0" border="0" style="font-size: 9px;">
                     <tr>
-                        <td align="right" style="padding: 1px 5px 1px 0;"><strong>Invoice #:</strong></td>
+                        <td align="right" style="padding: 1px 4px 1px 0;"><strong>Invoice #:</strong></td>
                         <td style="padding: 1px 0;">{{ data.invoice_number }}</td>
                     </tr>
                     <tr>
-                        <td align="right" style="padding: 1px 5px 1px 0;"><strong>Date:</strong></td>
+                        <td align="right" style="padding: 1px 4px 1px 0;"><strong>Date:</strong></td>
                         <td style="padding: 1px 0;">{{ data.invoice_date }}</td>
                     </tr>
                     {% if data.due_date %}
                     <tr>
-                        <td align="right" style="padding: 1px 5px 1px 0;"><strong>Due Date:</strong></td>
+                        <td align="right" style="padding: 1px 4px 1px 0;"><strong>Due Date:</strong></td>
                         <td style="padding: 1px 0;">{{ data.due_date }}</td>
                     </tr>
                     {% endif %}
@@ -56,132 +56,206 @@
     </table>
 
     <!-- Separator -->
-    <hr style="margin: 12px 0; border: none; border-top: 2px solid #2c5aa0;">
+    <hr style="margin: 8px 0; border: none; border-top: 1px solid #2c5aa0;">
+
+    <!-- FBR Compliance Badge - More Compact -->
+    {% if data.seller_ntn %}
+    <div style="background: #d4edda; padding: 4px 8px; border-radius: 3px; border-left: 3px solid #28a745; margin-bottom: 10px; font-size: 9px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                <td valign="middle">
+                    <strong style="color: #155724;">🏛️ FBR COMPLIANT INVOICE</strong>
+                </td>
+                <td align="right" valign="middle">
+                    <span style="color: #155724;">Seller NTN: {{ data.seller_ntn }}</span>
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
 
     <!-- Compact Client & Payment Info Side-by-Side -->
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 12px;">
         <tr>
             <!-- Bill To (Compact) -->
             <td width="48%" valign="top">
-                <h3 style="margin: 0 0 6px 0; font-size: 12px; color: #2c5aa0; font-weight: bold;">BILL TO</h3>
-                <p style="margin: 2px 0; font-size: 11px; font-weight: bold;">{{ data.client_name }}</p>
+                <h3 style="margin: 0 0 4px 0; font-size: 10px; color: #2c5aa0; font-weight: bold;">BILL TO</h3>
+                <p style="margin: 1px 0; font-size: 9px; font-weight: bold;">{{ data.client_name }}</p>
                 {% if data.client_email %}
-                <p style="margin: 1px 0; font-size: 10px; color: #666;">{{ data.client_email }}</p>
+                <p style="margin: 1px 0; font-size: 8px; color: #666;">{{ data.client_email }}</p>
                 {% endif %}
                 {% if data.client_phone %}
-                <p style="margin: 1px 0; font-size: 10px; color: #666;">{{ data.client_phone }}</p>
+                <p style="margin: 1px 0; font-size: 8px; color: #666;">{{ data.client_phone }}</p>
                 {% endif %}
                 {% if data.client_address %}
-                <p style="margin: 1px 0 0 0; font-size: 9px; color: #666;">{{ data.client_address }}</p>
+                <p style="margin: 1px 0 0 0; font-size: 7px; color: #666;">{{ data.client_address }}</p>
+                {% endif %}
+                
+                <!-- Buyer Tax Info -->
+                {% if data.buyer_ntn %}
+                <div style="margin-top: 6px; padding: 3px; background: #f8f9fa; border-radius: 2px;">
+                    <p style="margin: 1px 0; font-size: 7px; color: #666;"><strong>Buyer NTN:</strong> {{ data.buyer_ntn }}</p>
+                    {% if data.buyer_strn %}
+                    <p style="margin: 1px 0; font-size: 7px; color: #666;"><strong>Buyer STRN:</strong> {{ data.buyer_strn }}</p>
+                    {% endif %}
+                </div>
                 {% endif %}
             </td>
             
-            <!-- Payment Info (Compact) -->
+            <!-- Spacer -->
             <td width="4%"><!-- Spacer --></td>
             
+            <!-- Payment Info (Compact) -->
             <td width="48%" valign="top">
-                <h3 style="margin: 0 0 6px 0; font-size: 12px; color: #28a745; font-weight: bold;">PAYMENT INFO</h3>
-                <p style="margin: 2px 0; font-size: 10px;"><strong>Terms:</strong> {{ data.payment_terms }}</p>
-                <p style="margin: 2px 0; font-size: 10px;"><strong>Methods:</strong> {{ data.payment_methods }}</p>
-                <p style="margin: 4px 0 0 0; font-size: 9px; color: #666;">
+                <h3 style="margin: 0 0 4px 0; font-size: 10px; color: #28a745; font-weight: bold;">PAYMENT INFO</h3>
+                <p style="margin: 1px 0; font-size: 8px;"><strong>Terms:</strong> {{ data.payment_terms }}</p>
+                <p style="margin: 1px 0; font-size: 8px;"><strong>Methods:</strong> {{ data.payment_methods }}</p>
+                
+                <!-- Seller Tax Info -->
+                <div style="margin-top: 6px; padding: 3px; background: #f8f9fa; border-radius: 2px;">
+                    <p style="margin: 1px 0; font-size: 7px; color: #666;"><strong>Seller NTN:</strong> {{ data.seller_ntn }}</p>
+                    {% if data.seller_strn %}
+                    <p style="margin: 1px 0; font-size: 7px; color: #666;"><strong>Seller STRN:</strong> {{ data.seller_strn }}</p>
+                    {% endif %}
+                </div>
+                
+                <p style="margin: 3px 0 0 0; font-size: 7px; color: #666;">
                     Include invoice #{{ data.invoice_number }}
                 </p>
             </td>
         </tr>
     </table>
 
-    <!-- Items Table -->
-    <h3 style="margin: 0 0 8px 0; font-size: 12px; color: #2c5aa0; font-weight: bold;">ITEMS & SERVICES</h3>
+    <!-- Items Table - More Compact -->
+    <h3 style="margin: 0 0 6px 0; font-size: 10px; color: #2c5aa0; font-weight: bold;">ITEMS & SERVICES</h3>
     
-    <table width="100%" cellpadding="6" cellspacing="0" border="1" style="border-collapse: collapse; border: 1px solid #2c5aa0; margin: 0 0 15px 0; font-size: 10px;">
+    <table width="100%" cellpadding="4" cellspacing="0" border="1" style="border-collapse: collapse; border: 1px solid #2c5aa0; margin: 0 0 10px 0; font-size: 8px;">
         <thead>
             <tr style="background-color: #2c5aa0; color: white;">
-                <th align="left" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">DESCRIPTION</th>
-                <th width="10%" align="center" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">QTY</th>
-                <th width="18%" align="right" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">UNIT PRICE</th>
-                <th width="18%" align="right" style="border: 1px solid #1e3d6d; padding: 8px; font-weight: bold;">AMOUNT</th>
+                <th align="left" style="border: 1px solid #1e3d6d; padding: 6px; font-weight: bold;">DESCRIPTION</th>
+                <th width="8%" align="center" style="border: 1px solid #1e3d6d; padding: 6px; font-weight: bold;">QTY</th>
+                <th width="15%" align="right" style="border: 1px solid #1e3d6d; padding: 6px; font-weight: bold;">UNIT PRICE</th>
+                <th width="15%" align="right" style="border: 1px solid #1e3d6d; padding: 6px; font-weight: bold;">AMOUNT</th>
             </tr>
         </thead>
         <tbody>
             {% for item in data.get('items', []) %}
             <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;">{{ item.name or item.code or '—' }}</td>
-                <td align="center" style="border: 1px solid #ddd; padding: 8px;">{{ item.qty }}</td>
-                <td align="right" style="border: 1px solid #ddd; padding: 8px;">${{ "%.2f"|format(item.price) }}</td>
-                <td align="right" style="border: 1px solid #ddd; padding: 8px;"><strong>${{ "%.2f"|format(item.total) }}</strong></td>
+                <td style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">{{ item.name or item.code or '—' }}</td>
+                <td align="center" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">{{ item.qty }}</td>
+                <td align="right" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">${{ "%.2f"|format(item.price) }}</td>
+                <td align="right" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;"><strong>${{ "%.2f"|format(item.total) }}</strong></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <!-- Totals & Footer in Single Row -->
+    <!-- Totals & QR Codes in Single Row - Optimized -->
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-            <!-- Notes & Terms -->
-            <td width="55%" valign="top">
+            <!-- Notes & Terms - More Compact -->
+            <td width="50%" valign="top">
                 {% if data.notes %}
-                <div style="background: #fff3cd; padding: 6px; border-radius: 4px; border-left: 3px solid #ffc107; margin-bottom: 8px;">
-                    <p style="margin: 0; font-size: 9px; color: #856404;"><strong>Note:</strong> {{ data.notes }}</p>
+                <div style="background: #fff3cd; padding: 4px; border-radius: 3px; border-left: 2px solid #ffc107; margin-bottom: 6px;">
+                    <p style="margin: 0; font-size: 7px; color: #856404;"><strong>Note:</strong> {{ data.notes }}</p>
+                </div>
+                {% endif %}
+                
+                <!-- FBR Compliance Notice -->
+                {% if data.seller_ntn %}
+                <div style="background: #d1ecf1; padding: 4px; border-radius: 3px; border-left: 2px solid #17a2b8; margin-bottom: 6px;">
+                    <p style="margin: 0; font-size: 7px; color: #0c5460;">
+                        <strong>FBR Compliant:</strong> This invoice meets FBR requirements for electronic invoicing.
+                    </p>
                 </div>
                 {% endif %}
                 
                 <!-- Terms & Conditions -->
-                <div style="font-size: 8px; color: #666; line-height: 1.2;">
-                    <p style="margin: 2px 0;"><strong>Terms:</strong> Payment due upon receipt. Late payments subject to 1.5% monthly interest.</p>
-                    <p style="margin: 2px 0;">This is an computer generated invoice and requires no signature.</p>
+                <div style="font-size: 7px; color: #666; line-height: 1.1;">
+                    <p style="margin: 1px 0;"><strong>Terms:</strong> Payment due upon receipt. Late payments subject to 1.5% monthly interest.</p>
+                    <p style="margin: 1px 0;">This is an computer generated invoice and requires no signature.</p>
                 </div>
             </td>
             
-            <!-- Totals -->
-            <td width="45%" valign="top">
-                <table width="100%" cellpadding="5" cellspacing="0" border="0" style="background: #f8f9fa; border-radius: 4px;">
+            <!-- Totals & QR Codes -->
+            <td width="50%" valign="top">
+                <table width="100%" cellpadding="3" cellspacing="0" border="0" style="background: #f8f9fa; border-radius: 3px; margin-bottom: 8px;">
                     <tr>
-                        <td style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;"><strong>Subtotal:</strong></td>
-                        <td align="right" style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;">${{ "%.2f"|format(data.subtotal) }}</td>
+                        <td style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;"><strong>Subtotal:</strong></td>
+                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">${{ "%.2f"|format(data.subtotal) }}</td>
                     </tr>
                     {% if data.discount_rate > 0 %}
                     <tr>
-                        <td style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;"><strong>Discount ({{ "%.1f"|format(data.discount_rate) }}%):</strong></td>
-                        <td align="right" style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;">-${{ "%.2f"|format(data.discount_amount) }}</td>
+                        <td style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;"><strong>Discount ({{ "%.1f"|format(data.discount_rate) }}%):</strong></td>
+                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">-${{ "%.2f"|format(data.discount_amount) }}</td>
                     </tr>
                     {% endif %}
                     {% if data.tax_rate > 0 %}
                     <tr>
-                        <td style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;"><strong>Tax ({{ "%.1f"|format(data.tax_rate) }}%):</strong></td>
-                        <td align="right" style="padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px;">${{ "%.2f"|format(data.tax_amount) }}</td>
+                        <td style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;"><strong>Tax ({{ "%.1f"|format(data.tax_rate) }}%):</strong></td>
+                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">${{ "%.2f"|format(data.tax_amount) }}</td>
                     </tr>
                     {% endif %}
                     <tr style="background: #2c5aa0; color: white;">
-                        <td style="padding: 8px 4px; font-size: 12px; font-weight: bold;">TOTAL DUE:</td>
-                        <td align="right" style="padding: 8px 4px; font-size: 12px; font-weight: bold;">${{ "%.2f"|format(data.grand_total) }}</td>
+                        <td style="padding: 6px 3px; font-size: 10px; font-weight: bold;">TOTAL DUE:</td>
+                        <td align="right" style="padding: 6px 3px; font-size: 10px; font-weight: bold;">${{ "%.2f"|format(data.grand_total) }}</td>
                     </tr>
                 </table>
                 
-                <!-- QR Code Compact -->
-                <div style="text-align: center; margin-top: 8px;">
-                    {% if qr_b64 %}
-                    <img src="data:image/png;base64,{{ qr_b64 }}" style="width: 50px; height: 50px;" alt="QR Code">
-                    {% endif %}
-                    <p style="margin: 2px 0; font-size: 8px; color: #666;">Scan to pay</p>
-                </div>
+                <!-- Both QR Codes Side by Side -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <!-- Custom QR Code -->
+                        <td width="50%" align="center" valign="top">
+                            <div style="text-align: center;">
+                                <h4 style="margin: 0 0 4px 0; font-size: 9px; color: #2c5aa0;">PAYMENT QR</h4>
+                                {% if custom_qr_b64 %}
+                                <img src="data:image/png;base64,{{ custom_qr_b64 }}" style="width: 70px; height: 70px; border-radius: 5px;" alt="Payment QR Code">
+                                {% endif %}
+                                <p style="margin: 2px 0; font-size: 7px; color: #666;">Scan to pay</p>
+                            </div>
+                        </td>
+                        
+                        <!-- FBR QR Code -->
+                        {% if fbr_compliant and fbr_qr_code %}
+                        <td width="50%" align="center" valign="top">
+                            <div style="text-align: center;">
+                                <h4 style="margin: 0 0 4px 0; font-size: 9px; color: #155724;">FBR QR</h4>
+                                <img src="data:image/png;base64,{{ fbr_qr_code }}" style="width: 70px; height: 70px; border: 1px solid #ddd; border-radius: 5px;" alt="FBR QR Code">
+                                <p style="margin: 2px 0; font-size: 7px; color: #666;">Verify with FBR</p>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
 
     <!-- Compact Footer -->
-    <div style="margin-top: 15px; padding-top: 8px; border-top: 1px solid #ddd; text-align: center;">
-        <p style="margin: 2px 0; font-size: 9px; color: #2c5aa0; font-weight: bold;">Thank you for your business!</p>
-        <p style="margin: 0; font-size: 8px; color: #666;">Generated via GrowEasy Invoice • www.groweasy.com</p>
+    <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #ddd; text-align: center;">
+        <p style="margin: 1px 0; font-size: 7px; color: #2c5aa0; font-weight: bold;">Thank you for your business!</p>
+        <p style="margin: 0; font-size: 6px; color: #666;">Generated via GrowEasy Invoice • FBR Compliant Format • www.groweasy.com</p>
     </div>
 </div>
 
 {% if preview %}
 <div class="text-center my-4">
+    <!-- FBR Compliance Status -->
+    {% if fbr_compliant %}
+    <div class="alert alert-success mb-3">
+        <strong>✅ FBR Compliant:</strong> This invoice meets all FBR format requirements.
+    </div>
+    {% else %}
+    <div class="alert alert-warning mb-3">
+        <strong>⚠️ FBR Notice:</strong> {{ fbr_errors[0] if fbr_errors else 'FBR compliance requires seller NTN' }}
+    </div>
+    {% endif %}
+    
     <form id="downloadForm" action="{{ url_for('download_invoice') }}" method="POST">
         <input type="hidden" name="data" value='{{ data | tojson }}'>
-        <input type="hidden" name="qr_b64" value="{{ qr_b64 }}">
         <button type="submit" class="btn btn-success btn-lg px-5">
-            ⬇️ Download Enterprise PDF
+            ⬇️ Download FBR-Compliant PDF
         </button>
     </form>
 </div>

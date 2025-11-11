@@ -1,11 +1,12 @@
+# invoice_logic.py
 def prepare_invoice_data(form_data, files=None):
-    """Prepare complete invoice data with professional fields"""
+    """Prepare complete invoice data with FBR fields"""
     
-    # Extract existing data
+    # Extract existing data - USE getlist() for array fields
     items = []
-    item_names = form_data.get('item_name[]', [])
-    item_qtys = form_data.get('item_qty[]', [])
-    item_prices = form_data.get('item_price[]', [])
+    item_names = form_data.getlist('item_name[]')  # Changed to getlist
+    item_qtys = form_data.getlist('item_qty[]')    # Changed to getlist
+    item_prices = form_data.getlist('item_price[]') # Changed to getlist
     
     for i in range(len(item_names)):
         if item_names[i].strip():
@@ -19,8 +20,8 @@ def prepare_invoice_data(form_data, files=None):
             })
     
     subtotal = sum(item['total'] for item in items)
-    tax_rate = float(form_data.get('tax_rate', [0])[0])
-    discount_rate = float(form_data.get('discount_rate', [0])[0])
+    tax_rate = float(form_data.get('tax_rate', 0))  # Remove [0]
+    discount_rate = float(form_data.get('discount_rate', 0))  # Remove [0]
     
     discount_amount = subtotal * (discount_rate / 100)
     taxable_amount = subtotal - discount_amount
@@ -36,7 +37,7 @@ def prepare_invoice_data(form_data, files=None):
         if logo_file and logo_file.filename:
             logo_b64 = base64.b64encode(logo_file.read()).decode('utf-8')
     
-    # PROFESSIONAL FIELDS WITH DEFAULTS
+    # Enhanced with FBR fields - REMOVE ALL [0] INDEXING
     return {
         # Existing fields
         'items': items,
@@ -46,23 +47,30 @@ def prepare_invoice_data(form_data, files=None):
         'discount_rate': discount_rate,
         'discount_amount': discount_amount,
         'grand_total': grand_total,
-        'invoice_number': form_data.get('invoice_number', ['INV-00001'])[0],
-        'invoice_date': form_data.get('invoice_date', [''])[0],
-        'client_name': form_data.get('client_name', [''])[0],
-        'client_email': form_data.get('client_email', [''])[0],
-        'client_phone': form_data.get('client_phone', [''])[0],
-        'client_address': form_data.get('client_address', [''])[0],
+        'invoice_number': form_data.get('invoice_number', 'INV-00001'),  # Remove [0]
+        'invoice_date': form_data.get('invoice_date', ''),  # Remove [0]
+        'client_name': form_data.get('client_name', ''),  # Remove [0]
+        'client_email': form_data.get('client_email', ''),  # Remove [0]
+        'client_phone': form_data.get('client_phone', ''),  # Remove [0]
+        'client_address': form_data.get('client_address', ''),  # Remove [0]
         
-        # NEW PROFESSIONAL FIELDS (with defaults)
-        'company_name': form_data.get('company_name', ['Your Company Name'])[0],
-        'company_address': form_data.get('company_address', ['123 Business Street, City, State 12345'])[0],
-        'company_phone': form_data.get('company_phone', ['+1 (555) 123-4567'])[0],
-        'company_email': form_data.get('company_email', ['hello@company.com'])[0],
-        'company_tax_id': form_data.get('company_tax_id', [''])[0],
-        'due_date': form_data.get('due_date', [''])[0],
-        'payment_terms': form_data.get('payment_terms', ['Due upon receipt'])[0],
-        'payment_methods': form_data.get('payment_methods', ['Bank Transfer, Credit Card'])[0],
-        'notes': form_data.get('notes', [''])[0],
+        # Business Information
+        'company_name': form_data.get('company_name', 'Your Company Name'),  # Remove [0]
+        'company_address': form_data.get('company_address', '123 Business Street, City, State 12345'),  # Remove [0]
+        'company_phone': form_data.get('company_phone', '+1 (555) 123-4567'),  # Remove [0]
+        'company_email': form_data.get('company_email', 'hello@company.com'),  # Remove [0]
+        'company_tax_id': form_data.get('company_tax_id', ''),  # Remove [0]
+        'due_date': form_data.get('due_date', ''),  # Remove [0]
+        'payment_terms': form_data.get('payment_terms', 'Due upon receipt'),  # Remove [0]
+        'payment_methods': form_data.get('payment_methods', 'Bank Transfer, Credit Card'),  # Remove [0]
+        'notes': form_data.get('notes', ''),  # Remove [0]
+        
+        # FBR Specific Fields
+        'seller_ntn': form_data.get('seller_ntn', ''),  # Remove [0]
+        'seller_strn': form_data.get('seller_strn', ''),  # Remove [0]
+        'buyer_ntn': form_data.get('buyer_ntn', ''),  # Remove [0]
+        'buyer_strn': form_data.get('buyer_strn', ''),  # Remove [0]
+        'invoice_type': form_data.get('invoice_type', 'S'),  # Remove [0] - S for Sale
         
         # Logo handling
         'logo_b64': logo_b64
