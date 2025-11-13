@@ -20,6 +20,7 @@ pycparser==2.23
 pydyf==0.11.0
 pyphen==0.17.2
 pypng==0.20220715.0
+python-dotenv==1.0.1
 qrcode==7.4.2
 setuptools==80.9.0
 tinycss2==1.4.0
