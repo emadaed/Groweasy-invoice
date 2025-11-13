@@ -6,9 +6,12 @@ from core.invoice_logic import prepare_invoice_data
 from core.qr_engine import make_qr_with_logo
 from core.pdf_engine import generate_pdf, HAS_WEAZYPRINT
 from core.auth import init_db, create_user, verify_user
+import os
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-in-production'  # Change this!
+app.secret_key = os.getenv('SECRET_KEY')  # Change this!
 
 # Initialize database
 init_db()
