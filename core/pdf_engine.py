@@ -11,7 +11,7 @@ except ImportError:
 
 def generate_pdf(html_content: str) -> bytes:
     """Render HTML → PDF with proper fallback."""
-    
+
     if HAS_WEAZYPRINT:
         # Production - use WeasyPrint
         return _generate_weasyprint_pdf(html_content)
@@ -71,33 +71,33 @@ def _generate_content_fallback(html_content: str) -> bytes:
     try:
         from fpdf import FPDF
         import re
-        
+
         # Extract text from HTML
         def extract_text(html):
             clean = re.compile('<.*?>')
             return re.sub(clean, '', html)
-        
+
         pdf = FPDF()
         pdf.add_page()
-        
+
         # Title
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(200, 10, "INVOICE - DEVELOPMENT PREVIEW", 0, 1, 'C')
         pdf.ln(10)
-        
+
         # Content preview
         pdf.set_font("Arial", '', 10)
         clean_text = extract_text(html_content)
         preview = clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
         pdf.multi_cell(0, 6, preview)
-        
+
         # Footer
         pdf.ln(10)
         pdf.set_font("Arial", 'I', 8)
         pdf.cell(0, 6, "GrowEasy Invoice - Local Development - Deploy for full PDF", 0, 1)
-        
+
         return pdf.output(dest='S').encode('latin1')
-        
+
     except ImportError:
         return _generate_minimal_pdf()
 
@@ -116,17 +116,17 @@ endobj
 4 0 obj
 << /Length 100 >>
 stream
-BT /F1 12 Tf 50 750 Td (GrowEasy Invoice - Development Preview) Tj 
+BT /F1 12 Tf 50 750 Td (GrowEasy Invoice - Development Preview) Tj
 /F1 10 Tf 50 730 Td (PDF generation works! Deploy to production for professional formatting.) Tj ET
 endstream
 endobj
 xref
 0 5
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000233 00000 n 
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000233 00000 n
 trailer
 << /Size 5 /Root 1 0 R >>
 startxref

@@ -9,13 +9,13 @@
                 {% else %}
                 <img src="{{ url_for('static', filename='assets/logo.png') }}" class="company-logo me-3" alt="{{ data.company_name }}" onerror="this.style.display='none'">
                 {% endif %}
-                
+
                 <!-- Company Details -->
                 <div class="company-info">
                     <h2 class="company-name text-dark mb-1">{{ data.company_name }}</h2>
                     <p class="company-address text-muted mb-1 small">{{ data.company_address }}</p>
                     <p class="company-contact text-muted mb-1 small">
-                        {{ data.company_phone }} 
+                        {{ data.company_phone }}
                         {% if data.company_email %} | {{ data.company_email }}{% endif %}
                     </p>
                     {% if data.company_tax_id %}
@@ -24,7 +24,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Invoice Details -->
         <div class="col-4">
             <div class="invoice-meta text-end">

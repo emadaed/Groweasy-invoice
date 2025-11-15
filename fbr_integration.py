@@ -10,7 +10,7 @@ class FBRInvoice:
     def __init__(self, invoice_data):
         self.invoice_data = invoice_data
         self.fbr_data = self.prepare_fbr_data()
-    
+
     def prepare_fbr_data(self):
         """Prepare FBR-compliant invoice data"""
         # Extract basic invoice info
@@ -18,7 +18,7 @@ class FBRInvoice:
         subtotal = sum(item['total'] for item in items)
         tax_amount = self.invoice_data.get('tax_amount', 0)
         total = self.invoice_data.get('grand_total', subtotal + tax_amount)
-        
+
         # FBR required fields
         fbr_data = {
             # Seller Information (Your Business)
@@ -30,7 +30,7 @@ class FBRInvoice:
                 "phone": self.invoice_data.get('company_phone', ''),
                 "email": self.invoice_data.get('company_email', '')
             },
-            
+
             # Buyer Information (Client)
             "buyer": {
                 "ntn": self.invoice_data.get('buyer_ntn', ''),
@@ -40,7 +40,7 @@ class FBRInvoice:
                 "phone": self.invoice_data.get('client_phone', ''),
                 "email": self.invoice_data.get('client_email', '')
             },
-            
+
             # Invoice Details
             "invoice": {
                 "number": self.invoice_data.get('invoice_number', ''),
@@ -49,7 +49,7 @@ class FBRInvoice:
                 "pos": "Online",  # Point of Sale
                 "invoice_type": self.invoice_data.get('invoice_type', 'S'),  # S for Sale, P for Purchase
             },
-            
+
             # Financial Details
             "amounts": {
                 "subtotal": round(subtotal, 2),
@@ -59,7 +59,7 @@ class FBRInvoice:
                 "tax_amount": round(tax_amount, 2),
                 "total": round(total, 2)
             },
-            
+
             # Items
             "items": [
                 {
@@ -72,16 +72,16 @@ class FBRInvoice:
                 for idx, item in enumerate(items)
             ]
         }
-        
+
         return fbr_data
-    
+
     def is_valid_ntn(self, ntn):
         """Validate NTN format (1234567-8)"""
         if not ntn:
             return False
         pattern = r'^\d{7}-\d{1}$'
         return bool(re.match(pattern, ntn))
-    
+
     def generate_fbr_qr_code(self):
         """Generate FBR-compliant QR code with encrypted data"""
         # Prepare data for QR code
@@ -105,10 +105,10 @@ class FBRInvoice:
                 "tax": self.fbr_data['amounts']['tax_amount']
             }
         }
-        
+
         # Convert to JSON string
         json_data = json.dumps(qr_data, separators=(',', ':'))
-        
+
         # Generate QR code
         qr = qrcode.QRCode(
             version=1,
@@ -118,49 +118,49 @@ class FBRInvoice:
         )
         qr.add_data(json_data)
         qr.make(fit=True)
-        
+
         # Create image
         qr_img = qr.make_image(fill_color="black", back_color="white")
-        
+
         # Convert to base64 for HTML embedding
         buffered = BytesIO()
         qr_img.save(buffered, format="PNG")
         qr_b64 = base64.b64encode(buffered.getvalue()).decode()
-        
+
         return qr_b64
-    
+
     def validate_fbr_compliance(self):
         """Validate if invoice meets FBR requirements"""
         errors = []
-        
+
         # Check seller NTN
         seller_ntn = self.fbr_data['seller']['ntn']
         if not seller_ntn:
             errors.append("Seller NTN is required for FBR compliance")
         elif not self.is_valid_ntn(seller_ntn):
             errors.append("Seller NTN must be in format: 1234567-8")
-        
+
         # Check invoice number format
         invoice_number = self.fbr_data['invoice']['number']
         if not invoice_number or len(invoice_number) < 3:
             errors.append("Valid invoice number is required")
-        
+
         # Check amounts
         if self.fbr_data['amounts']['total'] <= 0:
             errors.append("Invoice total must be greater than 0")
-        
+
         # Check date format
         invoice_date = self.fbr_data['invoice']['date']
         if not invoice_date:
             errors.append("Invoice date is required")
-        
+
         return errors
-    
+
     def get_fbr_summary(self):
         """Get FBR compliance summary"""
         errors = self.validate_fbr_compliance()
         is_compliant = len(errors) == 0
-        
+
         return {
             "is_compliant": is_compliant,
             "errors": errors,

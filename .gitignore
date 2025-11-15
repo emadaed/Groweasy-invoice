@@ -6,10 +6,13 @@ __pycache__/
 *.db
 *.sqlite3
 
-# Environments
+# Environments - ENHANCED PROTECTION
 .env
+*.env
+*env
 venv/
 .venv/
+notepad*
 
 # Editors
 .vscode/
@@ -24,3 +27,8 @@ generated_pdfs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Backup files (prevent future accidents)
+*.bak
+*backup*
+*-backup*

@@ -50,7 +50,7 @@ def verify_user(email, password):
     c.execute('SELECT id, password_hash FROM users WHERE email = ?', (email,))
     user = c.fetchone()
     conn.close()
-    
+
     if user and user[1] == hash_password(password):
         return user[0]  # Return user ID
     return None

@@ -31,7 +31,7 @@
                     </tr>
                 </table>
             </td>
-            
+
             <!-- Invoice Number & Title -->
             <td width="40%" valign="top" align="right">
                 <h2 style="margin: 0 0 6px 0; font-size: 18px; color: #2c5aa0; text-align: right;">INVOICE</h2>
@@ -90,7 +90,7 @@
                 {% if data.client_address %}
                 <p style="margin: 1px 0 0 0; font-size: 7px; color: #666;">{{ data.client_address }}</p>
                 {% endif %}
-                
+
                 <!-- Buyer Tax Info -->
                 {% if data.buyer_ntn %}
                 <div style="margin-top: 6px; padding: 3px; background: #f8f9fa; border-radius: 2px;">
@@ -101,16 +101,16 @@
                 </div>
                 {% endif %}
             </td>
-            
+
             <!-- Spacer -->
             <td width="4%"><!-- Spacer --></td>
-            
+
             <!-- Payment Info (Compact) -->
             <td width="48%" valign="top">
                 <h3 style="margin: 0 0 4px 0; font-size: 10px; color: #28a745; font-weight: bold;">PAYMENT INFO</h3>
                 <p style="margin: 1px 0; font-size: 8px;"><strong>Terms:</strong> {{ data.payment_terms }}</p>
                 <p style="margin: 1px 0; font-size: 8px;"><strong>Methods:</strong> {{ data.payment_methods }}</p>
-                
+
                 <!-- Seller Tax Info -->
                 <div style="margin-top: 6px; padding: 3px; background: #f8f9fa; border-radius: 2px;">
                     <p style="margin: 1px 0; font-size: 7px; color: #666;"><strong>Seller NTN:</strong> {{ data.seller_ntn }}</p>
@@ -118,7 +118,7 @@
                     <p style="margin: 1px 0; font-size: 7px; color: #666;"><strong>Seller STRN:</strong> {{ data.seller_strn }}</p>
                     {% endif %}
                 </div>
-                
+
                 <p style="margin: 3px 0 0 0; font-size: 7px; color: #666;">
                     Include invoice #{{ data.invoice_number }}
                 </p>
@@ -128,7 +128,7 @@
 
     <!-- Items Table - More Compact -->
     <h3 style="margin: 0 0 6px 0; font-size: 10px; color: #2c5aa0; font-weight: bold;">ITEMS & SERVICES</h3>
-    
+
     <table width="100%" cellpadding="4" cellspacing="0" border="1" style="border-collapse: collapse; border: 1px solid #2c5aa0; margin: 0 0 10px 0; font-size: 8px;">
         <thead>
             <tr style="background-color: #2c5aa0; color: white;">
@@ -160,7 +160,7 @@
                     <p style="margin: 0; font-size: 7px; color: #856404;"><strong>Note:</strong> {{ data.notes }}</p>
                 </div>
                 {% endif %}
-                
+
                 <!-- FBR Compliance Notice -->
                 {% if data.seller_ntn %}
                 <div style="background: #d1ecf1; padding: 4px; border-radius: 3px; border-left: 2px solid #17a2b8; margin-bottom: 6px;">
@@ -169,14 +169,14 @@
                     </p>
                 </div>
                 {% endif %}
-                
+
                 <!-- Terms & Conditions -->
                 <div style="font-size: 7px; color: #666; line-height: 1.1;">
                     <p style="margin: 1px 0;"><strong>Terms:</strong> Payment due upon receipt. Late payments subject to 1.5% monthly interest.</p>
                     <p style="margin: 1px 0;">This is an computer generated invoice and requires no signature.</p>
                 </div>
             </td>
-            
+
             <!-- Totals & QR Codes -->
             <td width="50%" valign="top">
                 <table width="100%" cellpadding="3" cellspacing="0" border="0" style="background: #f8f9fa; border-radius: 3px; margin-bottom: 8px;">
@@ -201,7 +201,7 @@
                         <td align="right" style="padding: 6px 3px; font-size: 10px; font-weight: bold;">${{ "%.2f"|format(data.grand_total) }}</td>
                     </tr>
                 </table>
-                
+
                 <!-- Both QR Codes Side by Side -->
                 <table width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
@@ -215,7 +215,7 @@
                                 <p style="margin: 2px 0; font-size: 7px; color: #666;">Scan to pay</p>
                             </div>
                         </td>
-                        
+
                         <!-- FBR QR Code -->
                         {% if fbr_compliant and fbr_qr_code %}
                         <td width="50%" align="center" valign="top">
@@ -251,7 +251,7 @@
         <strong>⚠️ FBR Notice:</strong> {{ fbr_errors[0] if fbr_errors else 'FBR compliance requires seller NTN' }}
     </div>
     {% endif %}
-    
+
     <form id="downloadForm" action="{{ url_for('download_invoice') }}" method="POST">
         <input type="hidden" name="data" value='{{ data | tojson }}'>
         <button type="submit" class="btn btn-success btn-lg px-5">
