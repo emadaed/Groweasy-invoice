@@ -1,3 +1,4 @@
+# app.py 16 Nov 2025 11:11 PKST
 # 1. STANDARD LIBRARY IMPORTS (Python built-ins)
 # Standard library
 import io
@@ -7,7 +8,7 @@ import os
 from pathlib import Path
 
 # Third-party
-from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g
+from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
 from flask_compress import Compress
 from dotenv import load_dotenv
 
@@ -35,7 +36,7 @@ init_db()
 
 
 def generate_custom_qr(invoice_data):
-    """Generate custom branded QR code for payment"""
+    """Generate custom branded QR code for payment using uploaded logo"""
     try:
         import qrcode
         from PIL import Image, ImageDraw
@@ -66,11 +67,27 @@ Client: {invoice_data['client_name']}
             back_color="#ffffff"   # White background
         ).convert('RGB')
 
-        # Try to add logo if available
+        # Try to add logo - PRIORITY: Use uploaded logo first
+        logo_added = False
         try:
-            logo_path = os.path.join('static', 'assets', 'logo.png')
-            if os.path.exists(logo_path):
+            # 1. FIRST TRY: Use uploaded logo from invoice_data
+            if invoice_data.get('logo_b64'):
+                # Remove data URL prefix if present
+                logo_b64 = invoice_data['logo_b64']
+                if 'base64,' in logo_b64:
+                    logo_b64 = logo_b64.split('base64,')[1]
+
+                logo_data = base64.b64decode(logo_b64)
+                logo = Image.open(io.BytesIO(logo_data))
+                logo_added = True
+
+            # 2. FALLBACK: Use static logo if no uploaded logo
+            elif os.path.exists(os.path.join('static', 'assets', 'logo.png')):
+                logo_path = os.path.join('static', 'assets', 'logo.png')
                 logo = Image.open(logo_path)
+                logo_added = True
+
+            if logo_added:
                 # Resize logo
                 logo_size = 40
                 logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
@@ -88,6 +105,7 @@ Client: {invoice_data['client_name']}
 
                 # Paste logo on QR code
                 qr_img.paste(logo, pos, logo)
+
         except Exception as e:
             print(f"Logo addition skipped: {e}")
 
@@ -260,11 +278,10 @@ def download_invoice():
                                      fbr_compliant=fbr_summary['is_compliant'],
                                      nonce=g.nonce)
 
-        # Generate PDF
+        # Generate PDF using WeasyPrint only
         pdf_bytes = generate_pdf(html_content)
 
         # Return PDF
-        from flask import Response
         return Response(
             pdf_bytes,
             mimetype='application/pdf',
@@ -308,181 +325,6 @@ def debug_invoice_data():
         'notes': 'Test note'
     }
     return sample_data
-
-
-def _generate_data_driven_fallback(data):
-    """Generate fallback PDF using actual invoice data with proper encoding."""
-    print("DEBUG: Starting PDF fallback generation...")
-
-    # CORRECT IMPORT for fpdf2
-    try:
-        from fpdf import FPDF  # This is the correct import for fpdf2
-        print("fpdf2 import successful")
-    except ImportError as e:
-        print(f"fpdf2 import failed: {e}")
-        # Try to see what's available
-        try:
-            import fpdf
-            print(f"fpdf module found: {fpdf.__file__}")
-            from fpdf import FPDF
-            print("FPDF class imported successfully")
-        except Exception as e2:
-            print(f"Complete import failure: {e2}")
-        return _generate_minimal_pdf_structure()
-
-    # Rest of your function continues here...
-    try:
-        import tempfile
-        import os
-
-        pdf = FPDF()
-        pdf.add_page()
-
-        # Title
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, "INVOICE", 0, 1, 'C')
-        pdf.ln(5)
-
-        # Invoice info
-        pdf.set_font("Arial", '', 12)
-        pdf.cell(0, 8, f"Invoice #: {data.get('invoice_number', 'N/A')}", 0, 1)
-        pdf.cell(0, 8, f"Date: {data.get('invoice_date', 'N/A')}", 0, 1)
-        pdf.cell(0, 8, f"Client: {data.get('client_name', 'N/A')}", 0, 1)
-        pdf.ln(10)
-
-        # Items table header
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(100, 8, "Item", 1)
-        pdf.cell(30, 8, "Qty", 1)
-        pdf.cell(30, 8, "Price", 1)
-        pdf.cell(30, 8, "Total", 1)
-        pdf.ln()
-
-        # Items
-        pdf.set_font("Arial", '', 10)
-        for item in data.get('items', []):
-            item_name = str(item.get('name', ''))[:30]
-            pdf.cell(100, 8, item_name, 1)
-            pdf.cell(30, 8, str(item.get('qty', '')), 1)
-            pdf.cell(30, 8, f"${float(item.get('price', 0)):.2f}", 1)
-            pdf.cell(30, 8, f"${float(item.get('total', 0)):.2f}", 1)
-            pdf.ln()
-
-        # Totals
-        pdf.ln(10)
-        pdf.set_font("Arial", '', 10)
-        pdf.cell(130, 8, "Subtotal:", 0, 0, 'R')
-        pdf.cell(30, 8, f"${float(data.get('subtotal', 0)):.2f}", 0, 1)
-
-        tax_amount = float(data.get('tax_amount', 0))
-        if tax_amount > 0:
-            pdf.cell(130, 8, f"Tax ({data.get('tax_rate', 0)}%):", 0, 0, 'R')
-            pdf.cell(30, 8, f"${tax_amount:.2f}", 0, 1)
-
-        discount_amount = float(data.get('discount_amount', 0))
-        if discount_amount > 0:
-            pdf.cell(130, 8, f"Discount ({data.get('discount_rate', 0)}%):", 0, 0, 'R')
-            pdf.cell(30, 8, f"-${discount_amount:.2f}", 0, 1)
-
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(130, 10, "TOTAL:", 0, 0, 'R')
-        pdf.cell(30, 10, f"${float(data.get('grand_total', 0)):.2f}", 0, 1)
-
-        # Footer
-        pdf.ln(10)
-        pdf.set_font("Arial", 'I', 8)
-        pdf.cell(0, 6, "Development Preview - Full professional formatting in production", 0, 1)
-
-        # Use file output instead of string output for better compatibility
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-            pdf.output(tmp_file.name)
-            with open(tmp_file.name, 'rb') as f:
-                pdf_bytes = f.read()
-            os.unlink(tmp_file.name)
-
-        print("PDF generated successfully with fpdf2")
-        return pdf_bytes
-
-    except Exception as e:
-        print(f"PDF generation error: {e}")
-        return _generate_minimal_pdf_structure()
-
-
-def _generate_basic_pdf(data):
-    """Generate a basic but guaranteed-to-work PDF."""
-    try:
-        from fpdf import FPDF
-        import tempfile
-        import os
-
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=14)
-
-        # Simple content that always works
-        pdf.cell(200, 10, txt="GROWEASY INVOICE", ln=1, align='C')
-        pdf.ln(5)
-        pdf.set_font("Arial", size=10)
-        pdf.cell(0, 8, f"Invoice: {data.get('invoice_number', 'N/A')}", ln=1)
-        pdf.cell(0, 8, f"Client: {data.get('client_name', 'N/A')}", ln=1)
-        pdf.cell(0, 8, f"Total: ${float(data.get('grand_total', 0)):.2f}", ln=1)
-        pdf.ln(5)
-        pdf.cell(0, 8, "Development Preview - Professional PDF in production", ln=1)
-
-        # Use file output for reliability
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-            pdf.output(tmp_file.name)
-            with open(tmp_file.name, 'rb') as f:
-                pdf_bytes = f.read()
-            os.unlink(tmp_file.name)
-
-        return pdf_bytes
-
-    except Exception as e:
-        print(f"Basic PDF error: {e}")
-        # Final fallback - minimal PDF structure
-        return _generate_minimal_pdf_structure()
-
-
-def _generate_minimal_pdf_structure():
-    """Generate a minimal valid PDF structure that always works."""
-    # This is a basic PDF 1.4 structure that any PDF reader can open
-    pdf_content = b"""%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
-endobj
-4 0 obj
-<< /Length 200 >>
-stream
-BT /F1 18 Tf 50 750 Td (GrowEasy Invoice) Tj ET
-BT /F1 12 Tf 50 720 Td (Development Preview) Tj ET
-BT /F1 10 Tf 50 700 Td (PDF generation successful!) Tj ET
-BT /F1 8 Tf 50 680 Td (Deploy to production for professional formatting) Tj ET
-endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
-endobj
-xref
-0 6
-0000000000 65535 f
-0000000009 00000 n
-0000000058 00000 n
-0000000115 00000 n
-0000000250 00000 n
-0000000510 00000 n
-trailer
-<< /Size 6 /Root 1 0 R >>
-startxref
-610
-%%EOF"""
-    return pdf_content
 
 
 if __name__ == "__main__":
