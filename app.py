@@ -26,7 +26,7 @@ load_dotenv()
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'fallback-dev-key-railway-2025-safe')
+app.secret_key = os.getenv('SECRET_KEY')
 
 # Rate Limiting
 limiter = Limiter(
