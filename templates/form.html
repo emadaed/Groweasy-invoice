@@ -23,30 +23,35 @@
 
                         <!-- Professional Business Information -->
                         <div class="card mb-4 border-success">
-                            <div class="card-header bg-light">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0 text-success">🏢 Your Business Information</h5>
+                                {% if prefill_data %}
+                                <button type="button" class="btn btn-sm btn-outline-success" onclick="autoFillCompanyInfo()">
+                                    🔄 Use My Saved Info
+                                </button>
+                                {% endif %}
                             </div>
                             <div class="card-body">
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label">Company Name *</label>
-                                        <input type="text" name="company_name" class="form-control" value="Your Company Name" required>
+                                        <input type="text" name="company_name" class="form-control" value="{{ prefill_data.company_name if prefill_data else 'Your Company Name' }}" required>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Tax ID (Optional)</label>
-                                        <input type="text" name="company_tax_id" class="form-control" placeholder="Tax ID / VAT Number">
+                                        <input type="text" name="company_tax_id" class="form-control" placeholder="Tax ID / VAT Number" value="{{ prefill_data.company_tax_id if prefill_data else '' }}">
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label">Company Address</label>
-                                        <input type="text" name="company_address" class="form-control" value="123 Business Street, City, State 12345">
+                                        <input type="text" name="company_address" class="form-control" value="{{ prefill_data.company_address if prefill_data else '123 Business Street, City, State 12345' }}">
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Phone</label>
-                                        <input type="text" name="company_phone" class="form-control" value="+1 (555) 123-4567">
+                                        <input type="text" name="company_phone" class="form-control" value="{{ prefill_data.company_phone if prefill_data else '+1 (555) 123-4567' }}">
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Email</label>
-                                        <input type="email" name="company_email" class="form-control" value="hello@company.com">
+                                        <input type="email" name="company_email" class="form-control" value="{{ prefill_data.company_email if prefill_data else 'hello@company.com' }}">
                                     </div>
                                 </div>
                             </div>
@@ -240,4 +245,36 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/form_items.js') }}"></script>
+
+<script nonce="{{ nonce }}">
+// Auto-fill company info from user profile
+function autoFillCompanyInfo() {
+    {% if prefill_data %}
+    const companyName = document.querySelector('input[name="company_name"]');
+    const companyAddress = document.querySelector('input[name="company_address"]');
+    const companyPhone = document.querySelector('input[name="company_phone"]');
+    const companyEmail = document.querySelector('input[name="company_email"]');
+    const companyTaxId = document.querySelector('input[name="company_tax_id"]');
+
+    if (companyName) companyName.value = "{{ prefill_data.company_name or '' }}";
+    if (companyAddress) companyAddress.value = "{{ prefill_data.company_address or '' }}";
+    if (companyPhone) companyPhone.value = "{{ prefill_data.company_phone or '' }}";
+    if (companyEmail) companyEmail.value = "{{ prefill_data.company_email or '' }}";
+    if (companyTaxId) companyTaxId.value = "{{ prefill_data.company_tax_id or '' }}";
+
+    // Show success message
+    if (typeof showToast !== 'undefined') {
+        showToast('Company info auto-filled from your profile!', 'success');
+    } else {
+        alert('Company info auto-filled from your profile!');
+    }
+    {% else %}
+    if (typeof showToast !== 'undefined') {
+        showToast('No saved company info found. Update your settings first.', 'warning');
+    } else {
+        alert('No saved company info found. Update your settings first.');
+    }
+    {% endif %}
+}
+</script>
 {% endblock %}

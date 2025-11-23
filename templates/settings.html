@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - GrowEasy Invoice{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>⚙️ Account Settings</h2>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">← Back to Dashboard</a>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="row">
+                <!-- Profile Settings -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">🏢 Company Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <input type="hidden" name="update_profile" value="1">
+
+                                <div class="mb-3">
+                                    <label class="form-label">Company Name</label>
+                                    <input type="text" name="company_name" class="form-control"
+                                           value="{{ user_profile['company_name'] or '' }}">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Company Address</label>
+                                    <textarea name="company_address" class="form-control" rows="3">{{ user_profile['company_address'] or '' }}</textarea>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Phone Number</label>
+                                    <input type="text" name="company_phone" class="form-control"
+                                           value="{{ user_profile['company_phone'] or '' }}">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tax ID</label>
+                                    <input type="text" name="company_tax_id" class="form-control"
+                                           value="{{ user_profile['company_tax_id'] or '' }}">
+                                </div>
+
+                                <button type="submit" class="btn btn-success">Update Profile</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Settings -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">🔒 Security</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <input type="hidden" name="change_password" value="1">
+
+                                <div class="mb-3">
+                                    <label class="form-label">Current Password</label>
+                                    <input type="password" name="current_password" class="form-control" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">New Password</label>
+                                    <input type="password" name="new_password" class="form-control" required minlength="6">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Confirm New Password</label>
+                                    <input type="password" name="confirm_password" class="form-control" required minlength="6">
+                                </div>
+
+                                <button type="submit" class="btn btn-warning">Change Password</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Account Info -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">📊 Account Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Email:</strong> {{ user_profile['email'] }}</p>
+                            <p><strong>Member since:</strong> {{ user_profile['created_at'][:10] if user_profile['created_at'] else 'N/A' }}</p>
+                            <p><strong>User ID:</strong> {{ user_profile['id'] }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

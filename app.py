@@ -1,5 +1,4 @@
-# app.py 16 Nov 2025 11:11 PKST
-# 1. STANDARD LIBRARY IMPORTS (Python built-ins)
+# app.py 18 Nov 2025 4:3 PM PKST
 # Standard library
 import io
 import json
@@ -8,6 +7,8 @@ import os
 from pathlib import Path
 
 # Third-party
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
 from flask_compress import Compress
 from dotenv import load_dotenv
@@ -17,7 +18,7 @@ from fbr_integration import FBRInvoice
 from core.invoice_logic import prepare_invoice_data
 from core.qr_engine import make_qr_with_logo
 from core.pdf_engine import generate_pdf, HAS_WEAZYPRINT
-from core.auth import init_db, create_user, verify_user
+from core.auth import init_db, create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
 from core.middleware import security_headers
 
 # Environment setup
@@ -25,9 +26,16 @@ load_dotenv()
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')
+app.secret_key = os.getenv('SECRET_KEY', 'fallback-dev-key-railway-2025-safe')
 
-# Middleware (order matters)
+# Rate Limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+# Middleware
 Compress(app)
 security_headers(app)
 
@@ -152,8 +160,21 @@ def generate_simple_qr(invoice_data):
 
 @app.route('/')
 def home():
-    """Home page - show invoice creation form"""
-    return render_template('form.html', nonce=g.nonce)
+    """Home page - show invoice creation form with pre-filled data"""
+    prefill_data = {}
+
+    if 'user_id' in session:
+        user_profile = get_user_profile(session['user_id'])
+        if user_profile:
+            prefill_data = {
+                'company_name': user_profile.get('company_name', ''),
+                'company_address': user_profile.get('company_address', ''),
+                'company_phone': user_profile.get('company_phone', ''),
+                'company_email': user_profile.get('email', ''),
+                'company_tax_id': user_profile.get('company_tax_id', '')
+            }
+
+    return render_template('form.html', prefill_data=prefill_data, nonce=g.nonce)
 
 
 @app.route('/debug')
@@ -166,8 +187,60 @@ def debug():
     }
     return jsonify(debug_info)
 
+# NEW ROUTES USER SETTINGS
 
+@app.route("/settings", methods=['GET', 'POST'])
+def settings():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.auth import get_user_profile, update_user_profile, change_user_password, verify_user
+
+    user_profile = get_user_profile(session['user_id'])
+
+    if request.method == 'POST':
+        # Handle profile update
+        if 'update_profile' in request.form:
+            company_name = request.form.get('company_name')
+            company_address = request.form.get('company_address')
+            company_phone = request.form.get('company_phone')
+            company_tax_id = request.form.get('company_tax_id')
+
+            update_user_profile(
+                session['user_id'],
+                company_name=company_name,
+                company_address=company_address,
+                company_phone=company_phone,
+                company_tax_id=company_tax_id
+            )
+            flash('Profile updated successfully!', 'success')
+            return redirect(url_for('settings'))
+
+        # Handle password change
+        elif 'change_password' in request.form:
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
+
+            # Verify current password
+            if not verify_user(user_profile['email'], current_password):
+                flash('Current password is incorrect', 'error')
+            elif new_password != confirm_password:
+                flash('New passwords do not match', 'error')
+            elif len(new_password) < 6:
+                flash('New password must be at least 6 characters', 'error')
+            else:
+                change_user_password(session['user_id'], new_password)
+                flash('Password changed successfully!', 'success')
+
+            return redirect(url_for('settings'))
+
+    return render_template("settings.html", user_profile=user_profile, nonce=g.nonce)
+
+
+# ADD RATE LIMITS TO ROUTES:
 @app.route("/login", methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -185,6 +258,7 @@ def login():
 
 
 @app.route("/register", methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def register():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -223,6 +297,7 @@ def service_worker():
 
 
 @app.route('/preview_invoice', methods=['POST'])
+@limiter.limit("5 per minute")
 def preview_invoice():
     try:
         invoice_data = prepare_invoice_data(request.form, request.files)
@@ -232,7 +307,7 @@ def preview_invoice():
         fbr_summary = fbr_invoice.get_fbr_summary()
         fbr_qr_code = fbr_summary['qr_code'] if fbr_summary['is_compliant'] else None
 
-        # 2. Your Custom Colorful Logo-Embedded QR Code
+        # 2. Custom Colorful Logo-Embedded QR Code
         custom_qr_b64 = generate_custom_qr(invoice_data)
 
         print("DEBUG: Rendering invoice template with data:", invoice_data.keys())
@@ -281,6 +356,10 @@ def download_invoice():
         # Generate PDF using WeasyPrint only
         pdf_bytes = generate_pdf(html_content)
 
+        # SAVE INVOICE TO USER HISTORY
+        if 'user_id' in session:
+            save_user_invoice(session['user_id'], data)
+
         # Return PDF
         return Response(
             pdf_bytes,
@@ -292,6 +371,7 @@ def download_invoice():
         flash(f'Error generating PDF: {str(e)}', 'error')
         return redirect(url_for('home'))
 
+# debug invoice data
 
 def debug_invoice_data():
     """Debug function to check what data is being passed to template"""

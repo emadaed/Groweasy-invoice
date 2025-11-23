@@ -37,7 +37,24 @@
                         <div class="card-body">
                             <h5>⚙️ Settings</h5>
                             <p>Manage your account</p>
-                            <a href="#" class="btn btn-outline-secondary">Coming Soon</a>
+                            <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">Manage Settings</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice History Section -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">📋 Recent Invoices</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">Invoice history coming soon! Your future invoices will be saved here automatically.</p>
+                            <div class="text-center">
+                                <a href="{{ url_for('home') }}" class="btn btn-success">Create Your First Invoice</a>
+                            </div>
                         </div>
                     </div>
                 </div>
