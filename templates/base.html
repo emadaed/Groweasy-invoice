@@ -73,12 +73,11 @@
           {% if session.get('user_id') %}
             <!-- Logged in user menu -->
             <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
-            <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">New Invoice</a>
+            <a href="{{ url_for('create_invoice') }}" class="btn btn-outline-light btn-sm me-2">New Invoice</a>
             <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">Donate</a>
             <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
           {% else %}
             <!-- Guest user menu -->
-            <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">Create Invoice</a>
             <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-sm me-2">Login</a>
             <a href="{{ url_for('register') }}" class="btn btn-success btn-sm me-2">Register</a>
             <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">Donate</a>

@@ -8,6 +8,7 @@ def init_db():
     """Initialize SQLite database for users"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    # users table schema in init_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,6 +18,9 @@ def init_db():
             company_address TEXT,
             company_phone TEXT,
             company_tax_id TEXT,
+            seller_ntn TEXT,
+            seller_strn TEXT,
+            mobile_number TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -24,12 +28,54 @@ def init_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS user_invoices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            invoice_data TEXT,
+            user_id INTEGER NOT NULL,
+            invoice_number TEXT NOT NULL,
+            client_name TEXT NOT NULL,
+            invoice_date DATE NOT NULL,
+            due_date DATE,
+            grand_total DECIMAL(10,2) NOT NULL,
+            status TEXT DEFAULT 'paid',
+            invoice_data TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
     ''')
+    # Create index for fast searching
+    c.execute('CREATE INDEX IF NOT EXISTS idx_user_invoices ON user_invoices(user_id, invoice_date)')
+
+    # 🆕 NEW TABLES - ADD THESE:
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            tax_id TEXT,
+            total_spent DECIMAL(10,2) DEFAULT 0,
+            invoice_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            category TEXT NOT NULL,
+            expense_date DATE NOT NULL,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -124,26 +170,30 @@ def get_user_profile(user_id):
         }
     return None
 
-def save_user_invoice(user_id, invoice_data):
-    """Save invoice data for user history"""
+
+def get_user_invoices(user_id, limit=50, offset=0, search=None):
+    """Get invoices for a user with search and pagination"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
 
-    # Convert invoice data to JSON string
-    invoice_json = json.dumps(invoice_data)
+    query = '''
+        SELECT id, invoice_number, client_name, invoice_date, due_date,
+               grand_total, status, created_at, invoice_data
+        FROM user_invoices
+        WHERE user_id = ?
+    '''
+    params = [user_id]
 
-    c.execute('INSERT INTO user_invoices (user_id, invoice_data) VALUES (?, ?)',
-             (user_id, invoice_json))
-    conn.commit()
-    conn.close()
-    return True
+    # Add search filter if provided
+    if search:
+        query += ' AND (invoice_number LIKE ? OR client_name LIKE ?)'
+        search_term = f'%{search}%'
+        params.extend([search_term, search_term])
 
-def get_user_invoices(user_id):
-    """Get all invoices for a user"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
+    query += ' ORDER BY invoice_date DESC, created_at DESC LIMIT ? OFFSET ?'
+    params.extend([limit, offset])
 
-    c.execute('SELECT id, invoice_data, created_at FROM user_invoices WHERE user_id = ? ORDER BY created_at DESC', (user_id,))
+    c.execute(query, params)
     invoices = c.fetchall()
     conn.close()
 
@@ -151,7 +201,379 @@ def get_user_invoices(user_id):
     for invoice in invoices:
         result.append({
             'id': invoice[0],
-            'data': json.loads(invoice[1]),
-            'created_at': invoice[2]
+            'invoice_number': invoice[1],
+            'client_name': invoice[2],
+            'invoice_date': invoice[3],
+            'due_date': invoice[4],
+            'grand_total': float(invoice[5]),
+            'status': invoice[6],
+            'created_at': invoice[7],
+            'data': json.loads(invoice[8])  # Full invoice data
+        })
+    return result
+
+def get_invoice_count(user_id, search=None):
+    """Get total count of invoices for pagination"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    query = 'SELECT COUNT(*) FROM user_invoices WHERE user_id = ?'
+    params = [user_id]
+
+    if search:
+        query += ' AND (invoice_number LIKE ? OR client_name LIKE ?)'
+        search_term = f'%{search}%'
+        params.extend([search_term, search_term])
+
+    c.execute(query, params)
+    count = c.fetchone()[0]
+    conn.close()
+    return count
+
+def get_revenue_analytics(user_id, period='monthly'):
+    """Get revenue analytics for dashboard"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    if period == 'monthly':
+        query = '''
+            SELECT
+                STRFTIME('%Y-%m', invoice_date) as month,
+                COUNT(*) as invoice_count,
+                SUM(grand_total) as total_revenue,
+                AVG(grand_total) as avg_invoice
+            FROM user_invoices
+            WHERE user_id = ?
+            GROUP BY STRFTIME('%Y-%m', invoice_date)
+            ORDER BY month DESC
+            LIMIT 12
+        '''
+    else:  # yearly
+        query = '''
+            SELECT
+                STRFTIME('%Y', invoice_date) as year,
+                COUNT(*) as invoice_count,
+                SUM(grand_total) as total_revenue,
+                AVG(grand_total) as avg_invoice
+            FROM user_invoices
+            WHERE user_id = ?
+            GROUP BY STRFTIME('%Y', invoice_date)
+            ORDER BY year DESC
+        '''
+
+    c.execute(query, (user_id,))
+    results = c.fetchall()
+    conn.close()
+
+    analytics = []
+    for row in results:
+        analytics.append({
+            'period': row[0],
+            'invoice_count': row[1],
+            'total_revenue': float(row[2]) if row[2] else 0,
+            'avg_invoice': float(row[3]) if row[3] else 0
+        })
+
+    return analytics
+
+def get_client_analytics(user_id):
+    """Get top clients by revenue"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    query = '''
+        SELECT
+            client_name,
+            COUNT(*) as invoice_count,
+            SUM(grand_total) as total_spent,
+            AVG(grand_total) as avg_invoice
+        FROM user_invoices
+        WHERE user_id = ?
+        GROUP BY client_name
+        ORDER BY total_spent DESC
+        LIMIT 10
+    '''
+
+    c.execute(query, (user_id,))
+    results = c.fetchall()
+    conn.close()
+
+    clients = []
+    for row in results:
+        clients.append({
+            'client_name': row[0],
+            'invoice_count': row[1],
+            'total_spent': float(row[2]) if row[2] else 0,
+            'avg_invoice': float(row[3]) if row[3] else 0
+        })
+
+    return clients
+
+def get_business_summary(user_id):
+    """Get overall business summary"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Total revenue and invoices
+    c.execute('''
+        SELECT
+            COUNT(*) as total_invoices,
+            SUM(grand_total) as total_revenue,
+            AVG(grand_total) as avg_invoice,
+            MIN(invoice_date) as first_invoice,
+            MAX(invoice_date) as last_invoice
+        FROM user_invoices
+        WHERE user_id = ?
+    ''', (user_id,))
+
+    summary = c.fetchone()
+    conn.close()
+
+    if summary and summary[0] > 0:
+        return {
+            'total_invoices': summary[0],
+            'total_revenue': float(summary[1]) if summary[1] else 0,
+            'avg_invoice': float(summary[2]) if summary[2] else 0,
+            'first_invoice': summary[3],
+            'last_invoice': summary[4]
+        }
+    else:
+        return {
+            'total_invoices': 0,
+            'total_revenue': 0,
+            'avg_invoice': 0,
+            'first_invoice': None,
+            'last_invoice': None
+        }
+
+# save user invoices
+
+def save_user_invoice(user_id, invoice_data):
+    """Save invoice data with metadata for fast searching"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Extract metadata for fast searching
+    invoice_number = invoice_data.get('invoice_number', 'Unknown')
+    client_name = invoice_data.get('client_name', 'Unknown Client')
+    invoice_date = invoice_data.get('invoice_date', '')
+    due_date = invoice_data.get('due_date', '')
+    grand_total = float(invoice_data.get('grand_total', 0))
+
+    # Convert full invoice data to JSON
+    invoice_json = json.dumps(invoice_data)
+
+    # Save invoice
+    c.execute('''
+        INSERT INTO user_invoices
+        (user_id, invoice_number, client_name, invoice_date, due_date, grand_total, invoice_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, invoice_number, client_name, invoice_date, due_date, grand_total, invoice_json))
+
+    # AUTO-SAVE CUSTOMER USING SAME CONNECTION
+    try:
+        # Extract customer data from invoice
+        customer_data = {
+            'name': client_name,
+            'email': invoice_data.get('client_email', ''),
+            'phone': invoice_data.get('client_phone', ''),
+            'address': invoice_data.get('client_address', ''),
+            'tax_id': invoice_data.get('buyer_ntn', '')
+        }
+
+        # 🆕 DIRECT CUSTOMER SAVE USING SAME CONNECTION
+        # Check if customer exists
+        c.execute('SELECT id FROM customers WHERE user_id = ? AND name = ?',
+                 (user_id, customer_data['name']))
+        existing = c.fetchone()
+
+        if existing:
+            # Update existing customer
+            c.execute('''
+                UPDATE customers SET
+                email=?, phone=?, address=?, tax_id=?,
+                invoice_count = invoice_count + 1,
+                total_spent = total_spent + ?,
+                updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            ''', (customer_data.get('email'), customer_data.get('phone'),
+                  customer_data.get('address'), customer_data.get('tax_id'),
+                  grand_total, existing[0]))
+        else:
+            # Insert new customer
+            c.execute('''
+                INSERT INTO customers
+                (user_id, name, email, phone, address, tax_id, total_spent, invoice_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (user_id, customer_data['name'], customer_data.get('email'),
+                  customer_data.get('phone'), customer_data.get('address'),
+                  customer_data.get('tax_id'), grand_total))
+
+    except Exception as e:
+        print(f"Customer auto-save skipped: {e}")
+        # Don't fail the invoice save if customer save fails
+
+    conn.commit()
+    conn.close()
+    return True
+
+# ===== CUSTOMER MANAGEMENT =====
+def save_customer(user_id, customer_data):
+    """Save or update customer information"""
+    print(f"🎯 DEBUG: save_customer CALLED for user {user_id}")
+    print(f"🎯 DEBUG: Customer name: {customer_data['name']}")
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            tax_id TEXT,
+            total_spent DECIMAL(10,2) DEFAULT 0,
+            invoice_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Check if customer exists
+    c.execute('SELECT id FROM customers WHERE user_id = ? AND name = ?',
+              (user_id, customer_data['name']))
+    existing = c.fetchone()
+
+    if existing:
+        # Update existing customer
+        c.execute('''
+            UPDATE customers SET
+            email=?, phone=?, address=?, tax_id=?, updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+        ''', (customer_data.get('email'), customer_data.get('phone'),
+              customer_data.get('address'), customer_data.get('tax_id'), existing[0]))
+    else:
+        # Insert new customer
+        c.execute('''
+            INSERT INTO customers (user_id, name, email, phone, address, tax_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, customer_data['name'], customer_data.get('email'),
+              customer_data.get('phone'), customer_data.get('address'),
+              customer_data.get('tax_id')))
+
+    conn.commit()
+    conn.close()
+    print("✅ DEBUG: save_customer COMPLETED")
+    return True
+
+def get_customers(user_id):
+    """Get all customers for a user"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        SELECT id, name, email, phone, address, tax_id, total_spent, invoice_count
+        FROM customers WHERE user_id = ? ORDER BY name
+    ''', (user_id,))
+
+    customers = c.fetchall()
+    conn.close()
+
+    result = []
+    for customer in customers:
+        result.append({
+            'id': customer[0],
+            'name': customer[1],
+            'email': customer[2],
+            'phone': customer[3],
+            'address': customer[4],
+            'tax_id': customer[5],
+            'total_spent': float(customer[6]) if customer[6] else 0,
+            'invoice_count': customer[7]
+        })
+    return result
+
+# ===== EXPENSE TRACKING =====
+def save_expense(user_id, expense_data):
+    """Save business expense"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            category TEXT NOT NULL,
+            expense_date DATE NOT NULL,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    ''')
+
+    c.execute('''
+        INSERT INTO expenses (user_id, description, amount, category, expense_date, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, expense_data['description'], expense_data['amount'],
+          expense_data['category'], expense_data['expense_date'],
+          expense_data.get('notes', '')))
+
+    conn.commit()
+    conn.close()
+    return True
+
+def get_expenses(user_id, limit=50):
+    """Get expenses for a user"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        SELECT id, description, amount, category, expense_date, notes, created_at
+        FROM expenses WHERE user_id = ?
+        ORDER BY expense_date DESC, created_at DESC
+        LIMIT ?
+    ''', (user_id, limit))
+
+    expenses = c.fetchall()
+    conn.close()
+
+    result = []
+    for expense in expenses:
+        result.append({
+            'id': expense[0],
+            'description': expense[1],
+            'amount': float(expense[2]),
+            'category': expense[3],
+            'expense_date': expense[4],
+            'notes': expense[5],
+            'created_at': expense[6]
+        })
+    return result
+
+def get_expense_summary(user_id):
+    """Get expense summary by category"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        SELECT category, SUM(amount) as total, COUNT(*) as count
+        FROM expenses WHERE user_id = ?
+        GROUP BY category ORDER BY total DESC
+    ''', (user_id,))
+
+    summary = c.fetchall()
+    conn.close()
+
+    result = []
+    for item in summary:
+        result.append({
+            'category': item[0],
+            'total': float(item[1]) if item[1] else 0,
+            'count': item[2]
         })
     return result

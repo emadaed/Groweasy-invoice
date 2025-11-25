@@ -1,9 +1,10 @@
-# app.py 18 Nov 2025 4:3 PM PKST
+# app.py 24 Nov 2025 11:30 PM PKST
 # Standard library
 import io
 import json
 import base64
 import os
+import sqlite3
 from pathlib import Path
 
 # Third-party
@@ -157,22 +158,65 @@ def generate_simple_qr(invoice_data):
         print(f"Simple QR generation also failed: {e}")
         return None
 
+@app.route("/forgot_password", methods=['GET', 'POST'])
+@limiter.limit("3 per hour")
+def forgot_password():
+    """Simple password reset request with email simulation"""
+    if request.method == 'POST':
+        email = request.form.get('email')
+
+        # Check if email exists in database
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('SELECT id FROM users WHERE email = ?', (email,))
+        user = c.fetchone()
+        conn.close()
+
+        if user:
+            # In production: Send actual email with reset link
+            # For now: Show reset instructions on screen
+            flash('📧 Password reset instructions have been sent to your email.', 'success')
+            flash('🔐 Development Note: In production, you would receive an email with reset link.', 'info')
+            return render_template('reset_instructions.html', email=email, nonce=g.nonce)
+        else:
+            flash('❌ No account found with this email address.', 'error')
+
+    return render_template('forgot_password.html', nonce=g.nonce)
+
+
+@app.route("/reset_password/<token>", methods=['GET', 'POST'])
+def reset_password(token):
+    """Password reset page (placeholder)"""
+    # In production, you'd verify the token
+    flash('Password reset functionality coming soon!', 'info')
+    return redirect(url_for('login'))
+
 
 @app.route('/')
 def home():
-    """Home page - show invoice creation form with pre-filled data"""
-    prefill_data = {}
-
+    """Home page - redirect to login or dashboard"""
     if 'user_id' in session:
-        user_profile = get_user_profile(session['user_id'])
-        if user_profile:
-            prefill_data = {
-                'company_name': user_profile.get('company_name', ''),
-                'company_address': user_profile.get('company_address', ''),
-                'company_phone': user_profile.get('company_phone', ''),
-                'company_email': user_profile.get('email', ''),
-                'company_tax_id': user_profile.get('company_tax_id', '')
-            }
+        return redirect(url_for('dashboard'))
+    else:
+        return redirect(url_for('login'))
+
+
+@app.route('/create_invoice')
+def create_invoice():
+    """Direct invoice creation page for logged-in users"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    prefill_data = {}
+    user_profile = get_user_profile(session['user_id'])
+    if user_profile:
+        prefill_data = {
+            'company_name': user_profile.get('company_name', ''),
+            'company_address': user_profile.get('company_address', ''),
+            'company_phone': user_profile.get('company_phone', ''),
+            'company_email': user_profile.get('email', ''),
+            'company_tax_id': user_profile.get('company_tax_id', '')
+        }
 
     return render_template('form.html', prefill_data=prefill_data, nonce=g.nonce)
 
@@ -277,13 +321,22 @@ def register():
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template("dashboard.html", user_email=session['user_email'], nonce=g.nonce)
 
+    from core.auth import get_business_summary, get_client_analytics  # ← ADD THIS LINE
+
+    return render_template(
+        "dashboard.html",
+        user_email=session['user_email'],
+        get_business_summary=get_business_summary,                    # ← ADD THIS
+        get_client_analytics=get_client_analytics,                    # ← ADD THIS
+        nonce=g.nonce
+    )
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for('home'))
+    flash('You have been logged out successfully.', 'info')
+    return redirect(url_for('login'))  # Changed from 'home' to 'login'
 
 
 @app.route("/donate")
@@ -370,6 +423,126 @@ def download_invoice():
     except Exception as e:
         flash(f'Error generating PDF: {str(e)}', 'error')
         return redirect(url_for('home'))
+
+# invoice history
+
+@app.route("/invoice_history")
+def invoice_history():
+    """Invoice history and management page"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.auth import get_user_invoices, get_invoice_count
+
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    search = request.args.get('search', '')
+    limit = 10  # Invoices per page
+    offset = (page - 1) * limit
+
+    # Get invoices
+    invoices = get_user_invoices(session['user_id'], limit=limit, offset=offset, search=search)
+    total_invoices = get_invoice_count(session['user_id'], search=search)
+    total_pages = (total_invoices + limit - 1) // limit  # Ceiling division
+
+    return render_template(
+        "invoice_history.html",
+        invoices=invoices,
+        current_page=page,
+        total_pages=total_pages,
+        search_query=search,
+        total_invoices=total_invoices,
+        nonce=g.nonce
+    )
+
+# ===== CUSTOMER MANAGEMENT ROUTES =====
+@app.route("/customers")
+def customers():
+    """Customer management page"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.auth import get_customers
+    customer_list = get_customers(session['user_id'])
+
+    return render_template("customers.html", customers=customer_list, nonce=g.nonce)
+
+# ===== EXPENSE TRACKING ROUTES =====
+@app.route("/expenses")
+def expenses():
+    """Expense tracking page"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.auth import get_expenses, get_expense_summary
+    from datetime import datetime
+
+    expense_list = get_expenses(session['user_id'])
+    expense_summary = get_expense_summary(session['user_id'])
+    today_date = datetime.now().strftime('%Y-%m-%d')
+
+    return render_template("expenses.html",
+                         expenses=expense_list,
+                         expense_summary=expense_summary,
+                         today_date=today_date,
+                         nonce=g.nonce)
+
+@app.route("/add_expense", methods=['POST'])
+def add_expense():
+    """Add new expense"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.auth import save_expense
+
+    expense_data = {
+        'description': request.form.get('description'),
+        'amount': float(request.form.get('amount', 0)),
+        'category': request.form.get('category'),
+        'expense_date': request.form.get('expense_date'),
+        'notes': request.form.get('notes', '')
+    }
+
+    if save_expense(session['user_id'], expense_data):
+        flash('Expense added successfully!', 'success')
+    else:
+        flash('Error adding expense', 'error')
+
+    return redirect(url_for('expenses'))
+
+#fix customer
+
+@app.route("/fix_customers")
+def fix_customers():
+    """One-time fix to populate customers from existing invoices"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    import sqlite3
+
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Get all invoices for this user
+    c.execute('SELECT invoice_number, client_name, grand_total FROM user_invoices WHERE user_id = ?', (session['user_id'],))
+    invoices = c.fetchall()
+
+    results = []
+    for invoice in invoices:
+        invoice_number, client_name, grand_total = invoice
+
+        # Insert customer if not exists
+        c.execute('''
+            INSERT OR IGNORE INTO customers
+            (user_id, name, total_spent, invoice_count)
+            VALUES (?, ?, ?, 1)
+        ''', (session['user_id'], client_name, grand_total))
+
+        results.append(f"Added: {client_name} (Invoice: {invoice_number})")
+
+    conn.commit()
+    conn.close()
+    return "<br>".join(results)
 
 # debug invoice data
 
