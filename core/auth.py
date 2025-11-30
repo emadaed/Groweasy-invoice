@@ -44,7 +44,7 @@ def init_db():
     # Create index for fast searching
     c.execute('CREATE INDEX IF NOT EXISTS idx_user_invoices ON user_invoices(user_id, invoice_date)')
 
-    # 🆕 NEW TABLES - ADD THESE:
+    # 🆕 NEW TABLES - ADD CUSTOMER:
     c.execute('''
         CREATE TABLE IF NOT EXISTS customers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +73,59 @@ def init_db():
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS inventory_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            sku TEXT UNIQUE,
+            category TEXT,
+            description TEXT,
+            current_stock INTEGER DEFAULT 0,
+            min_stock_level INTEGER DEFAULT 5,
+            cost_price DECIMAL(10,2),
+            selling_price DECIMAL(10,2),
+            supplier TEXT,
+            location TEXT,
+            barcode TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Stock Movement History
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS stock_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            movement_type TEXT NOT NULL, -- 'sale', 'purchase', 'adjustment', 'transfer'
+            quantity INTEGER NOT NULL,
+            reference_id INTEGER, -- invoice_id, purchase_order_id, etc
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (product_id) REFERENCES inventory_items (id)
+        )
+    ''')
+
+    # Low Stock Alerts
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS stock_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            alert_type TEXT NOT NULL, -- 'low_stock', 'out_of_stock', 'over_stock'
+            message TEXT NOT NULL,
+            is_resolved BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (product_id) REFERENCES inventory_items (id)
         )
     ''')
 

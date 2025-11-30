@@ -7,16 +7,20 @@ def prepare_invoice_data(form_data, files=None):
     item_names = form_data.getlist('item_name[]')  # Changed to getlist
     item_qtys = form_data.getlist('item_qty[]')    # Changed to getlist
     item_prices = form_data.getlist('item_price[]') # Changed to getlist
+    item_ids = form_data.getlist('item_id[]')
 
     for i in range(len(item_names)):
         if item_names[i].strip():
             qty = float(item_qtys[i]) if i < len(item_qtys) and item_qtys[i] else 0
             price = float(item_prices[i]) if i < len(item_prices) and item_prices[i] else 0
+            product_id = item_ids[i] if i < len(item_ids) and item_ids[i] else None
+
             items.append({
                 'name': item_names[i],
                 'qty': qty,
                 'price': price,
-                'total': qty * price
+                'total': qty * price,
+                'product_id': product_id
             })
 
     subtotal = sum(item['total'] for item in items)

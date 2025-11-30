@@ -231,7 +231,179 @@ def debug():
     }
     return jsonify(debug_info)
 
-# NEW ROUTES USER SETTINGS
+# NEW ROUTES INVENTORY AND USER SETTINGS
+
+@app.route("/inventory")
+def inventory():
+    """Inventory management dashboard - FIXED VERSION"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.inventory import InventoryManager
+
+    # Get inventory items
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('''
+        SELECT id, name, sku, category, current_stock, min_stock_level,
+               cost_price, selling_price, supplier, location
+        FROM inventory_items
+        WHERE user_id = ? AND is_active = TRUE
+        ORDER BY name
+    ''', (session['user_id'],))
+
+    # Convert tuples to dictionaries for template
+    raw_items = c.fetchall()
+    conn.close()
+
+    inventory_items = []
+    for item in raw_items:
+        inventory_items.append({
+            'id': item[0],
+            'name': item[1],
+            'sku': item[2],
+            'category': item[3],
+            'current_stock': item[4],
+            'min_stock_level': item[5],
+            'cost_price': item[6],
+            'selling_price': item[7],
+            'supplier': item[8],
+            'location': item[9]
+        })
+
+    # Get low stock alerts
+    low_stock_alerts = InventoryManager.get_low_stock_alerts(session['user_id'])
+
+    return render_template("inventory.html",
+                         inventory_items=inventory_items,
+                         low_stock_alerts=low_stock_alerts,
+                         nonce=g.nonce)
+
+@app.route("/add_product", methods=['POST'])
+def add_product():
+    """Add new product to inventory"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.inventory import InventoryManager
+
+    product_data = {
+        'name': request.form.get('name'),
+        'sku': request.form.get('sku'),
+        'category': request.form.get('category'),
+        'description': request.form.get('description'),
+        'current_stock': int(request.form.get('current_stock', 0)),
+        'min_stock_level': int(request.form.get('min_stock_level', 5)),
+        'cost_price': float(request.form.get('cost_price', 0)),
+        'selling_price': float(request.form.get('selling_price', 0)),
+        'supplier': request.form.get('supplier'),
+        'location': request.form.get('location')
+    }
+
+    product_id = InventoryManager.add_product(session['user_id'], product_data)
+
+    if product_id:
+        flash('Product added successfully!', 'success')
+    else:
+        flash('Error adding product. SKU might already exist.', 'error')
+
+    return redirect(url_for('inventory'))
+
+# stock adjustment and auto popualate routes
+@app.route("/api/inventory_items")
+def get_inventory_items_api():
+    """API endpoint for inventory items (for invoice form)"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        SELECT id, name, selling_price, current_stock
+        FROM inventory_items
+        WHERE user_id = ? AND is_active = TRUE AND current_stock > 0
+        ORDER BY name
+    ''', (session['user_id'],))
+
+    items = c.fetchall()
+    conn.close()
+
+    inventory_data = [{
+        'id': item[0],
+        'name': item[1],
+        'price': float(item[2]) if item[2] else 0,
+        'stock': item[3]
+    } for item in items]
+
+    return jsonify(inventory_data)
+
+# stock adjustment
+@app.route("/adjust_stock", methods=['POST'])
+def adjust_stock():
+    """Adjust product stock quantity"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.inventory import InventoryManager
+
+    product_id = request.form.get('product_id')
+    new_quantity = int(request.form.get('new_quantity'))
+    notes = request.form.get('notes', 'Manual adjustment')
+
+    success = InventoryManager.update_stock(
+        session['user_id'],
+        product_id,
+        new_quantity,
+        'adjustment',
+        None,
+        notes
+    )
+
+    if success:
+        flash('Stock updated successfully!', 'success')
+    else:
+        flash('Error updating stock', 'error')
+
+    return redirect(url_for('inventory'))
+
+@app.route("/download_inventory_report")
+def download_inventory_report():
+    """Download inventory as CSV"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.inventory import InventoryManager
+    import csv
+    import io
+
+    inventory_data = InventoryManager.get_inventory_report(session['user_id'])
+
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow(['Product Name', 'SKU', 'Category', 'Current Stock', 'Min Stock',
+                    'Cost Price', 'Selling Price', 'Supplier', 'Location'])
+
+    # Write data
+    for item in inventory_data:
+        writer.writerow([
+            item['name'], item['sku'], item['category'], item['current_stock'],
+            item['min_stock'], item['cost_price'], item['selling_price'],
+            item['supplier'], item['location']
+        ])
+
+    # Return CSV file
+    output.seek(0)
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=inventory_report.csv"}
+    )
+
+#SETTINGS
 
 @app.route("/settings", methods=['GET', 'POST'])
 def settings():
@@ -316,19 +488,43 @@ def register():
 
     return render_template('register.html', nonce=g.nonce)
 
-
 @app.route("/dashboard")
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    from core.auth import get_business_summary, get_client_analytics  # ← ADD THIS LINE
+    from core.auth import get_business_summary, get_client_analytics
+
+    # Get inventory stats
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Total products
+    c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND is_active = TRUE',
+              (session['user_id'],))
+    total_products = c.fetchone()[0]
+
+    # Low stock items
+    c.execute('''SELECT COUNT(*) FROM inventory_items
+                 WHERE user_id = ? AND current_stock <= min_stock_level AND current_stock > 0''',
+              (session['user_id'],))
+    low_stock_items = c.fetchone()[0]
+
+    # Out of stock items
+    c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND current_stock = 0',
+              (session['user_id'],))
+    out_of_stock_items = c.fetchone()[0]
+
+    conn.close()
 
     return render_template(
         "dashboard.html",
         user_email=session['user_email'],
-        get_business_summary=get_business_summary,                    # ← ADD THIS
-        get_client_analytics=get_client_analytics,                    # ← ADD THIS
+        get_business_summary=get_business_summary,
+        get_client_analytics=get_client_analytics,
+        total_products=total_products,
+        low_stock_items=low_stock_items,
+        out_of_stock_items=out_of_stock_items,
         nonce=g.nonce
     )
 
@@ -379,6 +575,8 @@ def preview_invoice():
         return redirect(url_for('home'))
 
 
+#download route
+
 @app.route('/download_invoice', methods=['POST'])
 def download_invoice():
     try:
@@ -408,6 +606,47 @@ def download_invoice():
 
         # Generate PDF using WeasyPrint only
         pdf_bytes = generate_pdf(html_content)
+
+        # 🆕 AUTO-DEDUCT INVENTORY STOCK
+        if 'user_id' in session and 'items' in data:
+            from core.inventory import InventoryManager
+
+            for item in data['items']:
+                # Check if this is an inventory item (has product_id)
+                if 'product_id' in item and item['product_id']:
+                    try:
+                        # Get current stock
+                        conn = sqlite3.connect('users.db')
+                        c = conn.cursor()
+                        c.execute('SELECT current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
+
+                                 (item['product_id'], session['user_id']))
+                        result = c.fetchone()
+
+                        if result:
+                            current_stock = result[0]
+                            quantity_sold = int(item.get('qty', 1))
+                            new_stock = current_stock - quantity_sold
+
+                            if new_stock >= 0:
+                                # Update stock
+                                success = InventoryManager.update_stock(
+                                    session['user_id'],
+                                    item['product_id'],
+                                    new_stock,
+                                    'sale',
+                                    None,  # We'll add invoice reference later
+                                    f"Sold {quantity_sold} units via invoice"
+                                )
+                                if success:
+                                    print(f"✅ Stock deducted: {item.get('name')} -{quantity_sold} units")
+                                else:
+                                    print(f"❌ Failed to deduct stock for {item.get('name')}")
+
+                        conn.close()
+                    except Exception as e:
+                        print(f"⚠️ Inventory deduction error: {e}")
+                        # Don't fail the invoice if stock update fails
 
         # SAVE INVOICE TO USER HISTORY
         if 'user_id' in session:
@@ -543,6 +782,72 @@ def fix_customers():
     conn.commit()
     conn.close()
     return "<br>".join(results)
+#debug invnetory
+
+@app.route("/debug_inventory")
+def debug_inventory():
+    """Debug inventory state"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'})
+
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Get all inventory data
+    c.execute('''
+        SELECT id, name, current_stock, min_stock_level, selling_price
+        FROM inventory_items WHERE user_id = ?
+    ''', (session['user_id'],))
+
+    items = c.fetchall()
+
+    # Get stock movements
+    c.execute('''
+        SELECT product_id, movement_type, quantity, created_at
+        FROM stock_movements WHERE user_id = ? ORDER BY created_at DESC LIMIT 10
+    ''', (session['user_id'],))
+
+    movements = c.fetchall()
+
+    conn.close()
+
+    return jsonify({
+        'inventory_items': [{
+            'id': item[0],
+            'name': item[1],
+            'current_stock': item[2],
+            'min_stock': item[3],
+            'price': item[4]
+        } for item in items],
+        'recent_movements': [{
+            'product_id': mov[0],
+            'type': mov[1],
+            'quantity': mov[2],
+            'time': mov[3]
+        } for mov in movements]
+    })
+
+#debug stock
+
+@app.route("/debug_stock")
+def debug_stock():
+    """Debug stock update issues"""
+    if 'user_id' not in session:
+        return "Not logged in"
+
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Check inventory items
+    c.execute('SELECT id, name, current_stock FROM inventory_items WHERE user_id = ?', (session['user_id'],))
+    items = c.fetchall()
+
+    result = "<h3>Current Inventory:</h3>"
+    for item in items:
+        result += f"<p>ID: {item[0]}, Name: {item[1]}, Stock: {item[2]}</p>"
+
+    conn.close()
+    return result
 
 # debug invoice data
 
