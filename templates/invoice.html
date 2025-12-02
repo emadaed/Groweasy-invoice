@@ -241,6 +241,19 @@
 
 {% if preview %}
 <div class="text-center my-4">
+    <!-- 🛡️ STOCK AVAILABILITY WARNINGS -->
+    {% if stock_warnings %}
+    <div class="alert alert-danger mb-3">
+        <strong>⚠️ Stock Issues:</strong>
+        <ul class="mb-0">
+            {% for warning in stock_warnings %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+        </ul>
+        <small>Please adjust quantities before downloading PDF</small>
+    </div>
+    {% endif %}
+
     <!-- FBR Compliance Status -->
     {% if fbr_compliant %}
     <div class="alert alert-success mb-3">
@@ -254,8 +267,13 @@
 
     <form id="downloadForm" action="{{ url_for('download_invoice') }}" method="POST">
         <input type="hidden" name="data" value='{{ data | tojson }}'>
-        <button type="submit" class="btn btn-success btn-lg px-5">
+        <button type="submit" class="btn btn-success btn-lg px-5 {% if stock_warnings %}disabled{% endif %}"
+                {% if stock_warnings %}disabled{% endif %}>
+            {% if stock_warnings %}
+            ⚠️ Fix Stock Issues First
+            {% else %}
             ⬇️ Download FBR-Compliant PDF
+            {% endif %}
         </button>
     </form>
 </div>

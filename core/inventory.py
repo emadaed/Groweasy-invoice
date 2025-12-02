@@ -1,4 +1,4 @@
-# core/inventory.py - NEW FILE
+# core/inventory.py - ENHANCED INVENTORY MANAGER
 import sqlite3
 from datetime import datetime
 
@@ -58,7 +58,7 @@ class InventoryManager:
             print(f"📊 STOCK_CHANGE: {product_name} from {current_stock} to {new_quantity} (change: {quantity_change})")
 
             # Update the stock
-            c.execute('UPDATE inventory_items SET current_stock = ? WHERE id = ?', (new_quantity, product_id))
+            c.execute('UPDATE inventory_items SET current_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (new_quantity, product_id))
             print("✅ STOCK_UPDATED_IN_DB")
 
             # Log the movement
@@ -68,15 +68,24 @@ class InventoryManager:
             ''', (user_id, product_id, movement_type, quantity_change, reference_id, notes))
             print("✅ MOVEMENT_LOGGED")
 
-            # Update alerts
+            # Update alerts - clear existing alerts first
             c.execute('DELETE FROM stock_alerts WHERE product_id = ? AND user_id = ?', (product_id, user_id))
 
-            if new_quantity <= min_stock:
-                alert_type = 'out_of_stock' if new_quantity == 0 else 'low_stock'
+            # Create new alerts if needed
+            if new_quantity == 0:
+                alert_type = 'out_of_stock'
+                message = f"{product_name} is out of stock"
+            elif new_quantity <= min_stock:
+                alert_type = 'low_stock'
+                message = f"{product_name} has {new_quantity} units left (min: {min_stock})"
+            else:
+                alert_type = None
+
+            if alert_type:
                 c.execute('''
                     INSERT INTO stock_alerts (user_id, product_id, alert_type, message)
                     VALUES (?, ?, ?, ?)
-                ''', (user_id, product_id, alert_type, f"{product_name} has {new_quantity} units left"))
+                ''', (user_id, product_id, alert_type, message))
                 print(f"✅ ALERT_CREATED: {alert_type}")
 
             conn.commit()
@@ -91,6 +100,7 @@ class InventoryManager:
             conn.rollback()
             conn.close()
             return False
+
     @staticmethod
     def get_low_stock_alerts(user_id):
         """Get active low stock alerts"""
@@ -145,3 +155,110 @@ class InventoryManager:
             'supplier': item[7],
             'location': item[8]
         } for item in inventory]
+
+    # 🆕 NEW SMART INVENTORY METHODS
+    @staticmethod
+    def validate_stock_for_invoice(user_id, invoice_items):
+        """Validate stock for multiple invoice items"""
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        validation_results = []
+
+        for item in invoice_items:
+            if item.get('product_id'):
+                product_id = item['product_id']
+                requested_qty = int(item.get('qty', 1))
+
+                c.execute('SELECT name, current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
+                         (product_id, user_id))
+                result = c.fetchone()
+
+                if result:
+                    product_name, current_stock = result
+                    if current_stock < requested_qty:
+                        validation_results.append({
+                            'product_id': product_id,
+                            'product_name': product_name,
+                            'requested': requested_qty,
+                            'available': current_stock,
+                            'valid': False
+                        })
+                    else:
+                        validation_results.append({
+                            'product_id': product_id,
+                            'product_name': product_name,
+                            'requested': requested_qty,
+                            'available': current_stock,
+                            'valid': True
+                        })
+
+        conn.close()
+        return validation_results
+
+    @staticmethod
+    def get_inventory_summary(user_id):
+        """Get accurate inventory summary for dashboard"""
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        # Total products
+        c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND is_active = TRUE', (user_id,))
+        total_products = c.fetchone()[0]
+
+        # In stock (above zero)
+        c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND current_stock > 0 AND is_active = TRUE', (user_id,))
+        in_stock = c.fetchone()[0]
+
+        # Low stock (above zero but <= min_stock_level)
+        c.execute('''
+            SELECT COUNT(*) FROM inventory_items
+            WHERE user_id = ? AND current_stock > 0 AND current_stock <= min_stock_level AND is_active = TRUE
+        ''', (user_id,))
+        low_stock = c.fetchone()[0]
+
+        # Out of stock (zero stock)
+        c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND current_stock = 0 AND is_active = TRUE', (user_id,))
+        out_of_stock = c.fetchone()[0]
+
+        conn.close()
+
+        # 🛡️ VALIDATION: Ensure math is correct
+        calculated_total = in_stock + low_stock + out_of_stock
+        if calculated_total != total_products:
+            print(f"⚠️ Inventory math mismatch: {calculated_total} vs {total_products}")
+            # Auto-correct by using calculated total
+            total_products = calculated_total
+
+        return {
+            'total_products': total_products,
+            'in_stock': in_stock,
+            'low_stock': low_stock,
+            'out_of_stock': out_of_stock
+        }
+
+    @staticmethod
+    def get_product_details(product_id, user_id):
+        """Get detailed product information"""
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        c.execute('''
+            SELECT id, name, sku, current_stock, selling_price, min_stock_level
+            FROM inventory_items
+            WHERE id = ? AND user_id = ? AND is_active = TRUE
+        ''', (product_id, user_id))
+
+        result = c.fetchone()
+        conn.close()
+
+        if result:
+            return {
+                'id': result[0],
+                'name': result[1],
+                'sku': result[2],
+                'current_stock': result[3],
+                'selling_price': float(result[4]) if result[4] else 0,
+                'min_stock_level': result[5]
+            }
+        return None

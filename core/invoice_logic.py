@@ -1,19 +1,29 @@
-# invoice_logic.py
+# invoice_logic.py - INVENTORY-ONLY VERSION (Array Alignment Fixed)
 def prepare_invoice_data(form_data, files=None):
-    """Prepare complete invoice data with FBR fields"""
+    """Prepare complete invoice data with FBR fields - INVENTORY ITEMS ONLY"""
 
-    # Extract existing data - USE getlist() for array fields
+    # Extract arrays - ALL items MUST have product_id now
     items = []
-    item_names = form_data.getlist('item_name[]')  # Changed to getlist
-    item_qtys = form_data.getlist('item_qty[]')    # Changed to getlist
-    item_prices = form_data.getlist('item_price[]') # Changed to getlist
+    item_names = form_data.getlist('item_name[]')
+    item_qtys = form_data.getlist('item_qty[]')
+    item_prices = form_data.getlist('item_price[]')
     item_ids = form_data.getlist('item_id[]')
 
+    # 🛡️ VALIDATION: All arrays must have same length
+    array_lengths = [len(item_names), len(item_qtys), len(item_prices), len(item_ids)]
+    if len(set(array_lengths)) != 1:
+        raise ValueError(f"Array length mismatch: names={len(item_names)}, qtys={len(item_qtys)}, prices={len(item_prices)}, ids={len(item_ids)}")
+
+    # Process items - all should have product_id
     for i in range(len(item_names)):
         if item_names[i].strip():
-            qty = float(item_qtys[i]) if i < len(item_qtys) and item_qtys[i] else 0
-            price = float(item_prices[i]) if i < len(item_prices) and item_prices[i] else 0
-            product_id = item_ids[i] if i < len(item_ids) and item_ids[i] else None
+            qty = float(item_qtys[i]) if item_qtys[i] else 0
+            price = float(item_prices[i]) if item_prices[i] else 0
+            product_id = item_ids[i] if item_ids[i] else None
+
+            # 🛡️ VALIDATION: Reject items without product_id
+            if not product_id:
+                raise ValueError(f"Item '{item_names[i]}' missing product_id - all items must come from inventory")
 
             items.append({
                 'name': item_names[i],
@@ -22,6 +32,10 @@ def prepare_invoice_data(form_data, files=None):
                 'total': qty * price,
                 'product_id': product_id
             })
+
+    # 🛡️ VALIDATION: Must have at least one item
+    if not items:
+        raise ValueError("Invoice must have at least one item")
 
     subtotal = sum(item['total'] for item in items)
     tax_rate = float(form_data.get('tax_rate', 0))  # Remove [0]
@@ -79,3 +93,47 @@ def prepare_invoice_data(form_data, files=None):
         # Logo handling
         'logo_b64': logo_b64
     }
+
+# 🆕 NEW FUNCTION FOR MANUAL ENTRY VALIDATION
+def validate_manual_entry_items(form_data, user_id):
+    """Validate manual entry items against inventory for suggestions"""
+    import sqlite3
+
+    manual_items = []
+    item_names = form_data.getlist('item_name[]')
+    item_qtys = form_data.getlist('item_qty[]')
+    item_prices = form_data.getlist('item_price[]')
+
+    for i in range(len(item_names)):
+        if item_names[i].strip() and not form_data.getlist('item_id[]')[i]:
+            # This is a manual entry (no product_id)
+            item_name = item_names[i].strip().lower()
+
+            # Search inventory for similar items
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute('''
+                SELECT id, name, selling_price, current_stock
+                FROM inventory_items
+                WHERE user_id = ? AND LOWER(name) LIKE ? AND is_active = TRUE
+                LIMIT 3
+            ''', (user_id, f'%{item_name}%'))
+
+            suggestions = c.fetchall()
+            conn.close()
+
+            manual_items.append({
+                'name': item_names[i],
+                'qty': item_qtys[i] if i < len(item_qtys) else '1',
+                'price': item_prices[i] if i < len(item_prices) else '0',
+                'suggestions': [
+                    {
+                        'id': sug[0],
+                        'name': sug[1],
+                        'price': float(sug[2]) if sug[2] else 0,
+                        'stock': sug[3]
+                    } for sug in suggestions
+                ]
+            })
+
+    return manual_items

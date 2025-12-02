@@ -1,4 +1,4 @@
-# app.py 24 Nov 2025 11:30 PM PKST
+# app.py 30 Nov 2025 11:30 PM PKST
 # Standard library
 import io
 import json
@@ -43,6 +43,110 @@ security_headers(app)
 # Database
 init_db()
 
+# ===== NEW STOCK VALIDATION FUNCTIONS =====
+def validate_stock_availability(user_id, invoice_items):
+    """Validate stock availability BEFORE invoice processing"""
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        for item in invoice_items:
+            if item.get('product_id'):
+                product_id = item['product_id']
+                requested_qty = int(item.get('qty', 1))
+
+                # Get current stock
+                c.execute('SELECT name, current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
+                         (product_id, user_id))
+                result = c.fetchone()
+
+                if not result:
+                    return {'success': False, 'message': f"Product not found in inventory"}
+
+                product_name, current_stock = result
+                if current_stock < requested_qty:
+                    return {
+                        'success': False,
+                        'message': f"Only {current_stock} units available for '{product_name}'"
+                    }
+
+        conn.close()
+        return {'success': True, 'message': 'Stock available'}
+
+    except Exception as e:
+        print(f"Stock validation error: {e}")
+        return {'success': False, 'message': 'Stock validation failed'}
+
+def deduct_stock_on_invoice(user_id, invoice_items):
+    """Deduct stock quantities after successful validation"""
+    try:
+        from core.inventory import InventoryManager
+
+        for item in invoice_items:
+            if item.get('product_id'):
+                product_id = item['product_id']
+                quantity_sold = int(item.get('qty', 1))
+
+                # Get current stock to calculate new quantity
+                conn = sqlite3.connect('users.db')
+                c = conn.cursor()
+                c.execute('SELECT current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
+                         (product_id, user_id))
+                result = c.fetchone()
+                conn.close()
+
+                if result:
+                    current_stock = result[0]
+                    new_stock = current_stock - quantity_sold
+
+                    # Use existing inventory manager
+                    success = InventoryManager.update_stock(
+                        user_id, product_id, new_stock, 'sale', None,
+                        f"Sold {quantity_sold} units via invoice"
+                    )
+
+                    if success:
+                        print(f"✅ Stock deducted: {item.get('name')} -{quantity_sold} units")
+                    else:
+                        print(f"⚠️ Stock deduction failed for {item.get('name')}")
+
+    except Exception as e:
+        print(f"Stock deduction error: {e}")
+        # Don't fail the invoice if stock update fails
+
+def generate_unique_invoice_number(user_id):
+    """Generate guaranteed unique invoice number per user"""
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        # Get the last invoice number for this user
+        c.execute('''
+            SELECT invoice_number FROM user_invoices
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        ''', (user_id,))
+
+        result = c.fetchone()
+        conn.close()
+
+        if result:
+            last_number = result[0]
+            # Extract number from "INV-00123" format
+            if last_number.startswith('INV-'):
+                try:
+                    last_num = int(last_number.split('-')[1])
+                    return f"INV-{last_num + 1:05d}"
+                except (ValueError, IndexError):
+                    pass
+
+        # Start from INV-00001 for new users
+        return "INV-00001"
+
+    except Exception as e:
+        print(f"Invoice number generation error: {e}")
+        return f"INV-{int(__import__('time').time())}"  # Fallback
 
 def generate_custom_qr(invoice_data):
     """Generate custom branded QR code for payment using uploaded logo"""
@@ -130,7 +234,6 @@ Client: {invoice_data['client_name']}
         # Fallback: generate simple QR code
         return generate_simple_qr(invoice_data)
 
-
 def generate_simple_qr(invoice_data):
     """Generate simple QR code as fallback"""
     try:
@@ -183,14 +286,12 @@ def forgot_password():
 
     return render_template('forgot_password.html', nonce=g.nonce)
 
-
 @app.route("/reset_password/<token>", methods=['GET', 'POST'])
 def reset_password(token):
     """Password reset page (placeholder)"""
     # In production, you'd verify the token
     flash('Password reset functionality coming soon!', 'info')
     return redirect(url_for('login'))
-
 
 @app.route('/')
 def home():
@@ -199,7 +300,6 @@ def home():
         return redirect(url_for('dashboard'))
     else:
         return redirect(url_for('login'))
-
 
 @app.route('/create_invoice')
 def create_invoice():
@@ -219,7 +319,6 @@ def create_invoice():
         }
 
     return render_template('form.html', prefill_data=prefill_data, nonce=g.nonce)
-
 
 @app.route('/debug')
 def debug():
@@ -421,13 +520,17 @@ def settings():
             company_address = request.form.get('company_address')
             company_phone = request.form.get('company_phone')
             company_tax_id = request.form.get('company_tax_id')
+            #seller_ntn = request.form.get('seller_ntn')  # 🆕 FBR field
+            #seller_strn = request.form.get('seller_strn')  # 🆕 FBR fie
 
             update_user_profile(
                 session['user_id'],
                 company_name=company_name,
                 company_address=company_address,
                 company_phone=company_phone,
-                company_tax_id=company_tax_id
+                company_tax_id=company_tax_id,
+                #seller_ntn=seller_ntn,  # 🆕 Pass to function
+                #seller_strn=seller_strn  # 🆕 Pass to function
             )
             flash('Profile updated successfully!', 'success')
             return redirect(url_for('settings'))
@@ -453,7 +556,6 @@ def settings():
 
     return render_template("settings.html", user_profile=user_profile, nonce=g.nonce)
 
-
 # ADD RATE LIMITS TO ROUTES:
 @app.route("/login", methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
@@ -471,7 +573,6 @@ def login():
             return render_template('login.html', error='Invalid credentials', nonce=g.nonce)
 
     return render_template('login.html', nonce=g.nonce)
-
 
 @app.route("/register", methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
@@ -534,22 +635,31 @@ def logout():
     flash('You have been logged out successfully.', 'info')
     return redirect(url_for('login'))  # Changed from 'home' to 'login'
 
-
 @app.route("/donate")
 def donate():
     return render_template("donate.html", nonce=g.nonce)
 
-
 @app.route('/sw.js')
 def service_worker():
     return send_from_directory('static', 'sw.js'), 200, {'Content-Type': 'application/javascript'}
-
 
 @app.route('/preview_invoice', methods=['POST'])
 @limiter.limit("5 per minute")
 def preview_invoice():
     try:
         invoice_data = prepare_invoice_data(request.form, request.files)
+
+        # 🛡️ STRICT STOCK VALIDATION - BLOCK PREVIEW IF INSUFFICIENT STOCK
+        stock_warnings = []
+        if 'user_id' in session and 'items' in invoice_data:
+            stock_validation = validate_stock_availability(session['user_id'], invoice_data['items'])
+            if not stock_validation['success']:
+                flash(f'❌ Cannot create invoice: {stock_validation["message"]}', 'error')
+                return redirect(url_for('create_invoice'))
+
+        # Ensure unique invoice number
+        if 'user_id' in session:
+            invoice_data['invoice_number'] = generate_unique_invoice_number(session['user_id'])
 
         # 1. FBR QR Code (Mandatory)
         fbr_invoice = FBRInvoice(invoice_data)
@@ -568,12 +678,12 @@ def preview_invoice():
                              fbr_qr_code=fbr_qr_code,
                              fbr_compliant=fbr_summary['is_compliant'],
                              fbr_errors=fbr_summary['errors'],
+                             stock_warnings=stock_warnings,  # 🆕 PASS WARNINGS TO TEMPLATE
                              nonce=g.nonce)
 
     except Exception as e:
         flash(f'Error generating preview: {str(e)}', 'error')
         return redirect(url_for('home'))
-
 
 #download route
 
@@ -584,6 +694,14 @@ def download_invoice():
         from core.pdf_engine import generate_pdf
 
         data = json.loads(request.form['data'])
+
+        # 🛡️ STEP 1: VALIDATE STOCK AVAILABILITY BEFORE ANY PROCESSING
+        if 'user_id' in session and 'items' in data:
+            stock_validation = validate_stock_availability(session['user_id'], data['items'])
+            if not stock_validation['success']:
+                flash(f'❌ Cannot download: {stock_validation["message"]}', 'error')
+                # Return to preview with error
+                return redirect(url_for('preview_invoice'))
 
         # FBR Integration for download
         fbr_invoice = FBRInvoice(data)
@@ -607,46 +725,9 @@ def download_invoice():
         # Generate PDF using WeasyPrint only
         pdf_bytes = generate_pdf(html_content)
 
-        # 🆕 AUTO-DEDUCT INVENTORY STOCK
+        # 🛡️ STEP 4: DEDUCT STOCK ONLY AFTER SUCCESSFUL PDF GENERATION
         if 'user_id' in session and 'items' in data:
-            from core.inventory import InventoryManager
-
-            for item in data['items']:
-                # Check if this is an inventory item (has product_id)
-                if 'product_id' in item and item['product_id']:
-                    try:
-                        # Get current stock
-                        conn = sqlite3.connect('users.db')
-                        c = conn.cursor()
-                        c.execute('SELECT current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
-
-                                 (item['product_id'], session['user_id']))
-                        result = c.fetchone()
-
-                        if result:
-                            current_stock = result[0]
-                            quantity_sold = int(item.get('qty', 1))
-                            new_stock = current_stock - quantity_sold
-
-                            if new_stock >= 0:
-                                # Update stock
-                                success = InventoryManager.update_stock(
-                                    session['user_id'],
-                                    item['product_id'],
-                                    new_stock,
-                                    'sale',
-                                    None,  # We'll add invoice reference later
-                                    f"Sold {quantity_sold} units via invoice"
-                                )
-                                if success:
-                                    print(f"✅ Stock deducted: {item.get('name')} -{quantity_sold} units")
-                                else:
-                                    print(f"❌ Failed to deduct stock for {item.get('name')}")
-
-                        conn.close()
-                    except Exception as e:
-                        print(f"⚠️ Inventory deduction error: {e}")
-                        # Don't fail the invoice if stock update fails
+            deduct_stock_on_invoice(session['user_id'], data['items'])
 
         # SAVE INVOICE TO USER HISTORY
         if 'user_id' in session:
@@ -883,7 +964,6 @@ def debug_invoice_data():
         'notes': 'Test note'
     }
     return sample_data
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=False)
