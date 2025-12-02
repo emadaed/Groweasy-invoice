@@ -77,17 +77,17 @@ def validate_stock_availability(user_id, invoice_items):
         print(f"Stock validation error: {e}")
         return {'success': False, 'message': 'Stock validation failed'}
 
-def deduct_stock_on_invoice(user_id, invoice_items):
-    """Deduct stock quantities after successful validation"""
+def update_stock_on_invoice(user_id, invoice_items, invoice_type='S'):
+    """Update stock based on invoice type: Sale (decrease) or Purchase (increase)"""
     try:
         from core.inventory import InventoryManager
 
         for item in invoice_items:
             if item.get('product_id'):
                 product_id = item['product_id']
-                quantity_sold = int(item.get('qty', 1))
+                quantity = int(item.get('qty', 1))
 
-                # Get current stock to calculate new quantity
+                # Get current stock
                 conn = sqlite3.connect('users.db')
                 c = conn.cursor()
                 c.execute('SELECT current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
@@ -97,22 +97,31 @@ def deduct_stock_on_invoice(user_id, invoice_items):
 
                 if result:
                     current_stock = result[0]
-                    new_stock = current_stock - quantity_sold
+
+                    # 🆕 CALCULATE NEW STOCK BASED ON INVOICE TYPE
+                    if invoice_type == 'P':
+                        # Purchase Invoice: INCREASE stock
+                        new_stock = current_stock + quantity
+                        movement_type = 'purchase'
+                        notes = f"Purchased {quantity} units via invoice"
+                        print(f"📦 Stock increased: {item.get('name')} +{quantity} units")
+                    else:
+                        # Sale/Export Invoice: DECREASE stock
+                        new_stock = current_stock - quantity
+                        movement_type = 'sale'
+                        notes = f"Sold {quantity} units via invoice"
+                        print(f"✅ Stock deducted: {item.get('name')} -{quantity} units")
 
                     # Use existing inventory manager
                     success = InventoryManager.update_stock(
-                        user_id, product_id, new_stock, 'sale', None,
-                        f"Sold {quantity_sold} units via invoice"
+                        user_id, product_id, new_stock, movement_type, None, notes
                     )
 
-                    if success:
-                        print(f"✅ Stock deducted: {item.get('name')} -{quantity_sold} units")
-                    else:
-                        print(f"⚠️ Stock deduction failed for {item.get('name')}")
+                    if not success:
+                        print(f"⚠️ Stock update failed for {item.get('name')}")
 
     except Exception as e:
-        print(f"Stock deduction error: {e}")
-        # Don't fail the invoice if stock update fails
+        print(f"Error in update_stock_on_invoice: {e}")
 
 def generate_unique_invoice_number(user_id):
     """Generate guaranteed unique invoice number per user"""
@@ -748,7 +757,8 @@ def download_invoice():
 
         # 🛡️ STEP 4: DEDUCT STOCK ONLY AFTER SUCCESSFUL PDF GENERATION
         if 'user_id' in session and 'items' in data:
-            deduct_stock_on_invoice(session['user_id'], data['items'])
+            invoice_type = data.get('invoice_type', 'S')
+            update_stock_on_invoice(session['user_id'], data['items'], invoice_type)
 
         # SAVE INVOICE TO USER HISTORY
         if 'user_id' in session:

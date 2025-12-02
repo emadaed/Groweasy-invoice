@@ -64,10 +64,18 @@
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
                 <td valign="middle">
-                    <strong style="color: #155724;">🏛️ FBR COMPLIANT INVOICE</strong>
+                    <strong style="color: #155724;">🛒️ FBR COMPLIANT
+                        {% if data.invoice_type == 'P' %}PURCHASE{% elif data.invoice_type == 'E' %}EXPORT{% else %}SALE{% endif %} INVOICE
+                    </strong>
                 </td>
                 <td align="right" valign="middle">
-                    <span style="color: #155724;">Seller NTN: {{ data.seller_ntn }}</span>
+                    <span style="color: #155724;">
+                        {% if data.invoice_type == 'P' %}
+                            Supplier NTN: {{ data.seller_ntn }}
+                        {% else %}
+                            Seller NTN: {{ data.seller_ntn }}
+                        {% endif %}
+                    </span>
                 </td>
             </tr>
         </table>

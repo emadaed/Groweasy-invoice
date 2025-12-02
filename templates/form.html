@@ -96,11 +96,13 @@
                                     <!-- Invoice Type -->
                                     <div class="col-12">
                                         <label class="form-label">Invoice Type</label>
-                                        <select name="invoice_type" class="form-select">
-                                            <option value="S">Sale Invoice</option>
-                                            <option value="P">Purchase Invoice</option>
-                                            <option value="E">Export Invoice</option>
+                                        <select name="invoice_type" id="invoiceTypeSelector" class="form-select">
+                                            <option value="S">Sale Invoice (Outgoing)</option>
+                                            <option value="P">Purchase Invoice (Incoming)</option>
+                                            <option value="E">Export Invoice (International)</option>
                                         </select>
+                                        <div class="form-text" id="invoiceTypeHelp">
+                                            Sale Invoice: You're selling to a customer
                                     </div>
                                 </div>
                             </div>
@@ -298,5 +300,79 @@ function autoFillCompanyInfo() {
     }
     {% endif %}
 }
+</script>
+
+<script nonce="{{ nonce }}">
+// Dynamic Invoice Type Switcher
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelector = document.getElementById('invoiceTypeSelector');
+    const clientSection = document.querySelector('.card.border-primary');
+    const taxSection = document.querySelector('.card.border-danger');
+    const helpText = document.getElementById('invoiceTypeHelp');
+
+    // Labels to change based on invoice type
+    const clientNameLabel = document.querySelector('input[name="client_name"]').previousElementSibling;
+    const clientAddressLabel = document.querySelector('textarea[name="client_address"]').previousElementSibling;
+    const buyerNTNLabel = document.querySelector('input[name="buyer_ntn"]').previousElementSibling;
+    const sellerNTNLabel = document.querySelector('input[name="seller_ntn"]').previousElementSibling;
+
+    typeSelector.addEventListener('change', function() {
+        const invoiceType = this.value;
+
+        // Update help text
+        const helpTexts = {
+            'S': 'Sale Invoice: You\'re selling to a customer',
+            'P': 'Purchase Invoice: You\'re buying from a supplier',
+            'E': 'Export Invoice: International sales (Zero-rated for GST)'
+        };
+        helpText.textContent = helpTexts[invoiceType];
+
+        // Update labels based on type
+        if (invoiceType === 'S') {
+            // SALE INVOICE (default)
+            clientSection.querySelector('.card-header h5').innerHTML = '👤 Customer Information';
+            clientNameLabel.textContent = 'Customer Name *';
+            clientAddressLabel.textContent = 'Customer Address';
+            buyerNTNLabel.textContent = 'Buyer NTN';
+            sellerNTNLabel.textContent = 'Seller NTN (Your Business) *';
+
+            // Show buyer tax section
+            document.querySelector('input[name="buyer_ntn"]').closest('.col-md-6').style.display = 'block';
+
+        } else if (invoiceType === 'P') {
+            // PURCHASE INVOICE (reverse roles)
+            clientSection.querySelector('.card-header h5').innerHTML = '🏭 Supplier Information';
+            clientNameLabel.textContent = 'Supplier Name *';
+            clientAddressLabel.textContent = 'Supplier Address';
+            buyerNTNLabel.textContent = 'Seller NTN (Supplier)';
+            sellerNTNLabel.textContent = 'Buyer NTN (Your Business) *';
+
+            // Show supplier tax section
+            document.querySelector('input[name="buyer_ntn"]').closest('.col-md-6').style.display = 'block';
+
+        } else if (invoiceType === 'E') {
+            // EXPORT INVOICE (international)
+            clientSection.querySelector('.card-header h5').innerHTML = '🌍 International Buyer Information';
+            clientNameLabel.textContent = 'Buyer/Importer Name *';
+            clientAddressLabel.textContent = 'Destination Address';
+            buyerNTNLabel.textContent = 'Buyer Tax ID (Optional)';
+            sellerNTNLabel.textContent = 'Exporter NTN (Your Business) *';
+
+            // Hide buyer NTN requirement (international)
+            const buyerNTNInput = document.querySelector('input[name="buyer_ntn"]');
+            buyerNTNInput.required = false;
+            buyerNTNInput.closest('.col-md-6').style.display = 'block';
+
+            // Add export notice
+            if (!document.getElementById('exportNotice')) {
+                const exportNotice = document.createElement('div');
+                exportNotice.id = 'exportNotice';
+                exportNotice.className = 'alert alert-info mt-3';
+                exportNotice.innerHTML = '<strong>📦 Export Requirements:</strong> Zero-rated for GST. Ensure proper customs documentation.';
+                taxSection.querySelector('.card-body').appendChild(exportNotice);
+            }
+        }
+    });
+});
 </script>
 {% endblock %}

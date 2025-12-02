@@ -94,6 +94,28 @@ def prepare_invoice_data(form_data, files=None):
         'logo_b64': logo_b64
     }
 
+
+    # 🆕 INVOICE TYPE SPECIFIC VALIDATION
+    invoice_type = form_data.get('invoice_type', 'S')
+
+    if invoice_type == 'P':
+        # Purchase Invoice: Stock should INCREASE
+        for item in items:
+            item['is_purchase'] = True  # Flag for stock increase
+    elif invoice_type == 'E':
+        # Export Invoice: Additional validations
+        if not seller_ntn:
+            raise ValueError("Exporter NTN is required for export invoices")
+        # Zero-rate GST for exports
+        tax_rate = 0
+        tax_amount = 0
+
+    return {
+        # ... existing fields ...
+        'invoice_type': invoice_type,
+
+    }
+
 # 🆕 NEW FUNCTION FOR MANUAL ENTRY VALIDATION
 def validate_manual_entry_items(form_data, user_id):
     """Validate manual entry items against inventory for suggestions"""
@@ -137,3 +159,4 @@ def validate_manual_entry_items(form_data, user_id):
             })
 
     return manual_items
+
