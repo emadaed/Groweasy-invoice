@@ -378,6 +378,27 @@ def inventory():
                          low_stock_alerts=low_stock_alerts,
                          nonce=g.nonce)
 
+@app.route("/inventory_reports")
+def inventory_reports():
+    """Inventory analytics and reports dashboard"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.reports import InventoryReports
+
+    # Get all reports
+    bcg_matrix = InventoryReports.get_bcg_matrix(session['user_id'])
+    turnover = InventoryReports.get_stock_turnover(session['user_id'], days=30)
+    profitability = InventoryReports.get_profitability_analysis(session['user_id'])
+    slow_movers = InventoryReports.get_slow_movers(session['user_id'], days_threshold=90)
+
+    return render_template("inventory_reports.html",
+                         bcg_matrix=bcg_matrix,
+                         turnover=turnover[:10],  # Top 10
+                         profitability=profitability[:10],  # Top 10
+                         slow_movers=slow_movers,
+                         nonce=g.nonce)
+
 @app.route("/add_product", methods=['POST'])
 def add_product():
     """Add new product to inventory"""
@@ -520,8 +541,8 @@ def settings():
             company_address = request.form.get('company_address')
             company_phone = request.form.get('company_phone')
             company_tax_id = request.form.get('company_tax_id')
-            #seller_ntn = request.form.get('seller_ntn')  # 🆕 FBR field
-            #seller_strn = request.form.get('seller_strn')  # 🆕 FBR fie
+            seller_ntn = request.form.get('seller_ntn')  # 🆕 FBR field
+            seller_strn = request.form.get('seller_strn')  # 🆕 FBR fie
 
             update_user_profile(
                 session['user_id'],
@@ -529,8 +550,8 @@ def settings():
                 company_address=company_address,
                 company_phone=company_phone,
                 company_tax_id=company_tax_id,
-                #seller_ntn=seller_ntn,  # 🆕 Pass to function
-                #seller_strn=seller_strn  # 🆕 Pass to function
+                seller_ntn=seller_ntn,  # 🆕 Pass to function
+                seller_strn=seller_strn  # 🆕 Pass to function
             )
             flash('Profile updated successfully!', 'success')
             return redirect(url_for('settings'))

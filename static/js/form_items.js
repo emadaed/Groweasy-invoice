@@ -139,28 +139,38 @@ class InvoiceFormManager {
             <div class="alert alert-info">
                 <strong>Found ${items.length} product(s):</strong>
             </div>
-            ${items.map(item => `
-                <div class="card mb-2">
-                    <div class="card-body py-2">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <strong>${this.escapeHtml(item.name)}</strong><br>
-                                <small class="text-muted">Price: $${item.price} | Stock: ${item.stock}</small>
-                            </div>
-                            <div class="col-auto">
-                                <button type="button" class="btn btn-sm btn-success add-inventory-search-item"
+            <div class="row g-3">
+                ${items.map(item => `
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="card h-100 shadow-sm hover-shadow">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary mb-2">${this.escapeHtml(item.name)}</h6>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Price:</span>
+                                        <strong class="text-success">$${item.price}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">Stock:</span>
+                                        <span class="badge ${item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
+                                            ${item.stock} units
+                                        </span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success w-100 add-inventory-search-item"
                                         data-id="${item.id}"
                                         data-name="${this.escapeHtml(item.name)}"
                                         data-price="${item.price}"
                                         data-stock="${item.stock}">
-                                    Add to Invoice
+                                    ➕ Add to Invoice
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            `).join('')}
+                `).join('')}
+            </div>
         `;
+
 
         resultsDiv.innerHTML = resultsHTML;
         resultsDiv.style.display = 'block';

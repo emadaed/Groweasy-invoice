@@ -159,8 +159,9 @@ def verify_user(email, password):
         return user[0]  # Return user ID
     return None
 
-def update_user_profile(user_id, company_name=None, company_address=None, company_phone=None, company_tax_id=None):
-    """Update user profile information"""
+def update_user_profile(user_id, company_name=None, company_address=None, company_phone=None,
+                       company_tax_id=None, seller_ntn=None, seller_strn=None):
+    """Update user profile information including FBR tax details"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
 
@@ -179,6 +180,12 @@ def update_user_profile(user_id, company_name=None, company_address=None, compan
     if company_tax_id is not None:
         updates.append("company_tax_id = ?")
         params.append(company_tax_id)
+    if seller_ntn is not None:  # 🆕 FBR field
+        updates.append("seller_ntn = ?")
+        params.append(seller_ntn)
+    if seller_strn is not None:  # 🆕 FBR field
+        updates.append("seller_strn = ?")
+        params.append(seller_strn)
 
     if updates:
         updates.append("updated_at = CURRENT_TIMESTAMP")
@@ -203,11 +210,13 @@ def change_user_password(user_id, new_password):
     return True
 
 def get_user_profile(user_id):
-    """Get user profile information"""
+    """Get user profile information including FBR tax details"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
 
-    c.execute('SELECT id, email, company_name, company_address, company_phone, company_tax_id, created_at FROM users WHERE id = ?', (user_id,))
+    c.execute('''SELECT id, email, company_name, company_address, company_phone,
+                        company_tax_id, seller_ntn, seller_strn, created_at
+                 FROM users WHERE id = ?''', (user_id,))
     user = c.fetchone()
     conn.close()
 
@@ -219,10 +228,11 @@ def get_user_profile(user_id):
             'company_address': user[3],
             'company_phone': user[4],
             'company_tax_id': user[5],
-            'created_at': user[6]
+            'seller_ntn': user[6],  # 🆕 FBR field
+            'seller_strn': user[7],  # 🆕 FBR field
+            'created_at': user[8]
         }
     return None
-
 
 def get_user_invoices(user_id, limit=50, offset=0, search=None):
     """Get invoices for a user with search and pagination"""

@@ -56,31 +56,25 @@
                                            value="{{ user_profile['company_tax_id'] or '' }}">
                                 </div>
 
-                                <!-- FBR Tax Information -->
-                                <div class="accordion mb-3" id="taxAccordion">
-                                    <div class="accordion-item">
-                                        <h2 class="accordion-header">
-                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#taxCollapse">
-                                                🏛️ FBR Tax Information (Pakistan)
-                                            </button>
-                                        </h2>
-                                        <div id="taxCollapse" class="accordion-collapse collapse" data-bs-parent="#taxAccordion">
-                                            <div class="accordion-body">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Seller NTN</label>
-                                                    <input type="text" name="seller_ntn" class="form-control"
-                                                           value="{{ user_profile['seller_ntn'] or '' }}" pattern="[0-9]{7}-[0-9]{1}">
-                                                    <div class="form-text">National Tax Number (Format: 1234567-8)</div>
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label class="form-label">Seller STRN</label>
-                                                    <input type="text" name="seller_strn" class="form-control"
-                                                           value="{{ user_profile['seller_strn'] or '' }}">
-                                                    <div class="form-text">Sales Tax Registration Number</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <!-- 🆕 FBR Tax Fields (Moved from accordion) -->
+                                <hr>
+                                <h6 class="text-primary">🛒️ FBR Tax Information (Pakistan)</h6>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Seller NTN</label>
+                                    <input type="text" name="seller_ntn" class="form-control"
+                                           value="{{ user_profile.get('seller_ntn', '') }}"
+                                           pattern="[0-9]{7}-[0-9]{1}"
+                                           placeholder="1234567-8">
+                                    <div class="form-text">National Tax Number (Format: 1234567-8)</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Seller STRN</label>
+                                    <input type="text" name="seller_strn" class="form-control"
+                                           value="{{ user_profile.get('seller_strn', '') }}"
+                                           placeholder="Sales Tax Registration Number">
+                                    <div class="form-text">Required if registered for sales tax</div>
                                 </div>
 
                                 <button type="submit" class="btn btn-success">Update Profile</button>
