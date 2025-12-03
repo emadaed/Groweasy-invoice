@@ -20,6 +20,7 @@ from core.invoice_logic import prepare_invoice_data
 from core.qr_engine import make_qr_with_logo
 from core.pdf_engine import generate_pdf, HAS_WEAZYPRINT
 from core.auth import init_db, create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
+from core.purchases import save_purchase_order, get_purchase_orders, get_suppliers
 from core.middleware import security_headers
 
 # Environment setup
@@ -27,7 +28,7 @@ load_dotenv()
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')
+app.secret_key = os.getenv('SECRET_KEY', 'fallback_for_development_2025')
 
 # Rate Limiting
 limiter = Limiter(
@@ -123,18 +124,20 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S'):
     except Exception as e:
         print(f"Error in update_stock_on_invoice: {e}")
 
+
+# unique invoice numbers
+
 def generate_unique_invoice_number(user_id):
     """Generate guaranteed unique invoice number per user"""
     try:
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
 
-        # Get the last invoice number for this user
+        # Get highest invoice number across ALL tables
         c.execute('''
             SELECT invoice_number FROM user_invoices
-            WHERE user_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
+            WHERE user_id = ? AND invoice_number LIKE 'INV-%'
+            ORDER BY id DESC LIMIT 1
         ''', (user_id,))
 
         result = c.fetchone()
@@ -142,21 +145,115 @@ def generate_unique_invoice_number(user_id):
 
         if result:
             last_number = result[0]
-            # Extract number from "INV-00123" format
             if last_number.startswith('INV-'):
                 try:
                     last_num = int(last_number.split('-')[1])
                     return f"INV-{last_num + 1:05d}"
                 except (ValueError, IndexError):
-                    pass
+                    return "INV-00001"
 
-        # Start from INV-00001 for new users
         return "INV-00001"
 
     except Exception as e:
         print(f"Invoice number generation error: {e}")
-        return f"INV-{int(__import__('time').time())}"  # Fallback
+        import time
+        return f"INV-{int(time.time())}"
+# unique purchase order number
 
+def generate_unique_po_number(user_id):
+    """Generate unique purchase order number"""
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        # Ensure table exists
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                po_number TEXT,
+                supplier_name TEXT,
+                order_date DATE,
+                delivery_date DATE,
+                grand_total DECIMAL(10,2),
+                status TEXT DEFAULT 'pending',
+                order_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        c.execute('''
+            SELECT po_number FROM purchase_orders
+            WHERE user_id = ? AND po_number LIKE 'PO-%'
+            ORDER BY id DESC LIMIT 1
+        ''', (user_id,))
+
+        result = c.fetchone()
+        conn.close()
+
+        if result:
+            last_number = result[0]
+            if last_number.startswith('PO-'):
+                try:
+                    last_num = int(last_number.split('-')[1])
+                    return f"PO-{last_num + 1:05d}"
+                except (ValueError, IndexError):
+                    return "PO-00001"
+
+        return "PO-00001"
+
+    except Exception as e:
+        print(f"PO number generation error: {e}")
+        import time
+        return f"PO-{int(time.time())}"
+
+# save pending invoice
+def save_pending_invoice(user_id, invoice_data):
+    """Save pending invoice to database temporarily"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    # Create temp table if not exists
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS pending_invoices (
+            user_id INTEGER PRIMARY KEY,
+            invoice_data TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Delete old pending invoice
+    c.execute('DELETE FROM pending_invoices WHERE user_id = ?', (user_id,))
+
+    # Save new one
+    c.execute('INSERT INTO pending_invoices (user_id, invoice_data) VALUES (?, ?)',
+              (user_id, json.dumps(invoice_data)))
+
+    conn.commit()
+    conn.close()
+
+def get_pending_invoice(user_id):
+    """Retrieve pending invoice from database"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('SELECT invoice_data FROM pending_invoices WHERE user_id = ?', (user_id,))
+    result = c.fetchone()
+    conn.close()
+
+    if result:
+        return json.loads(result[0])
+    return None
+
+def clear_pending_invoice(user_id):
+    """Clear pending invoice after successful download"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('DELETE FROM pending_invoices WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+#custom QR
 def generate_custom_qr(invoice_data):
     """Generate custom branded QR code for payment using uploaded logo"""
     try:
@@ -312,7 +409,6 @@ def home():
 
 @app.route('/create_invoice')
 def create_invoice():
-    """Direct invoice creation page for logged-in users"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -324,7 +420,9 @@ def create_invoice():
             'company_address': user_profile.get('company_address', ''),
             'company_phone': user_profile.get('company_phone', ''),
             'company_email': user_profile.get('email', ''),
-            'company_tax_id': user_profile.get('company_tax_id', '')
+            'company_tax_id': user_profile.get('company_tax_id', ''),
+            'seller_ntn': user_profile.get('seller_ntn', ''),  # 🆕
+            'seller_strn': user_profile.get('seller_strn', '')  # 🆕
         }
 
     return render_template('form.html', prefill_data=prefill_data, nonce=g.nonce)
@@ -673,33 +771,40 @@ def donate():
 def service_worker():
     return send_from_directory('static', 'sw.js'), 200, {'Content-Type': 'application/javascript'}
 
+# preview invoice
 @app.route('/preview_invoice', methods=['POST'])
 @limiter.limit("5 per minute")
 def preview_invoice():
     try:
         invoice_data = prepare_invoice_data(request.form, request.files)
 
-        # 🛡️ STRICT STOCK VALIDATION - BLOCK PREVIEW IF INSUFFICIENT STOCK
-        stock_warnings = []
+        # Stock validation for SALE/EXPORT only
         if 'user_id' in session and 'items' in invoice_data:
-            stock_validation = validate_stock_availability(session['user_id'], invoice_data['items'])
-            if not stock_validation['success']:
-                flash(f'❌ Cannot create invoice: {stock_validation["message"]}', 'error')
-                return redirect(url_for('create_invoice'))
+            invoice_type = invoice_data.get('invoice_type', 'S')
+            if invoice_type in ['S', 'E']:
+                stock_validation = validate_stock_availability(session['user_id'], invoice_data['items'])
+                if not stock_validation['success']:
+                    flash(f'❌ Cannot create invoice: {stock_validation["message"]}', 'error')
+                    return redirect(url_for('create_invoice'))
 
-        # Ensure unique invoice number
+        # Generate unique number based on type
         if 'user_id' in session:
-            invoice_data['invoice_number'] = generate_unique_invoice_number(session['user_id'])
-
-        # 1. FBR QR Code (Mandatory)
+            invoice_type = invoice_data.get('invoice_type', 'S')
+            if invoice_type == 'P':
+                invoice_data['invoice_number'] = generate_unique_po_number(session['user_id'])
+            else:
+                invoice_data['invoice_number'] = generate_unique_invoice_number(session['user_id'])
+        # Generate QR codes
         fbr_invoice = FBRInvoice(invoice_data)
         fbr_summary = fbr_invoice.get_fbr_summary()
         fbr_qr_code = fbr_summary['qr_code'] if fbr_summary['is_compliant'] else None
-
-        # 2. Custom Colorful Logo-Embedded QR Code
         custom_qr_b64 = generate_custom_qr(invoice_data)
 
-        print("DEBUG: Rendering invoice template with data:", invoice_data.keys())
+        # 🆕 SAVE TO DATABASE (not session)
+        save_pending_invoice(session['user_id'], invoice_data)
+        session['invoice_finalized'] = False
+
+        print("DEBUG: Invoice saved to database for preview")
 
         return render_template('invoice.html',
                              data=invoice_data,
@@ -708,42 +813,49 @@ def preview_invoice():
                              fbr_qr_code=fbr_qr_code,
                              fbr_compliant=fbr_summary['is_compliant'],
                              fbr_errors=fbr_summary['errors'],
-                             stock_warnings=stock_warnings,  # 🆕 PASS WARNINGS TO TEMPLATE
                              nonce=g.nonce)
 
     except Exception as e:
         flash(f'Error generating preview: {str(e)}', 'error')
-        return redirect(url_for('home'))
+        return redirect(url_for('create_invoice'))
 
 #download route
 
 @app.route('/download_invoice', methods=['POST'])
 def download_invoice():
     try:
-        import json
-        from core.pdf_engine import generate_pdf
+        # 🛡️ CHECK IF ALREADY DOWNLOADED
+        if session.get('invoice_finalized'):
+            flash('⚠️ Invoice already downloaded. Create a new one.', 'warning')
+            return redirect(url_for('create_invoice'))
 
-        data = json.loads(request.form['data'])
+        # 🆕 GET FROM DATABASE (not session)
+        data = get_pending_invoice(session['user_id'])
 
-        # 🛡️ STEP 1: VALIDATE STOCK AVAILABILITY BEFORE ANY PROCESSING
+        if not data:
+            flash('❌ No invoice to download. Please create an invoice first.', 'error')
+            return redirect(url_for('create_invoice'))
+
+        # Re-validate stock for SALE/EXPORT
         if 'user_id' in session and 'items' in data:
-            stock_validation = validate_stock_availability(session['user_id'], data['items'])
-            if not stock_validation['success']:
-                flash(f'❌ Cannot download: {stock_validation["message"]}', 'error')
-                # Return to preview with error
-                return redirect(url_for('preview_invoice'))
+            invoice_type = data.get('invoice_type', 'S')
+            if invoice_type in ['S', 'E']:
+                stock_validation = validate_stock_availability(session['user_id'], data['items'])
+                if not stock_validation['success']:
+                    flash(f'❌ Stock changed! {stock_validation["message"]}', 'error')
+                    clear_pending_invoice(session['user_id'])
+                    session.pop('invoice_finalized', None)
+                    return redirect(url_for('create_invoice'))
 
-        # FBR Integration for download
+        # Generate QR codes
         fbr_invoice = FBRInvoice(data)
         fbr_summary = fbr_invoice.get_fbr_summary()
         fbr_qr_code = fbr_summary['qr_code'] if fbr_summary['is_compliant'] else None
-
-        # Generate custom QR for download as well
         custom_qr_b64 = generate_custom_qr(data)
 
         print("DEBUG: Generating PDF with data:", data.keys())
 
-        # Render HTML with BOTH QR codes
+        # Render HTML
         html_content = render_template('invoice.html',
                                      data=data,
                                      preview=False,
@@ -752,19 +864,32 @@ def download_invoice():
                                      fbr_compliant=fbr_summary['is_compliant'],
                                      nonce=g.nonce)
 
-        # Generate PDF using WeasyPrint only
+        # Generate PDF
         pdf_bytes = generate_pdf(html_content)
 
-        # 🛡️ STEP 4: DEDUCT STOCK ONLY AFTER SUCCESSFUL PDF GENERATION
+        # 🛡️ ATOMIC OPERATION: Update stock & save invoice
         if 'user_id' in session and 'items' in data:
             invoice_type = data.get('invoice_type', 'S')
-            update_stock_on_invoice(session['user_id'], data['items'], invoice_type)
 
-        # SAVE INVOICE TO USER HISTORY
-        if 'user_id' in session:
-            save_user_invoice(session['user_id'], data)
+            try:
+                update_stock_on_invoice(session['user_id'], data['items'], invoice_type)
 
-        # Return PDF
+                if invoice_type == 'P':
+                    from core.purchases import save_purchase_order
+                    save_purchase_order(session['user_id'], data)
+                else:
+                    save_user_invoice(session['user_id'], data)
+
+                session['invoice_finalized'] = True
+                print("✅ Invoice saved and stock updated successfully")
+
+            except Exception as e:
+                print(f"❌ CRITICAL: Invoice save failed: {e}")
+                flash('⚠️ Invoice generated but not saved. Contact support.', 'error')
+
+        # 🆕 CLEAR DATABASE ENTRY
+        clear_pending_invoice(session['user_id'])
+
         return Response(
             pdf_bytes,
             mimetype='application/pdf',
@@ -773,7 +898,19 @@ def download_invoice():
 
     except Exception as e:
         flash(f'Error generating PDF: {str(e)}', 'error')
-        return redirect(url_for('home'))
+        return redirect(url_for('create_invoice'))
+
+#clean up
+
+@app.route('/cancel_invoice')
+def cancel_invoice():
+    """Cancel pending invoice"""
+    if 'user_id' in session:
+        clear_pending_invoice(session['user_id'])
+        session.pop('invoice_finalized', None)
+        flash('Invoice cancelled', 'info')
+    return redirect(url_for('create_invoice'))
+
 
 # invoice history
 
@@ -805,6 +942,67 @@ def invoice_history():
         total_invoices=total_invoices,
         nonce=g.nonce
     )
+
+# purchase order
+
+@app.route("/purchase_orders")
+def purchase_orders():
+    """Purchase order history"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.purchases import get_purchase_orders
+
+    page = request.args.get('page', 1, type=int)
+    limit = 10
+    offset = (page - 1) * limit
+
+    orders = get_purchase_orders(session['user_id'], limit=limit, offset=offset)
+
+    return render_template("purchase_orders.html",
+                         orders=orders,
+                         current_page=page,
+                         nonce=g.nonce)
+
+# stock transaction
+@app.route("/stock_transactions")
+def stock_transactions():
+    """View all stock movements"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+
+    c.execute('''
+        SELECT sm.id, ii.name, sm.movement_type, sm.quantity,
+               sm.reference_id, sm.notes, sm.created_at
+        FROM stock_movements sm
+        JOIN inventory_items ii ON sm.product_id = ii.id
+        WHERE sm.user_id = ?
+        ORDER BY sm.created_at DESC
+        LIMIT 100
+    ''', (session['user_id'],))
+
+    transactions = c.fetchall()
+    conn.close()
+
+    return render_template("stock_transactions.html",
+                         transactions=transactions,
+                         nonce=g.nonce)
+# supplier management
+@app.route("/suppliers")
+def suppliers():
+    """Supplier management"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.purchases import get_suppliers
+    supplier_list = get_suppliers(session['user_id'])
+
+    return render_template("suppliers.html",
+                         suppliers=supplier_list,
+                         nonce=g.nonce)
 
 # ===== CUSTOMER MANAGEMENT ROUTES =====
 @app.route("/customers")

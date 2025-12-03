@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Stock Transactions{% endblock %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2>📋 Stock Transaction History</h2>
+    <div class="card">
+        <div class="card-body">
+            {% if transactions %}
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx[6][:16] }}</td>
+                        <td>{{ tx[1] }}</td>
+                        <td><span class="badge bg-{{ 'success' if tx[2] == 'purchase' else 'danger' if tx[2] == 'sale' else 'warning' }}">{{ tx[2] }}</span></td>
+                        <td>{{ tx[3] }}</td>
+                        <td>{{ tx[5] or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No transactions yet</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

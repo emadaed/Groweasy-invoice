@@ -69,13 +69,22 @@
                                         <h6>Your Business Tax Details</h6>
                                         <div class="mb-3">
                                             <label class="form-label">Seller NTN *</label>
-                                            <input type="text" name="seller_ntn" class="form-control" placeholder="1234567-8" pattern="[0-9]{7}-[0-9]{1}" required>
-                                            <div class="form-text">National Tax Number (Format: 1234567-8)</div>
+                                            <input type="text" name="seller_ntn" class="form-control"
+                                                placeholder="1234567-8"
+                                                pattern="[0-9]{7}-[0-9]{1}"
+                                                value="{{ prefill_data.get('seller_ntn', '') }}"
+                                                required>
+                                            <div class="form-text">
+                                                {% if not prefill_data.get('seller_ntn') %}
+                                                    <a href="{{ url_for('settings') }}" target="_blank">Save in Settings to auto-fill</a>
+                                                {% endif %}
+                                            </div>
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label">Seller STRN (Optional)</label>
-                                            <input type="text" name="seller_strn" class="form-control" placeholder="Sales Tax Registration Number">
-                                            <div class="form-text">Required if registered for sales tax</div>
+                                            <input type="text" name="seller_strn" class="form-control"
+                                                placeholder="Sales Tax Registration Number"
+                                                value="{{ prefill_data.get('seller_strn', '') }}">
                                         </div>
                                     </div>
 
@@ -129,7 +138,8 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Invoice Number *</label>
-                                        <input type="text" name="invoice_number" class="form-control" placeholder="INV-001" required>
+                                        <input type="text" class="form-control" value="Auto-generated" readonly disabled>
+                                        <small class="text-muted">System will assign next number automatically</small>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Invoice Date *</label>

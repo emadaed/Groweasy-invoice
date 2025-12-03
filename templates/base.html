@@ -74,10 +74,14 @@
             <!-- Logged in user menu -->
             <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
             <a href="{{ url_for('create_invoice') }}" class="btn btn-outline-light btn-sm me-2">New Invoice</a>
-            <a href="{{ url_for('invoice_history') }}" class="btn btn-outline-light btn-sm me-2">Invoices</a>
+            <a href="{{ url_for('invoice_history') }}" class="btn btn-outline-light btn-sm me-2">📄 Invoices</a>
+            <a href="{{ url_for('purchase_orders') }}" class="btn btn-outline-light btn-sm me-2">📦 Purchases</a>
+            <a href="{{ url_for('stock_transactions') }}" class="btn btn-outline-light btn-sm me-2">📋 Transactions</a>
+            <a href="{{ url_for('suppliers') }}" class="btn btn-outline-light btn-sm me-2">🏭 Suppliers</a>
             <a href="{{ url_for('inventory') }}" class="btn btn-outline-light btn-sm me-2">📦 Inventory</a>
             <a href="{{ url_for('customers') }}" class="btn btn-outline-light btn-sm me-2">Customers</a>
             <a href="{{ url_for('expenses') }}" class="btn btn-outline-light btn-sm me-2">Expenses</a>
+            <a href="{{ url_for('inventory_reports') }}" class="btn btn-outline-light btn-sm me-2">📊 Reports</a>
             <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-2">Settings</a>
             <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">Donate</a>
             <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>

@@ -34,7 +34,15 @@
 
             <!-- Invoice Number & Title -->
             <td width="40%" valign="top" align="right">
-                <h2 style="margin: 0 0 6px 0; font-size: 18px; color: #2c5aa0; text-align: right;">INVOICE</h2>
+                <h2 style="margin: 0 0 6px 0; font-size: 18px; color: #2c5aa0; text-align: right;">
+                    {% if data.invoice_type == 'P' %}
+                        PURCHASE INVOICE
+                    {% elif data.invoice_type == 'E' %}
+                        EXPORT INVOICE
+                    {% else %}
+                        INVOICE
+                    {% endif %}
+                </h2>
                 <table cellpadding="1" cellspacing="0" border="0" style="font-size: 9px;">
                     <tr>
                         <td align="right" style="padding: 1px 4px 1px 0;"><strong>Invoice #:</strong></td>
