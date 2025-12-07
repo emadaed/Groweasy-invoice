@@ -159,8 +159,8 @@
             <tr>
                 <td style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">{{ item.name or item.code or '—' }}</td>
                 <td align="center" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">{{ item.qty }}</td>
-                <td align="right" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">${{ "%.2f"|format(item.price) }}</td>
-                <td align="right" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;"><strong>${{ "%.2f"|format(item.total) }}</strong></td>
+                <td align="right" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;">{{ currency_symbol }}{{ "%.2f"|format(item.price) }}</td>
+                <td align="right" style="border: 1px solid #ddd; padding: 6px; font-size: 8px;"><strong>{{ currency_symbol }}{{ "%.2f"|format(item.total) }}</strong></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -198,23 +198,23 @@
                 <table width="100%" cellpadding="3" cellspacing="0" border="0" style="background: #f8f9fa; border-radius: 3px; margin-bottom: 8px;">
                     <tr>
                         <td style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;"><strong>Subtotal:</strong></td>
-                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">${{ "%.2f"|format(data.subtotal) }}</td>
+                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">{{ currency_symbol }}{{ "%.2f"|format(data.subtotal) }}</td>
                     </tr>
                     {% if data.discount_rate > 0 %}
                     <tr>
                         <td style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;"><strong>Discount ({{ "%.1f"|format(data.discount_rate) }}%):</strong></td>
-                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">-${{ "%.2f"|format(data.discount_amount) }}</td>
+                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">-{{ currency_symbol }}{{ "%.2f"|format(data.discount_amount) }}</td>
                     </tr>
                     {% endif %}
                     {% if data.tax_rate > 0 %}
                     <tr>
                         <td style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;"><strong>Tax ({{ "%.1f"|format(data.tax_rate) }}%):</strong></td>
-                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">${{ "%.2f"|format(data.tax_amount) }}</td>
+                        <td align="right" style="padding: 3px; border-bottom: 1px solid #ddd; font-size: 8px;">{{ currency_symbol }}{{ "%.2f"|format(data.tax_amount) }}</td>
                     </tr>
                     {% endif %}
                     <tr style="background: #2c5aa0; color: white;">
                         <td style="padding: 6px 3px; font-size: 10px; font-weight: bold;">TOTAL DUE:</td>
-                        <td align="right" style="padding: 6px 3px; font-size: 10px; font-weight: bold;">${{ "%.2f"|format(data.grand_total) }}</td>
+                        <td align="right" style="padding: 6px 3px; font-size: 10px; font-weight: bold;">{{ currency_symbol }}{{ "%.2f"|format(data.grand_total) }}</td>
                     </tr>
                 </table>
 
@@ -294,4 +294,9 @@
     </form>
 </div>
 {% endif %}
+<style>
+@media print {
+    footer { display: none !important; }
+}
+</style>
 {% endblock %}

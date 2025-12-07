@@ -76,7 +76,20 @@
                                            placeholder="Sales Tax Registration Number">
                                     <div class="form-text">Required if registered for sales tax</div>
                                 </div>
-
+                                <hr>
+                                <h6 class="text-primary">💱 Currency Preference</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Display Currency</label>
+                                    <select name="preferred_currency" class="form-control">
+                                        <option value="PKR" {% if user_profile.get('preferred_currency') == 'PKR' %}selected{% endif %}>🇵🇰 Pakistani Rupee (Rs.)</option>
+                                        <option value="USD" {% if user_profile.get('preferred_currency') == 'USD' %}selected{% endif %}>🇺🇸 US Dollar ($)</option>
+                                        <option value="EUR" {% if user_profile.get('preferred_currency') == 'EUR' %}selected{% endif %}>🇪🇺 Euro (€)</option>
+                                        <option value="GBP" {% if user_profile.get('preferred_currency') == 'GBP' %}selected{% endif %}>🇬🇧 British Pound (£)</option>
+                                        <option value="AED" {% if user_profile.get('preferred_currency') == 'AED' %}selected{% endif %}>🇦🇪 UAE Dirham (د.إ)</option>
+                                        <option value="SAR" {% if user_profile.get('preferred_currency') == 'SAR' %}selected{% endif %}>🇸🇦 Saudi Riyal (﷼)</option>
+                                    </select>
+                                    <small class="text-muted">Display only - amounts stored in PKR</small>
+                                </div>
                                 <button type="submit" class="btn btn-success">Update Profile</button>
                             </form>
                         </div>
@@ -117,7 +130,18 @@
                             </div>
                         </div>
                     </div>
-
+                    <!-- Active Devices -->
+                    <div class="col-md-12">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">📱 Active Devices</h5>
+                            </div>
+                            <div class="card-body">
+                                <a href="{{ url_for('devices') }}" class="btn btn-primary">Manage Devices</a>
+                                <p class="small text-muted mt-2">View and revoke access from other devices</p>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Account Info -->
                     <div class="card">
                         <div class="card-header">

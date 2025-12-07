@@ -6,13 +6,18 @@ import base64
 import os
 import sqlite3
 from pathlib import Path
+from datetime import datetime, timedelta
+import secrets
 
 # Third-party
+import requests
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
 from flask_compress import Compress
 from dotenv import load_dotenv
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 
 # Local application
 from fbr_integration import FBRInvoice
@@ -23,18 +28,81 @@ from core.auth import init_db, create_user, verify_user, get_user_profile, updat
 from core.purchases import save_purchase_order, get_purchase_orders, get_suppliers
 from core.middleware import security_headers
 
+# Cloudflare Turnstile Configuration
+TURNSTILE_SITE_KEY = os.getenv('TURNSTILE_SITE_KEY', '')
+TURNSTILE_SECRET_KEY = os.getenv('TURNSTILE_SECRET_KEY', '')
+
+def verify_turnstile(token):
+    """Verify Cloudflare Turnstile token"""
+    if not TURNSTILE_SECRET_KEY:
+        return True  # Skip if not configured (development mode)
+
+    if not token:
+        return False
+
+    try:
+        response = requests.post(
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+            json={
+                'secret': TURNSTILE_SECRET_KEY,
+                'response': token
+            },
+            timeout=5
+        )
+        result = response.json()
+        return result.get('success', False)
+    except Exception as e:
+        print(f"Turnstile verification error: {e}")
+        return True  # Don't block login if Cloudflare is down
+
+# Fun success messages
+SUCCESS_MESSAGES = {
+    'invoice_created': [
+        "🎉 Invoice created! You're a billing boss!",
+        "💰 Cha-ching! Another invoice done!",
+        "✨ Invoice magic complete!",
+        "🚀 Invoice sent to the moon!",
+        "🎊 You're on fire! Invoice created!"
+    ],
+    'stock_updated': [
+        "📦 Stock updated! Inventory ninja at work!",
+        "✅ Stock levels looking good!",
+        "🎯 Bullseye! Stock updated perfectly!",
+        "💪 Stock management on point!"
+    ],
+    'login': [
+        "🎉 Welcome back, superstar!",
+        "👋 Great to see you again!",
+        "✨ You're logged in! Let's make money!",
+        "🚀 Ready to conquer the day?"
+    ],
+    'product_added': [
+        "📦 Product added! Your inventory grows!",
+        "✨ New product in the house!",
+        "🎉 Inventory expanded successfully!",
+        "💪 Another product conquered!"
+    ]
+}
+
+def random_success_message(category='default'):
+    import random
+    messages = SUCCESS_MESSAGES.get(category, SUCCESS_MESSAGES['invoice_created'])
+    return random.choice(messages)
+
 # Environment setup
 load_dotenv()
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'fallback_for_development_2025')
+app.secret_key = os.getenv('SECRET_KEY')
 
 # Rate Limiting
+REDIS_URL = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=REDIS_URL
 )
 
 # Middleware
@@ -43,6 +111,31 @@ security_headers(app)
 
 # Database
 init_db()
+
+
+# Currency symbols
+CURRENCY_SYMBOLS = {
+    'PKR': 'Rs.',
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'AED': 'د.إ',
+    'SAR': '﷼'
+}
+
+@app.context_processor
+def inject_currency():
+    """Make currency available in all templates"""
+    currency = 'PKR'
+    symbol = 'Rs.'
+
+    if 'user_id' in session:
+        profile = get_user_profile(session['user_id'])
+        if profile:
+            currency = profile.get('preferred_currency', 'PKR')
+            symbol = CURRENCY_SYMBOLS.get(currency, 'Rs.')
+
+    return dict(currency=currency, currency_symbol=symbol)
 
 # ===== NEW STOCK VALIDATION FUNCTIONS =====
 def validate_stock_availability(user_id, invoice_items):
@@ -78,8 +171,9 @@ def validate_stock_availability(user_id, invoice_items):
         print(f"Stock validation error: {e}")
         return {'success': False, 'message': 'Stock validation failed'}
 
-def update_stock_on_invoice(user_id, invoice_items, invoice_type='S'):
-    """Update stock based on invoice type: Sale (decrease) or Purchase (increase)"""
+# update stock
+def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_number=None):
+    """Update stock with invoice reference number"""
     try:
         from core.inventory import InventoryManager
 
@@ -99,31 +193,28 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S'):
                 if result:
                     current_stock = result[0]
 
-                    # 🆕 CALCULATE NEW STOCK BASED ON INVOICE TYPE
+                    # 🆕 BUILD NOTES WITH INVOICE NUMBER
                     if invoice_type == 'P':
-                        # Purchase Invoice: INCREASE stock
                         new_stock = current_stock + quantity
                         movement_type = 'purchase'
-                        notes = f"Purchased {quantity} units via invoice"
-                        print(f"📦 Stock increased: {item.get('name')} +{quantity} units")
+                        notes = f"Purchased {quantity} units via PO: {invoice_number}" if invoice_number else f"Purchased {quantity} units"
                     else:
-                        # Sale/Export Invoice: DECREASE stock
                         new_stock = current_stock - quantity
                         movement_type = 'sale'
-                        notes = f"Sold {quantity} units via invoice"
-                        print(f"✅ Stock deducted: {item.get('name')} -{quantity} units")
+                        notes = f"Sold {quantity} units via Invoice: {invoice_number}" if invoice_number else f"Sold {quantity} units"
 
-                    # Use existing inventory manager
+                    # 🆕 PASS INVOICE NUMBER AS REFERENCE_ID
                     success = InventoryManager.update_stock(
-                        user_id, product_id, new_stock, movement_type, None, notes
+                        user_id, product_id, new_stock, movement_type, invoice_number, notes
                     )
 
-                    if not success:
+                    if success:
+                        print(f"✅ Stock updated: {item.get('name')} ({movement_type})")
+                    else:
                         print(f"⚠️ Stock update failed for {item.get('name')}")
 
     except Exception as e:
-        print(f"Error in update_stock_on_invoice: {e}")
-
+        print(f"Stock update error: {e}")
 
 # unique invoice numbers
 
@@ -530,9 +621,44 @@ def add_product():
     product_id = InventoryManager.add_product(session['user_id'], product_data)
 
     if product_id:
-        flash('Product added successfully!', 'success')
+        # 🆕 CREATE AUDIT TRAIL - Initial stock entry
+        initial_stock = product_data['current_stock']
+        if initial_stock > 0:
+            InventoryManager.update_stock(
+                session['user_id'],
+                product_id,
+                initial_stock,
+                'initial_stock',
+                None,
+                f"Product created with initial stock: {initial_stock} units"
+            )
+        flash(random_success_message('product_added'), 'success')
     else:
         flash('Error adding product. SKU might already exist.', 'error')
+
+    return redirect(url_for('inventory'))
+
+#delete
+@app.route("/delete_product", methods=['POST'])
+def delete_product():
+    """Remove product from inventory with audit trail"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.inventory import InventoryManager
+
+    product_id = request.form.get('product_id')
+    reason = request.form.get('reason')
+    notes = request.form.get('notes', '')
+
+    full_reason = f"{reason}. {notes}".strip()
+
+    success = InventoryManager.delete_product(session['user_id'], product_id, full_reason)
+
+    if success:
+        flash('✅ Product removed successfully', 'success')
+    else:
+        flash('❌ Error removing product', 'error')
 
     return redirect(url_for('inventory'))
 
@@ -588,7 +714,7 @@ def adjust_stock():
     )
 
     if success:
-        flash('Stock updated successfully!', 'success')
+        flash(random_success_message('stock_updated'), 'success')
     else:
         flash('Error updating stock', 'error')
 
@@ -631,7 +757,6 @@ def download_inventory_report():
     )
 
 #SETTINGS
-
 @app.route("/settings", methods=['GET', 'POST'])
 def settings():
     if 'user_id' not in session:
@@ -650,6 +775,7 @@ def settings():
             company_tax_id = request.form.get('company_tax_id')
             seller_ntn = request.form.get('seller_ntn')  # 🆕 FBR field
             seller_strn = request.form.get('seller_strn')  # 🆕 FBR fie
+            preferred_currency = request.form.get('preferred_currency')
 
             update_user_profile(
                 session['user_id'],
@@ -658,7 +784,8 @@ def settings():
                 company_phone=company_phone,
                 company_tax_id=company_tax_id,
                 seller_ntn=seller_ntn,  # 🆕 Pass to function
-                seller_strn=seller_strn  # 🆕 Pass to function
+                seller_strn=seller_strn,  # 🆕 Pass to function
+                preferred_currency=preferred_currency
             )
             flash('Profile updated successfully!', 'success')
             return redirect(url_for('settings'))
@@ -683,40 +810,149 @@ def settings():
             return redirect(url_for('settings'))
 
     return render_template("settings.html", user_profile=user_profile, nonce=g.nonce)
+#device management
+@app.route("/devices")
+def devices():
+    """Manage active devices"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
 
-# ADD RATE LIMITS TO ROUTES:
+    from core.session_manager import SessionManager
+    active_sessions = SessionManager.get_active_sessions(session['user_id'])
+
+    return render_template("devices.html",
+                         sessions=active_sessions,
+                         current_token=session.get('session_token'),
+                         nonce=g.nonce)
+
+@app.route("/revoke_device/<token>")
+def revoke_device(token):
+    """Revoke specific device session"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.session_manager import SessionManager
+
+    # Don't allow revoking current session
+    if token == session.get('session_token'):
+        flash('❌ Cannot revoke current session', 'error')
+    else:
+        SessionManager.revoke_session(token)
+        flash('✅ Device session revoked', 'success')
+
+    return redirect(url_for('devices'))
+
+@app.route("/revoke_all_devices")
+def revoke_all_devices():
+    """Revoke all other sessions"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    from core.session_manager import SessionManager
+    SessionManager.revoke_all_sessions(session['user_id'], except_token=session.get('session_token'))
+
+    flash('✅ All other devices logged out', 'success')
+    return redirect(url_for('devices'))
+
+# Login (RATE LIMITS TO ROUTES)
 @app.route("/login", methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def login():
     if request.method == 'POST':
+        # 🆕 VERIFY TURNSTILE
+        if TURNSTILE_SECRET_KEY:  # Only check if configured
+            turnstile_token = request.form.get('cf-turnstile-response')
+            if not verify_turnstile(turnstile_token):
+                flash('❌ Security verification failed. Please try again.', 'error')
+                return render_template('login.html',
+                                     turnstile_site_key=TURNSTILE_SITE_KEY,
+                                     nonce=g.nonce)
+
         email = request.form.get('email')
         password = request.form.get('password')
 
         user_id = verify_user(email, password)
         if user_id:
+            from core.session_manager import SessionManager
+
+            # Check location restrictions
+            if not SessionManager.check_location_restrictions(user_id, request.remote_addr):
+                flash('❌ Login not allowed from this location', 'error')
+                return render_template('login.html', nonce=g.nonce)
+
+            # Create secure session
+            session_token = SessionManager.create_session(user_id, request)
+
             session['user_id'] = user_id
             session['user_email'] = email
+            session['session_token'] = session_token
+
+            flash(random_success_message('login'), 'success')
             return redirect(url_for('dashboard'))
         else:
             return render_template('login.html', error='Invalid credentials', nonce=g.nonce)
 
-    return render_template('login.html', nonce=g.nonce)
+    # GET request - show login form
+    return render_template('login.html',
+                           turnstile_site_key=TURNSTILE_SITE_KEY,
+                           nonce=g.nonce)
 
+# leagal pages
+@app.route("/terms")
+def terms():
+    return render_template("terms.html", nonce=g.nonce)
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html", nonce=g.nonce)
+
+@app.route("/about")
+def about():
+    return render_template("about.html", nonce=g.nonce)
+
+#register
 @app.route("/register", methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def register():
     if request.method == 'POST':
+        # 🆕 VALIDATE TERMS ACCEPTANCE
+        if not request.form.get('agree_terms'):
+            flash('❌ You must agree to Terms of Service to register', 'error')
+            return render_template('register.html', nonce=g.nonce)
+
         email = request.form.get('email')
         password = request.form.get('password')
         company_name = request.form.get('company_name', '')
 
         if create_user(email, password, company_name):
+            flash('✅ Account created! Please login.', 'success')
             return redirect(url_for('login'))
         else:
             return render_template('register.html', error='User already exists', nonce=g.nonce)
 
     return render_template('register.html', nonce=g.nonce)
+#session validation
+@app.before_request
+def validate_session():
+    """Validate session token on each request"""
+    # Skip validation for public routes
+    public_routes = ['login', 'register', 'forgot_password', 'static', 'sw.js']
+    if request.endpoint in public_routes or request.path.startswith('/static/') or request.path == '/sw.js':
+        return None
 
+    # Only validate if user is logged in
+    if 'user_id' in session and 'session_token' in session:
+        from core.session_manager import SessionManager
+
+        user_id = SessionManager.validate_session(session['session_token'])
+
+        if not user_id or user_id != session['user_id']:
+            session.clear()
+            flash('⚠️ Session expired. Please login again.', 'warning')
+            return redirect(url_for('login'))
+
+    return None
+#dashboard
 @app.route("/dashboard")
 def dashboard():
     if 'user_id' not in session:
@@ -820,7 +1056,6 @@ def preview_invoice():
         return redirect(url_for('create_invoice'))
 
 #download route
-
 @app.route('/download_invoice', methods=['POST'])
 def download_invoice():
     try:
@@ -867,12 +1102,12 @@ def download_invoice():
         # Generate PDF
         pdf_bytes = generate_pdf(html_content)
 
-        # 🛡️ ATOMIC OPERATION: Update stock & save invoice
+        # Update stock & save invoice # 🆕 UPDATE STOCK WITH INVOICE NUMBER REFERENCE
         if 'user_id' in session and 'items' in data:
             invoice_type = data.get('invoice_type', 'S')
 
             try:
-                update_stock_on_invoice(session['user_id'], data['items'], invoice_type)
+                update_stock_on_invoice(session['user_id'], data['items'], invoice_type, data.get('invoice_number'))
 
                 if invoice_type == 'P':
                     from core.purchases import save_purchase_order
@@ -881,6 +1116,7 @@ def download_invoice():
                     save_user_invoice(session['user_id'], data)
 
                 session['invoice_finalized'] = True
+                flash(random_success_message('invoice_created'), 'success')
                 print("✅ Invoice saved and stock updated successfully")
 
             except Exception as e:
@@ -1194,5 +1430,106 @@ def debug_invoice_data():
     }
     return sample_data
 
+#Backup Route (Manual Trigger)
+
+@app.route('/admin/backup')
+def admin_backup():
+    """Manual database backup trigger (admin only)"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    # Simple admin check (first user is admin)
+    if session['user_id'] != 1:
+        return jsonify({'error': 'Admin only'}), 403
+
+    try:
+        import subprocess
+        result = subprocess.run(['python', 'backup_db.py'],
+                              capture_output=True,
+                              text=True,
+                              timeout=30)
+
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Backup created successfully',
+                'output': result.stdout
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.stderr
+            }), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Health and API
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    try:
+        # Check database connectivity
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('SELECT COUNT(*) FROM users')
+        user_count = c.fetchone()[0]
+        conn.close()
+
+        # Check disk space
+        import shutil
+        total, used, free = shutil.disk_usage(".")
+        disk_free_gb = free // (2**30)
+
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'database': 'connected',
+            'users': user_count,
+            'disk_free_gb': disk_free_gb,
+            'version': '1.0.0'
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/status')
+def system_status():
+    """Detailed system status"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        # System stats
+        c.execute('SELECT COUNT(*) FROM users')
+        total_users = c.fetchone()[0]
+
+        c.execute('SELECT COUNT(*) FROM user_invoices')
+        total_invoices = c.fetchone()[0]
+
+        c.execute('SELECT COUNT(*) FROM inventory_items WHERE is_active = TRUE')
+        total_products = c.fetchone()[0]
+
+        conn.close()
+
+        return jsonify({
+            'status': 'operational',
+            'stats': {
+                'total_users': total_users,
+                'total_invoices': total_invoices,
+                'total_products': total_products
+            },
+            'timestamp': datetime.now().isoformat()
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=False)

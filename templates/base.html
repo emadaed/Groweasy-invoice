@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -19,10 +18,11 @@
   <meta name="description" content="Free professional invoices for small businesses and NGOs">
 
   <!-- Bootstrap + shared CSS -->
-<link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.min.css') }}?v=6">
+  <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.min.css') }}?v=6">
+
   <style nonce="{{ nonce }}">
-    /* Local layout container — minimal and safe */
+    /* Local layout container */
     .container-main {
       max-width: 980px;
       margin: 30px auto;
@@ -56,6 +56,24 @@
       margin-bottom: 2rem;
       border-radius: 0 0 12px 12px;
     }
+
+    /* Footer Styles */
+    footer {
+      margin-top: 4rem;
+      padding: 2rem 0;
+      background: #f8f9fa;
+      border-top: 1px solid #dee2e6;
+    }
+
+    footer a {
+      color: #6c757d;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    footer a:hover {
+      color: #28a745;
+    }
   </style>
 </head>
 <body class="bg-light">
@@ -76,12 +94,12 @@
             <a href="{{ url_for('create_invoice') }}" class="btn btn-outline-light btn-sm me-2">New Invoice</a>
             <a href="{{ url_for('invoice_history') }}" class="btn btn-outline-light btn-sm me-2">📄 Invoices</a>
             <a href="{{ url_for('purchase_orders') }}" class="btn btn-outline-light btn-sm me-2">📦 Purchases</a>
-            <a href="{{ url_for('stock_transactions') }}" class="btn btn-outline-light btn-sm me-2">📋 Transactions</a>
-            <a href="{{ url_for('suppliers') }}" class="btn btn-outline-light btn-sm me-2">🏭 Suppliers</a>
             <a href="{{ url_for('inventory') }}" class="btn btn-outline-light btn-sm me-2">📦 Inventory</a>
-            <a href="{{ url_for('customers') }}" class="btn btn-outline-light btn-sm me-2">Customers</a>
-            <a href="{{ url_for('expenses') }}" class="btn btn-outline-light btn-sm me-2">Expenses</a>
             <a href="{{ url_for('inventory_reports') }}" class="btn btn-outline-light btn-sm me-2">📊 Reports</a>
+            <a href="{{ url_for('stock_transactions') }}" class="btn btn-outline-light btn-sm me-2">📋 Transactions</a>
+            <a href="{{ url_for('customers') }}" class="btn btn-outline-light btn-sm me-2">Customers</a>
+            <a href="{{ url_for('suppliers') }}" class="btn btn-outline-light btn-sm me-2">🏭 Suppliers</a>
+            <a href="{{ url_for('expenses') }}" class="btn btn-outline-light btn-sm me-2">Expenses</a>
             <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-2">Settings</a>
             <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">Donate</a>
             <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
@@ -89,6 +107,7 @@
             <!-- Guest user menu -->
             <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-sm me-2">Login</a>
             <a href="{{ url_for('register') }}" class="btn btn-success btn-sm me-2">Register</a>
+            <a href="{{ url_for('about') }}" class="btn btn-outline-light btn-sm me-2">About</a>
             <a href="{{ url_for('donate') }}" class="btn btn-warning btn-sm me-2">Donate</a>
           {% endif %}
         </div>
@@ -111,8 +130,46 @@
     {% block content %}{% endblock %}
   </main>
 
+  <!-- Footer -->
+  <footer class="text-center">
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12 mb-3">
+          <a href="{{ url_for('about') }}" class="me-3">About Us</a>
+          <a href="{{ url_for('terms') }}" class="me-3">Terms of Service</a>
+          <a href="{{ url_for('privacy') }}" class="me-3">Privacy Policy</a>
+          <a href="mailto:support@groweasy.com" class="me-3">Contact</a>
+        </div>
+        <div class="col-md-12">
+          <small class="text-muted">
+            © 2024 GrowEasy Invoice - Free FBR-Compliant Invoicing for Pakistan 🇵🇰
+            <br>
+            Made with ❤️ for Pakistani Small Businesses & NGOs
+          </small>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Cookie Consent Banner -->
+  <div id="cookieConsent" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #2c3e50; color: white; padding: 15px; z-index: 9999; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-9">
+          <small>
+            🍪 We use essential cookies for login sessions only. No tracking or advertising cookies.
+            <a href="{{ url_for('privacy') }}" style="color: #3498db; text-decoration: underline;">Learn more</a>
+          </small>
+        </div>
+        <div class="col-md-3 text-end">
+          <button type="button" class="btn btn-sm btn-success">Accept & Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- PWA Install Button -->
-  <button id="pwaInstallBtn" class="pwa-install-btn" title="Install App">Install</button>
+  <button id="pwaInstallBtn" class="pwa-install-btn" title="Install App">📲</button>
 
   <!-- GrowEasy Watermark (Preview Only) -->
   {% if request.endpoint == 'preview_invoice' %}
@@ -122,6 +179,74 @@
   <!-- Bootstrap JS + Custom Scripts -->
   <script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
   <script defer nonce="{{ nonce }}" src="{{ url_for('static', filename='js/groweasy_toast.min.js') }}?v=6"></script>
+
+  <!-- Cookie Consent Script -->
+  <script nonce="{{ nonce }}">
+  // Cookie consent - Guaranteed working version
+  (function() {
+      const CONSENT_KEY = 'groweasy_cookie_consent';
+      const CONSENT_VALUE = 'accepted_v1';
+
+      function setCookie(name, value, days) {
+          const d = new Date();
+          d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+          const expires = "expires=" + d.toUTCString();
+          document.cookie = name + "=" + value + ";" + expires + ";path=/;SameSite=Lax";
+      }
+
+      function getCookie(name) {
+          const nameEQ = name + "=";
+          const ca = document.cookie.split(';');
+          for(let i = 0; i < ca.length; i++) {
+              let c = ca[i];
+              while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+              if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+          }
+          return null;
+      }
+
+      function hasConsent() {
+          // Check both localStorage AND cookie
+          return localStorage.getItem(CONSENT_KEY) === CONSENT_VALUE ||
+                getCookie(CONSENT_KEY) === CONSENT_VALUE;
+      }
+
+      function giveConsent() {
+          localStorage.setItem(CONSENT_KEY, CONSENT_VALUE);
+          setCookie(CONSENT_KEY, CONSENT_VALUE, 365);
+          const banner = document.getElementById('cookieConsent');
+          if (banner) {
+              banner.style.display = 'none';
+          }
+      }
+
+      // Wait for DOM to be ready
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+      } else {
+          init();
+      }
+
+      function init() {
+          // Show banner if consent not given
+          if (!hasConsent()) {
+              const banner = document.getElementById('cookieConsent');
+              if (banner) {
+                  banner.style.display = 'block';
+              }
+          }
+
+          // Attach button handler
+          const acceptBtn = document.querySelector('#cookieConsent button');
+          if (acceptBtn) {
+              acceptBtn.onclick = giveConsent;
+          }
+      }
+
+      // Make globally available
+      window.acceptCookies = giveConsent;
+  })();
+  </script>
 
   <!-- PWA Installation Script -->
   <script nonce="{{ nonce }}">

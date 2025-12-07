@@ -49,3 +49,5 @@ Werkzeug==3.0.3
 wheel==0.45.1
 wrapt==2.0.1
 zopfli==0.4.0
+user-agents==2.2.0
+sentry-sdk[flask]==1.40.0

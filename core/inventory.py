@@ -33,6 +33,48 @@ class InventoryManager:
         finally:
             conn.close()
 
+    #delete
+    @staticmethod
+    def delete_product(user_id, product_id, reason="Product removed"):
+        """Soft delete product with audit trail"""
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
+        try:
+            # Get current stock before deletion
+            c.execute('SELECT name, current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
+                     (product_id, user_id))
+            result = c.fetchone()
+
+            if not result:
+                conn.close()
+                return False
+
+            product_name, current_stock = result
+
+            # Soft delete (mark as inactive)
+            c.execute('UPDATE inventory_items SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                     (product_id,))
+
+            # Create audit trail
+            c.execute('''
+                INSERT INTO stock_movements (user_id, product_id, movement_type, quantity, notes)
+                VALUES (?, ?, 'removal', ?, ?)
+            ''', (user_id, product_id, current_stock, f"Product removed: {reason}"))
+
+            conn.commit()
+            conn.close()
+
+            print(f"✅ Product {product_name} deleted with audit trail")
+            return True
+
+        except Exception as e:
+            print(f"❌ Delete error: {e}")
+            conn.rollback()
+            conn.close()
+            return False
+
+    #update stock
     @staticmethod
     def update_stock(user_id, product_id, new_quantity, movement_type='adjustment', reference_id=None, notes=None):
         """Update stock quantity - ENHANCED DEBUG VERSION"""
