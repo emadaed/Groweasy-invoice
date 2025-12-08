@@ -28,6 +28,16 @@ from core.auth import init_db, create_user, verify_user, get_user_profile, updat
 from core.purchases import save_purchase_order, get_purchase_orders, get_suppliers
 from core.middleware import security_headers
 
+# Initialize Sentry for error monitoring
+if os.getenv('SENTRY_DSN'):
+    sentry_sdk.init(
+        dsn=os.getenv('SENTRY_DSN'),
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,  # 10% of requests for performance monitoring
+        environment='production' if os.getenv('RAILWAY_ENVIRONMENT') else 'development'
+    )
+    print("✅ Sentry monitoring enabled")
+
 # Cloudflare Turnstile Configuration
 TURNSTILE_SITE_KEY = os.getenv('TURNSTILE_SITE_KEY', '')
 TURNSTILE_SECRET_KEY = os.getenv('TURNSTILE_SECRET_KEY', '')
@@ -94,7 +104,7 @@ load_dotenv()
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')
+app.secret_key = os.getenv('SECRET_KEY',)
 
 # Rate Limiting
 REDIS_URL = os.getenv('REDIS_URL', 'memory://')
