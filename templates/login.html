@@ -55,12 +55,12 @@
                                 <a href="{{ url_for('forgot_password') }}" class="small text-decoration-none">Forgot Password?</a>
                             </div>
                             <!-- Cloudflare Turnstile -->
-                                {% if turnstile_site_key %}
-                                <div class="cf-turnstile mb-3"
-                                    data-sitekey="{{ turnstile_site_key }}"
-                                    data-theme="light">
-                                </div>
-                                {% endif %}
+                            {% if turnstile_site_key %}
+                            <div class="cf-turnstile mb-3"
+                                data-sitekey="{{ turnstile_site_key }}"
+                                data-theme="light">
+                            </div>
+                            {% endif %}
                             <button type="submit" class="btn btn-lg w-100 text-white fw-bold mb-3"
                                     style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 10px;">
                                 Login

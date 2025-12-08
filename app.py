@@ -10,14 +10,12 @@ from datetime import datetime, timedelta
 import secrets
 
 # Third-party
-import requests
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
 from flask_compress import Compress
 from dotenv import load_dotenv
-import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
+
 
 # Local application
 from fbr_integration import FBRInvoice
@@ -27,7 +25,8 @@ from core.pdf_engine import generate_pdf, HAS_WEAZYPRINT
 from core.auth import init_db, create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
 from core.purchases import save_purchase_order, get_purchase_orders, get_suppliers
 from core.middleware import security_headers
-
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 # Initialize Sentry for error monitoring
 if os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
@@ -38,6 +37,7 @@ if os.getenv('SENTRY_DSN'):
     )
     print("✅ Sentry monitoring enabled")
 
+import requests
 # Cloudflare Turnstile Configuration
 TURNSTILE_SITE_KEY = os.getenv('TURNSTILE_SITE_KEY', '')
 TURNSTILE_SECRET_KEY = os.getenv('TURNSTILE_SECRET_KEY', '')
@@ -104,7 +104,7 @@ load_dotenv()
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY',)
+app.secret_key = os.getenv('SECRET_KEY')
 
 # Rate Limiting
 REDIS_URL = os.getenv('REDIS_URL', 'memory://')
