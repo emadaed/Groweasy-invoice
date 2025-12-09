@@ -15,8 +15,6 @@ from flask_limiter.util import get_remote_address
 from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
 from flask_compress import Compress
 from dotenv import load_dotenv
-
-
 # Local application
 from fbr_integration import FBRInvoice
 from core.invoice_logic import prepare_invoice_data
@@ -27,6 +25,8 @@ from core.purchases import save_purchase_order, get_purchase_orders, get_supplie
 from core.middleware import security_headers
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
+# Environment setup
+load_dotenv()
 # Initialize Sentry for error monitoring
 if os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
@@ -99,12 +99,15 @@ def random_success_message(category='default'):
     messages = SUCCESS_MESSAGES.get(category, SUCCESS_MESSAGES['invoice_created'])
     return random.choice(messages)
 
-# Environment setup
-load_dotenv()
-
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')
+app.secret_key = os.getenv('SECRET_KEY' , '1234')
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Rate Limiting
 REDIS_URL = os.getenv('REDIS_URL', 'memory://')
@@ -121,8 +124,6 @@ security_headers(app)
 
 # Database
 init_db()
-
-
 # Currency symbols
 CURRENCY_SYMBOLS = {
     'PKR': 'Rs.',
@@ -925,43 +926,47 @@ def about():
 @limiter.limit("5 per minute")
 def register():
     if request.method == 'POST':
-        # 🆕 VALIDATE TERMS ACCEPTANCE
+        # 🆕 ADD TURNSTILE VERIFICATION
+        if TURNSTILE_SECRET_KEY:  # Only check if configured
+            turnstile_token = request.form.get('cf-turnstile-response')
+            if not verify_turnstile(turnstile_token):
+                flash('❌ Security verification failed. Please try again.', 'error')
+                return render_template('register.html',
+                                     turnstile_site_key=TURNSTILE_SITE_KEY,
+                                     nonce=g.nonce)
+
+        # Validate terms acceptance
         if not request.form.get('agree_terms'):
             flash('❌ You must agree to Terms of Service to register', 'error')
-            return render_template('register.html', nonce=g.nonce)
+            return render_template('register.html',
+                                 turnstile_site_key=TURNSTILE_SITE_KEY,
+                                 nonce=g.nonce)
 
         email = request.form.get('email')
         password = request.form.get('password')
         company_name = request.form.get('company_name', '')
 
-        if create_user(email, password, company_name):
+        # 🆕 ADD DEBUG LOGGING
+        print(f"📝 Attempting to register user: {email}")
+        print(f"🔑 Password length: {len(password) if password else 0}")
+
+        user_created = create_user(email, password, company_name)
+        print(f"✅ User creation result: {user_created}")
+
+        if user_created:
             flash('✅ Account created! Please login.', 'success')
             return redirect(url_for('login'))
         else:
-            return render_template('register.html', error='User already exists', nonce=g.nonce)
+            flash('❌ User already exists or registration failed', 'error')
+            return render_template('register.html',
+                                 turnstile_site_key=TURNSTILE_SITE_KEY,
+                                 nonce=g.nonce)
 
-    return render_template('register.html', nonce=g.nonce)
-#session validation
-@app.before_request
-def validate_session():
-    """Validate session token on each request"""
-    # Skip validation for public routes
-    public_routes = ['login', 'register', 'forgot_password', 'static', 'sw.js']
-    if request.endpoint in public_routes or request.path.startswith('/static/') or request.path == '/sw.js':
-        return None
+    # GET request - show form with Turnstile
+    return render_template('register.html',
+                         turnstile_site_key=TURNSTILE_SITE_KEY,
+                         nonce=g.nonce)
 
-    # Only validate if user is logged in
-    if 'user_id' in session and 'session_token' in session:
-        from core.session_manager import SessionManager
-
-        user_id = SessionManager.validate_session(session['session_token'])
-
-        if not user_id or user_id != session['user_id']:
-            session.clear()
-            flash('⚠️ Session expired. Please login again.', 'warning')
-            return redirect(url_for('login'))
-
-    return None
 #dashboard
 @app.route("/dashboard")
 def dashboard():
