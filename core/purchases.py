@@ -118,6 +118,22 @@ def get_purchase_orders(user_id, limit=50, offset=0):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
 
+    # Ensure table exists before querying
+    try:
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='purchase_orders'")
+        if not c.fetchone():
+            print("⚠️ purchase_orders table not found, creating...")
+            conn.close()
+            init_purchase_tables()
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+    except Exception as e:
+        print(f"❌ Table check error: {e}")
+        conn.close()
+        init_purchase_tables()
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+
     c.execute('''
         SELECT id, po_number, supplier_name, order_date, delivery_date,
                grand_total, status, created_at, order_data
@@ -150,8 +166,21 @@ def get_suppliers(user_id):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
 
-    # Ensure table exists
-    init_purchase_tables()
+    # Ensure table exists before querying
+    try:
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='suppliers'")
+        if not c.fetchone():
+            print("⚠️ suppliers table not found, creating...")
+            conn.close()
+            init_purchase_tables()
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+    except Exception as e:
+        print(f"❌ Table check error: {e}")
+        conn.close()
+        init_purchase_tables()
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
 
     c.execute('''
         SELECT id, name, email, phone, address, tax_id, total_purchased, order_count

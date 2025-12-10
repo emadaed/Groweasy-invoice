@@ -1,4 +1,4 @@
-# app.py 30 Nov 2025 11:30 PM PKST
+# app.py 10 Dec 2025 11:30 PM PKST
 # Standard library
 import io
 import json
@@ -124,6 +124,17 @@ security_headers(app)
 
 # Database
 init_db()
+
+# Initialize purchase tables
+from core.purchases import init_purchase_tables
+try:
+    init_purchase_tables()
+    print("✅ Purchase tables initialized successfully")
+except Exception as e:
+    print(f"⚠️ Warning: Could not initialize purchase tables: {e}")
+    if os.getenv('SENTRY_DSN'):
+        sentry_sdk.capture_exception(e)
+
 # Currency symbols
 CURRENCY_SYMBOLS = {
     'PKR': 'Rs.',
@@ -1105,6 +1116,37 @@ def download_invoice():
 
         print("DEBUG: Generating PDF with data:", data.keys())
 
+        # Read CSS files for inline embedding
+        try:
+            css_dir = os.path.join(app.root_path, 'static', 'css')
+
+            # Read Bootstrap CSS
+            bootstrap_css_path = os.path.join(css_dir, 'bootstrap.min.css')
+            if os.path.exists(bootstrap_css_path):
+                with open(bootstrap_css_path, 'r', encoding='utf-8') as f:
+                    bootstrap_css = f.read()
+                print(f"✅ Loaded Bootstrap CSS ({len(bootstrap_css)} bytes)")
+            else:
+                print("⚠️ bootstrap.min.css not found")
+                bootstrap_css = ""
+
+            # Read Invoice CSS
+            invoice_css_path = os.path.join(css_dir, 'invoice.min.css')
+            if os.path.exists(invoice_css_path):
+                with open(invoice_css_path, 'r', encoding='utf-8') as f:
+                    invoice_css = f.read()
+                print(f"✅ Loaded Invoice CSS ({len(invoice_css)} bytes)")
+            else:
+                print("⚠️ invoice.min.css not found")
+                invoice_css = ""
+
+        except Exception as e:
+            print(f"⚠️ Error reading CSS files: {e}")
+            bootstrap_css = ""
+            invoice_css = ""
+            if os.getenv('SENTRY_DSN'):
+                sentry_sdk.capture_exception(e)
+
         # Render HTML
         html_content = render_template('invoice.html',
                                      data=data,
@@ -1113,6 +1155,20 @@ def download_invoice():
                                      fbr_qr_code=fbr_qr_code,
                                      fbr_compliant=fbr_summary['is_compliant'],
                                      nonce=g.nonce)
+
+        # Inject CSS inline into HTML (works without modifying template)
+        if bootstrap_css or invoice_css:
+            css_injection = f"""
+    <style>
+        /* Bootstrap CSS */
+        {bootstrap_css}
+
+        /* Invoice CSS */
+        {invoice_css}
+    </style>
+"""
+            html_content = html_content.replace('</head>', f'{css_injection}</head>')
+            print("✅ CSS injected inline into HTML")
 
         # Generate PDF
         pdf_bytes = generate_pdf(html_content)
