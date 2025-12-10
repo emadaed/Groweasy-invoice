@@ -1125,7 +1125,11 @@ def download_invoice():
                                      fbr_compliant=fbr_summary['is_compliant'],
                                      nonce=g.nonce)
 
-        # Generate PDF (pass app.root_path to pdf_engine)
+        # Remove any file:// protocol URLs from HTML (these break WeasyPrint)
+        html_content = html_content.replace('file:///', '/')
+        html_content = html_content.replace('file://', '/')
+
+        # Generate PDF with app.root_path for CSS loading
         pdf_bytes = generate_pdf(html_content, app.root_path)
 
         # Update stock & save invoice # 🆕 UPDATE STOCK WITH INVOICE NUMBER REFERENCE
