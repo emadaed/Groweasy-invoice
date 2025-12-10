@@ -28,15 +28,13 @@
                         <div class="alert alert-danger" role="alert">{{ error }}</div>
                         {% endif %}
 
-                        <!-- Login Form -->
+                        <!-- Login Form - NO TURNSTILE -->
                         <form method="POST">
-                            {% if turnstile_site_key %}
-                            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-                            {% endif %}
                             <div class="mb-3">
                                 <label class="form-label small fw-bold">Email Address</label>
                                 <input type="email" name="email" class="form-control form-control-lg"
                                        placeholder="you@company.com" required autofocus
+                                       autocomplete="email"
                                        style="border-radius: 10px;">
                             </div>
 
@@ -44,23 +42,18 @@
                                 <label class="form-label small fw-bold">Password</label>
                                 <input type="password" name="password" class="form-control form-control-lg"
                                        placeholder="••••••••" required
+                                       autocomplete="current-password"
                                        style="border-radius: 10px;">
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center mb-4">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="remember">
+                                    <input class="form-check-input" type="checkbox" id="remember" name="remember">
                                     <label class="form-check-label small" for="remember">Remember me</label>
                                 </div>
                                 <a href="{{ url_for('forgot_password') }}" class="small text-decoration-none">Forgot Password?</a>
                             </div>
-                            <!-- Cloudflare Turnstile -->
-                            {% if turnstile_site_key %}
-                            <div class="cf-turnstile mb-3"
-                                data-sitekey="{{ turnstile_site_key }}"
-                                data-theme="light">
-                            </div>
-                            {% endif %}
+
                             <button type="submit" class="btn btn-lg w-100 text-white fw-bold mb-3"
                                     style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 10px;">
                                 Login
@@ -76,7 +69,7 @@
 
                         <!-- Features -->
                         <div class="mt-4 pt-4" style="border-top: 1px solid #dee2e6;">
-                            <small class="text-muted d-block text-center mb-2">✓ FBR Compliant • ✓ Free Forever • ✓ Inventory Management</small>
+                            <small class="text-muted d-block text-center mb-2">✔ FBR Compliant • ✔ Free Forever • ✔ Inventory Management</small>
                         </div>
                     </div>
                 </div>
@@ -84,7 +77,7 @@
                 <!-- Trust Indicators -->
                 <div class="text-center mt-3">
                     <small class="text-white">
-                        🔒 Secured with Cloudflare • 🇵🇰 Made for Pakistan
+                        🔒 Secure Login • 🇵🇰 Made for Pakistan
                     </small>
                 </div>
             </div>
@@ -94,19 +87,20 @@
 
 <script nonce="{{ nonce }}">
 // Timezone-based greeting
-function updateGreeting() {
+(function() {
     const hour = new Date().getHours();
     const greetingEl = document.getElementById('greetingText');
 
+    if (!greetingEl) return;
+
     let message = '';
-    if (hour < 5) message = 'Late night! Workiing so hard? 🌙<br>السلام علیکم';
+    if (hour < 5) message = 'Late night! Working so hard? 🌙<br>السلام علیکم';
     else if (hour < 12) message = 'Good morning! ☀️<br>السلام علیکم';
     else if (hour < 17) message = 'Good afternoon! 🌤️<br>السلام علیکم';
     else if (hour < 21) message = 'Good evening! 🌆<br>السلام علیکم';
     else message = 'Working late? 🌃<br>السلام علیکم';
 
     greetingEl.innerHTML = message;
-}
-updateGreeting();
+})();
 </script>
 {% endblock %}
