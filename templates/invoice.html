@@ -3,33 +3,17 @@
 {% block title %}Professional Invoice{% endblock %}
 
 {% block content %}
-<div class="invoice-container" style="font-family: Arial, sans-serif; font-size: 10px; line-height: 1.2;">
-    <!-- Compact Header: Company + Invoice Details -->
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 12px;">
-        <tr>
-            <!-- Company Info -->
-            <td width="60%" valign="top">
-                <table cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                        <td valign="top" style="padding-right: 8px;">
-                            {% if data.logo_b64 %}
-                            <img src="data:image/png;base64,{{ data.logo_b64 }}" style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;" alt="{{ data.company_name }}">
-                            {% else %}
-                            <img src="{{ url_for('static', filename='assets/logo.png') }}" style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;" alt="{{ data.company_name }}" onerror="this.style.display='none'">
-                            {% endif %}
-                        </td>
-                        <td valign="top">
-                            <h1 style="margin: 0 0 3px 0; font-size: 16px; color: #2c5aa0; font-weight: bold;">{{ data.company_name }}</h1>
-                            <p style="margin: 1px 0; font-size: 8px; color: #666;">{{ data.company_address }}</p>
-                            <p style="margin: 1px 0; font-size: 8px; color: #666;">
-                                {{ data.company_phone }} | {{ data.company_email }}
-                            </p>
-                            {% if data.company_tax_id %}
-                            <p style="margin: 1px 0; font-size: 8px; color: #666;"><strong>Tax ID:</strong> {{ data.company_tax_id }}</p>
-                            {% endif %}
-                        </td>
-                    </tr>
-                </table>
+            <td valign="top" style="padding-right: 8px;">
+                {% if data.logo_b64 %}
+                    <img src="data:image/png;base64,{{ data.logo_b64 | replace('data:image/png;base64,', '') | replace('data:image/jpeg;base64,', '') }}"
+                        style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;"
+                        alt="{{ data.company_name }}">
+                {% else %}
+                    <img src="{{ url_for('static', filename='assets/logo.png') }}"
+                        style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;"
+                        alt="{{ data.company_name }}"
+                        onerror="this.style.display='none'">
+                {% endif %}
             </td>
 
             <!-- Invoice Number & Title -->
