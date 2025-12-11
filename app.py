@@ -75,13 +75,13 @@ def random_success_message(category='default'):
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY' , '1234')
-##from werkzeug.middleware.proxy_fix import ProxyFix
-##app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-##
-##app.config['SESSION_COOKIE_SECURE'] = True
-##app.config['SESSION_COOKIE_HTTPONLY'] = True
-##app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.secret_key = os.getenv('SECRET_KEY')
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Rate Limiting
 REDIS_URL = os.getenv('REDIS_URL', 'memory://')
@@ -94,6 +94,14 @@ limiter = Limiter(
 
 # Middleware
 Compress(app)
+# Exclude PDFs from compression to prevent corruption
+app.config['COMPRESS_MIMETYPES'] = [
+    'text/html',
+    'text/css',
+    'text/xml',
+    'application/json',
+    'application/javascript'
+]
 security_headers(app)
 
 # Database
@@ -977,9 +985,7 @@ def logout():
 def donate():
     return render_template("donate.html", nonce=g.nonce)
 
-@app.route('/sw.js')
-def service_worker():
-    return send_from_directory('static', 'sw.js'), 200, {'Content-Type': 'application/javascript'}
+# Service worker route REMOVED - was causing CSP issues
 
 # preview invoice
 @app.route('/preview_invoice', methods=['POST'])
@@ -1103,13 +1109,19 @@ def download_invoice():
         # 🆕 CLEAR DATABASE ENTRY
         clear_pending_invoice(session['user_id'])
 
-        return Response(
-            pdf_bytes,
-            mimetype='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename=invoice_{data["invoice_number"]}.pdf'}
-        )
+        # Return PDF with proper headers - bypass compression
+        response = Response(pdf_bytes, mimetype='application/pdf')
+        response.headers['Content-Disposition'] = f'attachment; filename=invoice_{data["invoice_number"]}.pdf'
+        response.headers['Content-Length'] = len(pdf_bytes)
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Content-Encoding'] = 'identity'  # Prevent compression
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
 
     except Exception as e:
+        print(f"❌ PDF download error: {e}")
+        import traceback
+        traceback.print_exc()
         flash(f'Error generating PDF: {str(e)}', 'error')
         return redirect(url_for('create_invoice'))
 

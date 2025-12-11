@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>{% block title %}GrowEasy Invoice{% endblock %}</title>
 
-    <!-- Favicon & PWA Meta Tags -->
+    <!-- Favicon -->
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
     <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
 
-    <!-- PWA Manifest -->
+    <!-- PWA Meta Tags (no service worker) -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#28a745">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,7 +20,7 @@
     <!-- Bootstrap CSS -->
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
     <!-- Custom Invoice CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.min.css') }}?v=7">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.min.css') }}?v=8">
 
     <style nonce="{{ nonce }}">
         .container-main {
@@ -30,22 +30,6 @@
             padding: 30px 36px;
             border-radius: 12px;
             box-shadow: 0 6px 20px rgba(0,0,0,0.04);
-        }
-        .pwa-install-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            font-size: 24px;
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-            display: none;
-            cursor: pointer;
         }
         .user-nav {
             background: linear-gradient(135deg, #28a745, #20c997);
@@ -124,7 +108,7 @@
                 </div>
                 <div class="col-md-12">
                     <small class="text-muted">
-                        © 2024 GrowEasy Invoice - Free FBR-Compliant Invoicing for Pakistan
+                        © 2024 GrowEasy Invoice - Free FBR-Compliant Invoicing for Pakistan 🇵🇰
                     </small>
                 </div>
             </div>
@@ -141,64 +125,52 @@
                     </small>
                 </div>
                 <div class="col-md-3 text-end">
-                    <button type="button" class="btn btn-sm btn-success" onclick="acceptCookies()">Accept</button>
+                    <button type="button" class="btn btn-sm btn-success" id="acceptCookiesBtn">Accept</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- PWA Install Button -->
-    <button id="pwaInstallBtn" class="pwa-install-btn" title="Install App">📲</button>
-
     <!-- Bootstrap JS -->
     <script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 
+    <!-- Cookie Consent Script - with nonce -->
     <script nonce="{{ nonce }}">
-    // Cookie consent
     (function() {
-        const CONSENT_KEY = 'groweasy_cookie_consent';
+        var CONSENT_KEY = 'groweasy_cookie_consent';
+
         function hasConsent() {
             return localStorage.getItem(CONSENT_KEY) === 'accepted';
         }
-        function init() {
-            if (!hasConsent()) {
-                document.getElementById('cookieConsent').style.display = 'block';
+
+        function acceptCookies() {
+            localStorage.setItem(CONSENT_KEY, 'accepted');
+            var banner = document.getElementById('cookieConsent');
+            if (banner) {
+                banner.style.display = 'none';
             }
         }
-        window.acceptCookies = function() {
-            localStorage.setItem(CONSENT_KEY, 'accepted');
-            document.getElementById('cookieConsent').style.display = 'none';
-        };
+
+        function init() {
+            if (!hasConsent()) {
+                var banner = document.getElementById('cookieConsent');
+                if (banner) {
+                    banner.style.display = 'block';
+                }
+            }
+
+            var btn = document.getElementById('acceptCookiesBtn');
+            if (btn) {
+                btn.addEventListener('click', acceptCookies);
+            }
+        }
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
             init();
         }
     })();
-
-    // PWA Installation
-    let deferredPrompt;
-    const installBtn = document.getElementById('pwaInstallBtn');
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        if (installBtn) installBtn.style.display = 'block';
-    });
-    if (installBtn) {
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') installBtn.style.display = 'none';
-                deferredPrompt = null;
-            }
-        });
-    }
-
-    // Service Worker Registration
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed'));
-    }
     </script>
 </body>
 </html>

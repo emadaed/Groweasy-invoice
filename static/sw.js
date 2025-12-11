@@ -1,33 +1,22 @@
-// Basic Service Worker
-const CACHE_NAME = 'groweasy-invoice-v3';
+// Service Worker DISABLED
+// This file exists only to unregister any previously cached service workers
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        return cache.addAll([
-          '/',
-          '/static/css/invoice.min.css',
-          '/static/css/bootstrap.min.css',
-          '/static/js/groweasy_toast.min.js',
-          '/static/js/bootstrap.bundle.min.js',
-          '/static/js/form_items.js',
-          '/static/img/favicon.ico',
-          '/static/img/favicon-192.png',
-          '/static/manifest.json'
-        ]).catch(error => {
-          console.log('Cache addAll failed:', error);
-        });
-      })
-  );
+self.addEventListener('install', function(event) {
+    self.skipWaiting();
 });
 
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
-  );
+self.addEventListener('activate', function(event) {
+    // Unregister this service worker
+    self.registration.unregister();
+
+    // Clear all caches
+    event.waitUntil(
+        caches.keys().then(function(cacheNames) {
+            return Promise.all(
+                cacheNames.map(function(cacheName) {
+                    return caches.delete(cacheName);
+                })
+            );
+        })
+    );
 });

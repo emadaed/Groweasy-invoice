@@ -265,9 +265,9 @@
                             </div>
                         </div>
 
-                        <!-- Submit Button -->
+                        <!-- Submit Button with Double-Submit Prevention -->
                         <div class="text-center">
-                            <button type="submit" class="btn btn-success btn-lg px-5">
+                            <button type="submit" id="previewBtn" class="btn btn-success btn-lg px-5">
                                 👁️ Preview FBR-Compliant Invoice
                             </button>
                         </div>
@@ -278,7 +278,33 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/form_items.js') }}"></script>
+<script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/form_items.js') }}"></script>
+
+<script nonce="{{ nonce }}">
+// Auto-set today's date on page load
+document.addEventListener('DOMContentLoaded', function() {
+    var dateInput = document.querySelector('input[name="invoice_date"]');
+    if (dateInput && !dateInput.value) {
+        var today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+
+    // Double-submit prevention
+    var form = document.querySelector('form');
+    var submitBtn = document.getElementById('previewBtn');
+    var isSubmitting = false;
+
+    form.addEventListener('submit', function(e) {
+        if (isSubmitting) {
+            e.preventDefault();
+            return false;
+        }
+        isSubmitting = true;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Generating Preview...';
+    });
+});
+</script>
 
 <script nonce="{{ nonce }}">
 // Auto-fill company info from user profile
