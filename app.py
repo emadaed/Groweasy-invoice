@@ -104,6 +104,16 @@ app.config['COMPRESS_MIMETYPES'] = [
 ]
 security_headers(app)
 
+# === REDUCE LOG NOISE (fixes Railway rate-limit warning) ===
+import logging
+# Set root logger to INFO (your own prints stay)
+logging.getLogger().setLevel(logging.INFO)
+# Silence the very noisy third-party libraries
+logging.getLogger('weasyprint').setLevel(logging.WARNING)
+logging.getLogger('fontTools').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+
 # Database
 init_db()
 
