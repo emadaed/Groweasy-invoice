@@ -162,6 +162,9 @@ def generate_pdf(html_content, app_root_path=None):
                 td, th { padding: 4px; border: 1px solid #ddd; }
                 .btn, button, form { display: none; }
             ''')
+            print(f"DEBUG: Final PDF size: {len(pdf_bytes)} bytes")
+            if len(pdf_bytes) < 5000:
+                print("WARNING: PDF suspiciously small — possible blank!")
 
             return HTML(string=html_content).write_pdf(stylesheets=[fallback_css])
         except Exception as fallback_error:

@@ -250,9 +250,11 @@
                         <tr>
                             <td valign="top" style="padding-right: 8px;">
                                 {% if data.logo_b64 %}
-                                <img src="data:image/png;base64,{{ data.logo_b64 }}"
-                                     style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;"
-                                     alt="{{ data.company_name }}">
+                                    <img src="data:image/png;base64,{{ data.logo_b64 }}"
+                                        style="width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 3px;"
+                                        alt="{{ data.company_name }}">
+                                {% else %}
+                                    <!-- fallback static logo -->
                                 {% endif %}
                             </td>
                             <td valign="top">
