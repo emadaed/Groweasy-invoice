@@ -241,7 +241,7 @@
 
 {% if preview %}
 <div class="text-center my-4">
-    <!-- 🛡️ STOCK AVAILABILITY WARNINGS -->
+    <!-- Stock Warnings -->
     {% if stock_warnings %}
     <div class="alert alert-danger mb-3">
         <strong>⚠️ Stock Issues:</strong>
@@ -265,17 +265,15 @@
     </div>
     {% endif %}
 
-    <form id="downloadForm" action="{{ url_for('download_invoice') }}" method="POST">
-        <input type="hidden" name="data" value='{{ data | tojson }}'>
-        <button type="submit" id="downloadBtn" class="btn btn-success btn-lg px-5 {% if stock_warnings %}disabled{% endif %}"
-                {% if stock_warnings %}disabled{% endif %}>
-            {% if stock_warnings %}
+    <!-- Download Button (No Form) -->
+    <button id="downloadBtn" class="btn btn-success btn-lg px-5"
+            {% if stock_warnings %}disabled{% endif %}>
+        {% if stock_warnings %}
             ⚠️ Fix Stock Issues First
-            {% else %}
+        {% else %}
             ⬇️ Download FBR-Compliant PDF
-            {% endif %}
-        </button>
-    </form>
+        {% endif %}
+    </button>
 
     <p class="mt-3">
         <a href="{{ url_for('cancel_invoice') }}" class="btn btn-outline-secondary btn-sm">Cancel & Start Over</a>
@@ -283,24 +281,53 @@
 </div>
 
 <script nonce="{{ nonce }}">
-// Double-submit prevention for download
 document.addEventListener('DOMContentLoaded', function() {
-    var form = document.getElementById('downloadForm');
-    var btn = document.getElementById('downloadBtn');
-    var isSubmitting = false;
+    const downloadBtn = document.getElementById('downloadBtn');
+    if (!downloadBtn) return;
 
-    form.addEventListener('submit', function(e) {
-        if (isSubmitting) {
-            e.preventDefault();
-            return false;
+    downloadBtn.addEventListener('click', async function() {
+        if (downloadBtn.disabled) return;
+
+        downloadBtn.disabled = true;
+        downloadBtn.innerHTML = '⏳ Generating PDF...';
+
+        try {
+            const invoiceData = {{ data | tojson }};
+
+            const response = await fetch('{{ url_for("download_invoice") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(invoiceData)
+            });
+
+            if (!response.ok) throw new Error('Server error');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'invoice_{{ data.invoice_number }}.pdf';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            downloadBtn.innerHTML = '✅ Download Complete!';
+            setTimeout(() => {
+                window.location.href = '{{ url_for("create_invoice") }}';
+            }, 1000);
+
+        } catch (err) {
+            console.error('Download failed:', err);
+            alert('Download failed. Please try again.');
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = '⬇️ Download FBR-Compliant PDF';
         }
-        isSubmitting = true;
-        btn.disabled = true;
-        btn.innerHTML = '⏳ Generating PDF...';
     });
 });
 </script>
 {% endif %}
+
 <style>
 @media print {
     footer { display: none !important; }
