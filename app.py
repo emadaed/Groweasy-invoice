@@ -1044,8 +1044,19 @@ def download_invoice():
             flash('⚠️ Invoice already downloaded. Create a new one.', 'warning')
             return redirect(url_for('create_invoice'))
 
-        # 🆕 GET FROM DATABASE (not session)
-        data = get_pending_invoice(session['user_id'])
+        # PRIORITY: Use JSON from frontend (clean logo_b64)
+        data = None
+        if request.is_json:
+            try:
+                data = request.get_json()
+                print("✅ Using clean JSON data from frontend (with processed logo)")
+            except Exception as e:
+                print(f"❌ JSON parse failed: {e}")
+
+        # Fallback to pending_invoice only if no JSON
+        if not data:
+            data = get_pending_invoice(session['user_id'])
+            print("⚠️ Fallback: Using pending_invoice data (may have dirty logo)")
 
         if not data:
             flash('❌ No invoice to download. Please create an invoice first.', 'error')
@@ -1062,18 +1073,19 @@ def download_invoice():
                     session.pop('invoice_finalized', None)
                     return redirect(url_for('create_invoice'))
 
-        # Generate QR codes
+        # Generate QR codes (uses data, which now has clean logo_b64)
         fbr_invoice = FBRInvoice(data)
         fbr_summary = fbr_invoice.get_fbr_summary()
         fbr_qr_code = fbr_summary['qr_code'] if fbr_summary['is_compliant'] else None
         custom_qr_b64 = generate_custom_qr(data)
 
         print("DEBUG: Generating PDF with data:", data.keys())
+        print(f"DEBUG: PDF size before generation: logo_b64 length = {len(data.get('logo_b64', '')) if data.get('logo_b64') else 0}")
 
         # Get currency symbol for PDF
         currency_symbol = CURRENCY_SYMBOLS.get(data.get('currency', 'PKR'), 'Rs.')
 
-        # Render HTML using STANDALONE PDF template (no base.html dependency)
+        # Render HTML
         html_content = render_template('invoice_pdf.html',
                                      data=data,
                                      preview=False,
@@ -1082,39 +1094,36 @@ def download_invoice():
                                      fbr_compliant=fbr_summary['is_compliant'],
                                      currency_symbol=currency_symbol)
 
-        # Generate PDF with app.root_path for CSS loading
+        # Generate PDF
         pdf_bytes = generate_pdf(html_content, app.root_path)
+        print(f"✅ Final PDF generated: {len(pdf_bytes)} bytes")
 
-        # Update stock & save invoice # 🆕 UPDATE STOCK WITH INVOICE NUMBER REFERENCE
+        # Update stock & save invoice
         if 'user_id' in session and 'items' in data:
             invoice_type = data.get('invoice_type', 'S')
-
             try:
                 update_stock_on_invoice(session['user_id'], data['items'], invoice_type, data.get('invoice_number'))
-
                 if invoice_type == 'P':
                     from core.purchases import save_purchase_order
                     save_purchase_order(session['user_id'], data)
                 else:
                     save_user_invoice(session['user_id'], data)
-
                 session['invoice_finalized'] = True
                 flash(random_success_message('invoice_created'), 'success')
                 print("✅ Invoice saved and stock updated successfully")
-
             except Exception as e:
                 print(f"❌ CRITICAL: Invoice save failed: {e}")
                 flash('⚠️ Invoice generated but not saved. Contact support.', 'error')
 
-        # 🆕 CLEAR DATABASE ENTRY
+        # CLEAR DATABASE ENTRY
         clear_pending_invoice(session['user_id'])
 
-        # Return PDF with proper headers - bypass compression
+        # Return PDF
         response = Response(pdf_bytes, mimetype='application/pdf')
         response.headers['Content-Disposition'] = f'attachment; filename=invoice_{data["invoice_number"]}.pdf'
         response.headers['Content-Length'] = len(pdf_bytes)
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Content-Encoding'] = 'identity'  # Prevent compression
+        response.headers['Content-Encoding'] = 'identity'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
@@ -1124,7 +1133,6 @@ def download_invoice():
         traceback.print_exc()
         flash(f'Error generating PDF: {str(e)}', 'error')
         return redirect(url_for('create_invoice'))
-
 #clean up
 
 @app.route('/cancel_invoice')
