@@ -31,7 +31,8 @@ RUN pip install --upgrade pip setuptools wheel && \
 EXPOSE 8080
 
 # Use port 8080 directly (Railway's default)
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "300", "--workers", "2", "--worker-class", "gevent", "app:app"]
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "120", "--workers", "1", "--preload", "app:app"]
+#CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "120", "--workers", "1", "--preload", "app:app"]
 
 # CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "app:app"]

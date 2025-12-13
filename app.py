@@ -76,6 +76,8 @@ def random_success_message(category='default'):
 # App creation
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+from core.cache import init_cache, get_user_profile_cached
+init_cache(app)
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
@@ -144,7 +146,7 @@ def inject_currency():
     symbol = 'Rs.'
 
     if 'user_id' in session:
-        profile = get_user_profile(session['user_id'])
+        profile = get_user_profile_cached(session['user_id'])
         if profile:
             currency = profile.get('preferred_currency', 'PKR')
             symbol = CURRENCY_SYMBOLS.get(currency, 'Rs.')
@@ -231,14 +233,13 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
         print(f"Stock update error: {e}")
 
 # unique invoice numbers
-
 def generate_unique_invoice_number(user_id):
-    """Generate guaranteed unique invoice number per user"""
+    """Generate unique invoice number with DB lock to prevent duplicates"""
     try:
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect('users.db', timeout=30.0)  # Long timeout for lock
+        conn.execute("BEGIN EXCLUSIVE")  # Lock DB until commit
         c = conn.cursor()
 
-        # Get highest invoice number across ALL tables
         c.execute('''
             SELECT invoice_number FROM user_invoices
             WHERE user_id = ? AND invoice_number LIKE 'INV-%'
@@ -246,46 +247,40 @@ def generate_unique_invoice_number(user_id):
         ''', (user_id,))
 
         result = c.fetchone()
-        conn.close()
 
         if result:
             last_number = result[0]
             if last_number.startswith('INV-'):
                 try:
                     last_num = int(last_number.split('-')[1])
-                    return f"INV-{last_num + 1:05d}"
-                except (ValueError, IndexError):
-                    return "INV-00001"
+                    new_num = f"INV-{last_num + 1:05d}"
+                except:
+                    new_num = "INV-00001"
+            else:
+                new_num = "INV-00001"
+        else:
+            new_num = "INV-00001"
 
-        return "INV-00001"
+        conn.commit()
+        conn.close()
+        return new_num
 
-    except Exception as e:
-        print(f"Invoice number generation error: {e}")
-        import time
-        return f"INV-{int(time.time())}"
+    except sqlite3.OperationalError as e:
+        if "database is locked" in str(e):
+            # Retry once
+            import time
+            time.sleep(1)
+            return generate_unique_invoice_number(user_id)
+        raise
+
 # unique purchase order number
 
 def generate_unique_po_number(user_id):
-    """Generate unique purchase order number"""
+    """Generate unique PO number with DB lock"""
     try:
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect('users.db', timeout=30.0)
+        conn.execute("BEGIN EXCLUSIVE")
         c = conn.cursor()
-
-        # Ensure table exists
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS purchase_orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                po_number TEXT,
-                supplier_name TEXT,
-                order_date DATE,
-                delivery_date DATE,
-                grand_total DECIMAL(10,2),
-                status TEXT DEFAULT 'pending',
-                order_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
 
         c.execute('''
             SELECT po_number FROM purchase_orders
@@ -294,23 +289,30 @@ def generate_unique_po_number(user_id):
         ''', (user_id,))
 
         result = c.fetchone()
-        conn.close()
 
         if result:
             last_number = result[0]
             if last_number.startswith('PO-'):
                 try:
                     last_num = int(last_number.split('-')[1])
-                    return f"PO-{last_num + 1:05d}"
-                except (ValueError, IndexError):
-                    return "PO-00001"
+                    new_num = f"PO-{last_num + 1:05d}"
+                except:
+                    new_num = "PO-00001"
+            else:
+                new_num = "PO-00001"
+        else:
+            new_num = "PO-00001"
 
-        return "PO-00001"
+        conn.commit()
+        conn.close()
+        return new_num
 
-    except Exception as e:
-        print(f"PO number generation error: {e}")
-        import time
-        return f"PO-{int(time.time())}"
+    except sqlite3.OperationalError as e:
+        if "database is locked" in str(e):
+            import time
+            time.sleep(1)
+            return generate_unique_po_number(user_id)
+        raise
 
 # save pending invoice
 def save_pending_invoice(user_id, invoice_data):
@@ -518,7 +520,7 @@ def create_invoice():
         return redirect(url_for('login'))
 
     prefill_data = {}
-    user_profile = get_user_profile(session['user_id'])
+    user_profile = get_user_profile_cached(session['user_id'])
     if user_profile:
         prefill_data = {
             'company_name': user_profile.get('company_name', ''),
@@ -778,7 +780,7 @@ def settings():
 
     from core.auth import get_user_profile, update_user_profile, change_user_password, verify_user
 
-    user_profile = get_user_profile(session['user_id'])
+    user_profile = get_user_profile_cached(session['user_id'])
 
     if request.method == 'POST':
         # Handle profile update
