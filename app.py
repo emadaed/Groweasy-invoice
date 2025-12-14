@@ -20,7 +20,7 @@ from fbr_integration import FBRInvoice
 from core.invoice_logic import prepare_invoice_data
 from core.qr_engine import make_qr_with_logo
 from core.pdf_engine import generate_pdf, HAS_WEASYPRINT
-from core.auth import init_db, create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
+from core.auth import create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
 from core.purchases import save_purchase_order, get_purchase_orders, get_suppliers
 from core.middleware import security_headers
 from core.db import DB_ENGINE
