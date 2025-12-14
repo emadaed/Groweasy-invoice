@@ -17,3 +17,7 @@ def make_qr_with_logo(data_text, logo_path, output_path):
         pass
 
     img.save(output_path)
+
+def generate_simple_qr(data):
+    """Generate black/white QR without logo"""
+    return make_qr_with_logo(data, logo_b64=None)  # Reuse logic, no logo

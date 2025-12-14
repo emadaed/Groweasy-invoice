@@ -4,7 +4,7 @@ from celery import Celery
 import redis
 import json
 from .invoice_logic import prepare_invoice_data
-from .qr_engine import generate_simple_qr  # Black/white only
+from .qr_engine import make_qr_with_logo as generate_simple_qr  # Use existing, but no logo
 from sqlalchemy import text
 
 class InvoiceService:
@@ -47,7 +47,7 @@ class InvoiceService:
 
     def generate_download(self):
         # Sync for download
-        qr_b64 = generate_simple_qr(self.data)  # Black/white only
+        qr_b64 = generate_simple_qr(self.data, logo_b64=None)  # Pass None to mute logo
         html = render_template('invoice_pdf.html', data=self.data, preview=False,
                               custom_qr_b64=qr_b64, fbr_qr_code=None,  # Mute FBR
                               fbr_compliant=False, currency_symbol='Rs.')
