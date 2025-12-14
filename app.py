@@ -23,6 +23,7 @@ from core.pdf_engine import generate_pdf, HAS_WEASYPRINT
 from core.auth import init_db, create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
 from core.purchases import save_purchase_order, get_purchase_orders, get_suppliers
 from core.middleware import security_headers
+from core.db import DB_ENGINE
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 # Environment setup
@@ -120,116 +121,6 @@ logging.getLogger('PIL').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 # Initiate Database
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine, text
-
-db = SQLAlchemy()
-
-def init_db():
-    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///users.db')
-    engine = create_engine(DATABASE_URL)
-
-    if 'postgresql' in DATABASE_URL:
-        with engine.connect() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY,
-                    email TEXT UNIQUE,
-                    password_hash TEXT,
-                    company_name TEXT,
-                    company_address TEXT,
-                    company_phone TEXT,
-                    company_email TEXT,
-                    company_tax_id TEXT,
-                    seller_ntn TEXT,
-                    seller_strn TEXT,
-                    preferred_currency TEXT DEFAULT 'PKR'
-                );
-
-                CREATE TABLE IF NOT EXISTS user_invoices (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    invoice_number TEXT,
-                    invoice_data TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS inventory_items (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    name TEXT,
-                    sku TEXT,
-                    category TEXT,
-                    current_stock INTEGER,
-                    min_stock_level INTEGER,
-                    cost_price DECIMAL,
-                    selling_price DECIMAL,
-                    is_active BOOLEAN DEFAULT TRUE
-                );
-
-                CREATE TABLE IF NOT EXISTS stock_movements (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    product_id INTEGER,
-                    movement_type TEXT,
-                    quantity INTEGER,
-                    reference_id TEXT,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS pending_invoices (
-                    user_id INTEGER PRIMARY KEY,
-                    invoice_data TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS purchase_orders (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    po_number TEXT,
-                    supplier_name TEXT,
-                    order_date DATE,
-                    delivery_date DATE,
-                    grand_total DECIMAL(10,2),
-                    status TEXT DEFAULT 'pending',
-                    order_data TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS customers (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    name TEXT,
-                    total_spent DECIMAL(10,2) DEFAULT 0,
-                    invoice_count INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS expenses (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    description TEXT,
-                    amount DECIMAL(10,2),
-                    category TEXT,
-                    expense_date DATE,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS suppliers (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    name TEXT,
-                    contact_info TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """))
-            conn.commit()
-            print("✅ All tables created in Postgres")
-
-    global DB_ENGINE
-    DB_ENGINE = engine
 
 # Initialize purchase tables
 from core.purchases import init_purchase_tables

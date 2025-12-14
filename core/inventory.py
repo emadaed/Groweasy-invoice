@@ -1,5 +1,5 @@
 # core/inventory.py (Postgres Ready)
-from app import DB_ENGINE
+from core.db import DB_ENGINE
 from sqlalchemy import text
 from datetime import datetime
 
