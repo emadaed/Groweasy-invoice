@@ -909,7 +909,7 @@ def donate():
 # preview and download
 from flask.views import MethodView
 from core.services import InvoiceService
-from tasks import generate_preview  # For polling
+##from tasks import generate_preview  # For polling
 
 class InvoiceView(MethodView):
     def post(self):
