@@ -32,15 +32,13 @@ if os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
         dsn=os.getenv('SENTRY_DSN'),
         integrations=[FlaskIntegration()],
-        traces_sample_rate=1.0,  # 10% of requests for performance monitoring
-        environment='production'
-        send_default_pii=True if os.getenv('RAILWAY_ENVIRONMENT') else 'development'
+        traces_sample_rate=1.0,  # Capture all for MVP monitoring
+        environment='production' if os.getenv('RAILWAY_ENVIRONMENT') else 'development',
+        send_default_pii=True
     )
-    # Breadcrumbs for invoices
-    sentry_sdk.add_breadcrumb(category="invoice", message="preview_start", level="info")
+    # Breadcrumbs for invoices (example — add more as needed)
+    sentry_sdk.add_breadcrumb(category="invoice", message="app_started", level="info")
     print("✅ Sentry monitoring enabled")
-
-# Cloudflare Turnstile REMOVED - December 2025
 
 # Fun success messages
 SUCCESS_MESSAGES = {
