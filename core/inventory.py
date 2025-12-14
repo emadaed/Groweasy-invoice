@@ -1,5 +1,6 @@
-# core/inventory.py - ENHANCED INVENTORY MANAGER
-import sqlite3
+# core/inventory.py (Postgres Ready)
+from app import DB_ENGINE
+from sqlalchemy import text
 from datetime import datetime
 
 class InventoryManager:
@@ -7,91 +8,65 @@ class InventoryManager:
     @staticmethod
     def add_product(user_id, product_data):
         """Add new product to inventory"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        try:
-            c.execute('''
+        with DB_ENGINE.begin() as conn:
+            conn.execute(text('''
                 INSERT INTO inventory_items
                 (user_id, name, sku, category, description, current_stock,
                  min_stock_level, cost_price, selling_price, supplier, location)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                user_id, product_data['name'], product_data.get('sku'),
-                product_data.get('category'), product_data.get('description'),
-                product_data.get('current_stock', 0), product_data.get('min_stock_level', 5),
-                product_data.get('cost_price'), product_data.get('selling_price'),
-                product_data.get('supplier'), product_data.get('location')
-            ))
+                VALUES (:user_id, :name, :sku, :category, :description, :current_stock,
+                        :min_stock_level, :cost_price, :selling_price, :supplier, :location)
+            '''), {
+                "user_id": user_id, "name": product_data['name'], "sku": product_data.get('sku'),
+                "category": product_data.get('category'), "description": product_data.get('description'),
+                "current_stock": product_data.get('current_stock', 0),
+                "min_stock_level": product_data.get('min_stock_level', 5),
+                "cost_price": product_data.get('cost_price'), "selling_price": product_data.get('selling_price'),
+                "supplier": product_data.get('supplier'), "location": product_data.get('location')
+            })
 
-            product_id = c.lastrowid
-            conn.commit()
-            return product_id
+            result = conn.execute(text("SELECT lastval()")).fetchone()
+            return result[0] if result else None
 
-        except sqlite3.IntegrityError:
-            return None  # SKU already exists
-        finally:
-            conn.close()
-
-    #delete
     @staticmethod
     def delete_product(user_id, product_id, reason="Product removed"):
         """Soft delete product with audit trail"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        try:
-            # Get current stock before deletion
-            c.execute('SELECT name, current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
-                     (product_id, user_id))
-            result = c.fetchone()
+        with DB_ENGINE.begin() as conn:
+            result = conn.execute(text('''
+                SELECT name, current_stock FROM inventory_items
+                WHERE id = :product_id AND user_id = :user_id
+            '''), {"product_id": product_id, "user_id": user_id}).fetchone()
 
             if not result:
-                conn.close()
                 return False
 
             product_name, current_stock = result
 
-            # Soft delete (mark as inactive)
-            c.execute('UPDATE inventory_items SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                     (product_id,))
+            conn.execute(text('''
+                UPDATE inventory_items SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :product_id
+            '''), {"product_id": product_id})
 
-            # Create audit trail
-            c.execute('''
+            conn.execute(text('''
                 INSERT INTO stock_movements (user_id, product_id, movement_type, quantity, notes)
-                VALUES (?, ?, 'removal', ?, ?)
-            ''', (user_id, product_id, current_stock, f"Product removed: {reason}"))
-
-            conn.commit()
-            conn.close()
+                VALUES (:user_id, :product_id, 'removal', :quantity, :notes)
+            '''), {"user_id": user_id, "product_id": product_id, "quantity": current_stock, "notes": f"Product removed: {reason}"})
 
             print(f"✅ Product {product_name} deleted with audit trail")
             return True
 
-        except Exception as e:
-            print(f"❌ Delete error: {e}")
-            conn.rollback()
-            conn.close()
-            return False
-
-    #update stock
     @staticmethod
     def update_stock(user_id, product_id, new_quantity, movement_type='adjustment', reference_id=None, notes=None):
         """Update stock quantity - ENHANCED DEBUG VERSION"""
         print(f"🔍 STOCK_UPDATE_START: user_id={user_id}, product_id={product_id}, new_quantity={new_quantity}")
 
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        try:
-            # Verify product exists and belongs to user
-            c.execute('SELECT name, current_stock, min_stock_level FROM inventory_items WHERE id = ? AND user_id = ?',
-                     (product_id, user_id))
-            result = c.fetchone()
+        with DB_ENGINE.begin() as conn:
+            result = conn.execute(text('''
+                SELECT name, current_stock, min_stock_level
+                FROM inventory_items WHERE id = :product_id AND user_id = :user_id
+            '''), {"product_id": product_id, "user_id": user_id}).fetchone()
 
             if not result:
                 print(f"❌ PRODUCT_NOT_FOUND: product_id={product_id} for user_id={user_id}")
-                conn.close()
                 return False
 
             product_name, current_stock, min_stock = result
@@ -99,21 +74,24 @@ class InventoryManager:
 
             print(f"📊 STOCK_CHANGE: {product_name} from {current_stock} to {new_quantity} (change: {quantity_change})")
 
-            # Update the stock
-            c.execute('UPDATE inventory_items SET current_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (new_quantity, product_id))
+            conn.execute(text('''
+                UPDATE inventory_items SET current_stock = :new_quantity, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :product_id
+            '''), {"new_quantity": new_quantity, "product_id": product_id})
             print("✅ STOCK_UPDATED_IN_DB")
 
-            # Log the movement
-            c.execute('''
+            conn.execute(text('''
                 INSERT INTO stock_movements (user_id, product_id, movement_type, quantity, reference_id, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, product_id, movement_type, quantity_change, reference_id, notes))
+                VALUES (:user_id, :product_id, :movement_type, :quantity_change, :reference_id, :notes)
+            '''), {
+                "user_id": user_id, "product_id": product_id, "movement_type": movement_type,
+                "quantity_change": quantity_change, "reference_id": reference_id, "notes": notes
+            })
             print("✅ MOVEMENT_LOGGED")
 
-            # Update alerts - clear existing alerts first
-            c.execute('DELETE FROM stock_alerts WHERE product_id = ? AND user_id = ?', (product_id, user_id))
+            conn.execute(text("DELETE FROM stock_alerts WHERE product_id = :product_id AND user_id = :user_id"),
+                        {"product_id": product_id, "user_id": user_id})
 
-            # Create new alerts if needed
             if new_quantity == 0:
                 alert_type = 'out_of_stock'
                 message = f"{product_name} is out of stock"
@@ -124,41 +102,25 @@ class InventoryManager:
                 alert_type = None
 
             if alert_type:
-                c.execute('''
+                conn.execute(text('''
                     INSERT INTO stock_alerts (user_id, product_id, alert_type, message)
-                    VALUES (?, ?, ?, ?)
-                ''', (user_id, product_id, alert_type, message))
+                    VALUES (:user_id, :product_id, :alert_type, :message)
+                '''), {"user_id": user_id, "product_id": product_id, "alert_type": alert_type, "message": message})
                 print(f"✅ ALERT_CREATED: {alert_type}")
 
-            conn.commit()
-            conn.close()
             print("🎯 STOCK_UPDATE_SUCCESSFUL")
             return True
 
-        except Exception as e:
-            print(f"💥 STOCK_UPDATE_ERROR: {str(e)}")
-            import traceback
-            print(f"🔍 STACK_TRACE: {traceback.format_exc()}")
-            conn.rollback()
-            conn.close()
-            return False
-
     @staticmethod
     def get_low_stock_alerts(user_id):
-        """Get active low stock alerts"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        c.execute('''
-            SELECT sa.id, ii.name, ii.current_stock, ii.min_stock_level, sa.message, sa.created_at
-            FROM stock_alerts sa
-            JOIN inventory_items ii ON sa.product_id = ii.id
-            WHERE sa.user_id = ? AND sa.is_resolved = FALSE
-            ORDER BY sa.created_at DESC
-        ''', (user_id,))
-
-        alerts = c.fetchall()
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            alerts = conn.execute(text('''
+                SELECT sa.id, ii.name, ii.current_stock, ii.min_stock_level, sa.message, sa.created_at
+                FROM stock_alerts sa
+                JOIN inventory_items ii ON sa.product_id = ii.id
+                WHERE sa.user_id = :user_id AND sa.is_resolved = FALSE
+                ORDER BY sa.created_at DESC
+            '''), {"user_id": user_id}).fetchall()
 
         return [{
             'id': alert[0],
@@ -171,20 +133,14 @@ class InventoryManager:
 
     @staticmethod
     def get_inventory_report(user_id):
-        """Generate inventory report for CSV export"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        c.execute('''
-            SELECT name, sku, category, current_stock, min_stock_level,
-                   cost_price, selling_price, supplier, location
-            FROM inventory_items
-            WHERE user_id = ? AND is_active = TRUE
-            ORDER BY category, name
-        ''', (user_id,))
-
-        inventory = c.fetchall()
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            inventory = conn.execute(text('''
+                SELECT name, sku, category, current_stock, min_stock_level,
+                       cost_price, selling_price, supplier, location
+                FROM inventory_items
+                WHERE user_id = :user_id AND is_active = TRUE
+                ORDER BY category, name
+            '''), {"user_id": user_id}).fetchall()
 
         return [{
             'name': item[0],
@@ -198,101 +154,80 @@ class InventoryManager:
             'location': item[8]
         } for item in inventory]
 
-    # 🆕 NEW SMART INVENTORY METHODS
     @staticmethod
     def validate_stock_for_invoice(user_id, invoice_items):
-        """Validate stock for multiple invoice items"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
+        with DB_ENGINE.connect() as conn:
+            validation_results = []
 
-        validation_results = []
+            for item in invoice_items:
+                if item.get('product_id'):
+                    product_id = item['product_id']
+                    requested_qty = int(item.get('qty', 1))
 
-        for item in invoice_items:
-            if item.get('product_id'):
-                product_id = item['product_id']
-                requested_qty = int(item.get('qty', 1))
+                    result = conn.execute(text('''
+                        SELECT name, current_stock FROM inventory_items
+                        WHERE id = :product_id AND user_id = :user_id
+                    '''), {"product_id": product_id, "user_id": user_id}).fetchone()
 
-                c.execute('SELECT name, current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
-                         (product_id, user_id))
-                result = c.fetchone()
+                    if result:
+                        product_name, current_stock = result
+                        if current_stock < requested_qty:
+                            validation_results.append({
+                                'product_id': product_id,
+                                'product_name': product_name,
+                                'requested': requested_qty,
+                                'available': current_stock,
+                                'valid': False
+                            })
+                        else:
+                            validation_results.append({
+                                'product_id': product_id,
+                                'product_name': product_name,
+                                'requested': requested_qty,
+                                'available': current_stock,
+                                'valid': True
+                            })
 
-                if result:
-                    product_name, current_stock = result
-                    if current_stock < requested_qty:
-                        validation_results.append({
-                            'product_id': product_id,
-                            'product_name': product_name,
-                            'requested': requested_qty,
-                            'available': current_stock,
-                            'valid': False
-                        })
-                    else:
-                        validation_results.append({
-                            'product_id': product_id,
-                            'product_name': product_name,
-                            'requested': requested_qty,
-                            'available': current_stock,
-                            'valid': True
-                        })
-
-        conn.close()
-        return validation_results
+            return validation_results
 
     @staticmethod
     def get_inventory_summary(user_id):
-        """Get accurate inventory summary for dashboard"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
+        with DB_ENGINE.connect() as conn:
+            total_products = conn.execute(text('''
+                SELECT COUNT(*) FROM inventory_items
+                WHERE user_id = :user_id AND is_active = TRUE
+            '''), {"user_id": user_id}).scalar()
 
-        # Total products
-        c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND is_active = TRUE', (user_id,))
-        total_products = c.fetchone()[0]
+            in_stock = conn.execute(text('''
+                SELECT COUNT(*) FROM inventory_items
+                WHERE user_id = :user_id AND current_stock > 0 AND is_active = TRUE
+            '''), {"user_id": user_id}).scalar()
 
-        # In stock (above zero)
-        c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND current_stock > 0 AND is_active = TRUE', (user_id,))
-        in_stock = c.fetchone()[0]
+            low_stock = conn.execute(text('''
+                SELECT COUNT(*) FROM inventory_items
+                WHERE user_id = :user_id AND current_stock > 0 AND current_stock <= min_stock_level AND is_active = TRUE
+            '''), {"user_id": user_id}).scalar()
 
-        # Low stock (above zero but <= min_stock_level)
-        c.execute('''
-            SELECT COUNT(*) FROM inventory_items
-            WHERE user_id = ? AND current_stock > 0 AND current_stock <= min_stock_level AND is_active = TRUE
-        ''', (user_id,))
-        low_stock = c.fetchone()[0]
-
-        # Out of stock (zero stock)
-        c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND current_stock = 0 AND is_active = TRUE', (user_id,))
-        out_of_stock = c.fetchone()[0]
-
-        conn.close()
-
-        # 🛡️ VALIDATION: Ensure math is correct
-        calculated_total = in_stock + low_stock + out_of_stock
-        if calculated_total != total_products:
-            print(f"⚠️ Inventory math mismatch: {calculated_total} vs {total_products}")
-            # Auto-correct by using calculated total
-            total_products = calculated_total
+            out_of_stock = conn.execute(text('''
+                SELECT COUNT(*) FROM inventory_items
+                WHERE user_id = :user_id AND current_stock = 0 AND is_active = TRUE
+            '''), {"user_id": user_id}).scalar()
 
         return {
-            'total_products': total_products,
-            'in_stock': in_stock,
-            'low_stock': low_stock,
-            'out_of_stock': out_of_stock
+            'total_products': total_products or 0,
+            'in_stock': in_stock or 0,
+            'low_stock': low_stock or 0,
+            'out_of_stock': out_of_stock or 0
         }
 
     @staticmethod
     def get_product_details(product_id, user_id):
-        """Get detailed product information"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        c.execute('''
-            SELECT id, name, sku, current_stock, selling_price, min_stock_level
-            FROM inventory_items
-            WHERE id = ? AND user_id = ? AND is_active = TRUE
-        ''', (product_id, user_id))
-
-        result = c.fetchone()
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            result = conn.execute(text('''
+                SELECT id, name, sku, current_stock, selling_price, min_stock_level
+                FROM inventory_items
+                WHERE id = :product_id AND user_id = :user_id AND is_active = TRUE
+            '''), {"product_id": product_id, "user_id": user_id}).fetchone()
 
         if result:
             return {

@@ -32,9 +32,12 @@ if os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
         dsn=os.getenv('SENTRY_DSN'),
         integrations=[FlaskIntegration()],
-        traces_sample_rate=0.1,  # 10% of requests for performance monitoring
-        environment='production' if os.getenv('RAILWAY_ENVIRONMENT') else 'development'
+        traces_sample_rate=1.0,  # 10% of requests for performance monitoring
+        environment='production'
+        send_default_pii=True if os.getenv('RAILWAY_ENVIRONMENT') else 'development'
     )
+    # Breadcrumbs for invoices
+    sentry_sdk.add_breadcrumb(category="invoice", message="preview_start", level="info")
     print("✅ Sentry monitoring enabled")
 
 # Cloudflare Turnstile REMOVED - December 2025
@@ -76,6 +79,8 @@ def random_success_message(category='default'):
 # App creation
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+from tasks import celery
+celery.conf.update(app.config)
 from core.cache import init_cache, get_user_profile_cached
 init_cache(app)
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -116,8 +121,117 @@ logging.getLogger('fontTools').setLevel(logging.WARNING)
 logging.getLogger('PIL').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 
-# Database
-init_db()
+# Initiate Database
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import create_engine, text
+
+db = SQLAlchemy()
+
+def init_db():
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///users.db')
+    engine = create_engine(DATABASE_URL)
+
+    if 'postgresql' in DATABASE_URL:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    email TEXT UNIQUE,
+                    password_hash TEXT,
+                    company_name TEXT,
+                    company_address TEXT,
+                    company_phone TEXT,
+                    company_email TEXT,
+                    company_tax_id TEXT,
+                    seller_ntn TEXT,
+                    seller_strn TEXT,
+                    preferred_currency TEXT DEFAULT 'PKR'
+                );
+
+                CREATE TABLE IF NOT EXISTS user_invoices (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    invoice_number TEXT,
+                    invoice_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS inventory_items (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    name TEXT,
+                    sku TEXT,
+                    category TEXT,
+                    current_stock INTEGER,
+                    min_stock_level INTEGER,
+                    cost_price DECIMAL,
+                    selling_price DECIMAL,
+                    is_active BOOLEAN DEFAULT TRUE
+                );
+
+                CREATE TABLE IF NOT EXISTS stock_movements (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    product_id INTEGER,
+                    movement_type TEXT,
+                    quantity INTEGER,
+                    reference_id TEXT,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS pending_invoices (
+                    user_id INTEGER PRIMARY KEY,
+                    invoice_data TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS purchase_orders (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    po_number TEXT,
+                    supplier_name TEXT,
+                    order_date DATE,
+                    delivery_date DATE,
+                    grand_total DECIMAL(10,2),
+                    status TEXT DEFAULT 'pending',
+                    order_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS customers (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    name TEXT,
+                    total_spent DECIMAL(10,2) DEFAULT 0,
+                    invoice_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS expenses (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    description TEXT,
+                    amount DECIMAL(10,2),
+                    category TEXT,
+                    expense_date DATE,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS suppliers (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    name TEXT,
+                    contact_info TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            conn.commit()
+            print("✅ All tables created in Postgres")
+
+    global DB_ENGINE
+    DB_ENGINE = engine
 
 # Initialize purchase tables
 from core.purchases import init_purchase_tables
@@ -139,6 +253,7 @@ CURRENCY_SYMBOLS = {
     'SAR': '﷼'
 }
 
+#context processor
 @app.context_processor
 def inject_currency():
     """Make currency available in all templates"""
@@ -153,35 +268,33 @@ def inject_currency():
 
     return dict(currency=currency, currency_symbol=symbol)
 
-# ===== NEW STOCK VALIDATION FUNCTIONS =====
+# STOCK VALIDATION
 def validate_stock_availability(user_id, invoice_items):
     """Validate stock availability BEFORE invoice processing"""
     try:
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
+        with DB_ENGINE.begin() as conn:
+            for item in invoice_items:
+                if item.get('product_id'):
+                    product_id = item['product_id']
+                    requested_qty = int(item.get('qty', 1))
 
-        for item in invoice_items:
-            if item.get('product_id'):
-                product_id = item['product_id']
-                requested_qty = int(item.get('qty', 1))
+                    result = conn.execute(text("""
+                        SELECT name, current_stock
+                        FROM inventory_items
+                        WHERE id = :product_id AND user_id = :user_id
+                    """), {"product_id": product_id, "user_id": user_id}).fetchone()
 
-                # Get current stock
-                c.execute('SELECT name, current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
-                         (product_id, user_id))
-                result = c.fetchone()
+                    if not result:
+                        return {'success': False, 'message': "Product not found in inventory"}
 
-                if not result:
-                    return {'success': False, 'message': f"Product not found in inventory"}
+                    product_name, current_stock = result
+                    if current_stock < requested_qty:
+                        return {
+                            'success': False,
+                            'message': f"Only {current_stock} units available for '{product_name}'"
+                        }
 
-                product_name, current_stock = result
-                if current_stock < requested_qty:
-                    return {
-                        'success': False,
-                        'message': f"Only {current_stock} units available for '{product_name}'"
-                    }
-
-        conn.close()
-        return {'success': True, 'message': 'Stock available'}
+            return {'success': True, 'message': 'Stock available'}
 
     except Exception as e:
         print(f"Stock validation error: {e}")
@@ -198,18 +311,15 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
                 product_id = item['product_id']
                 quantity = int(item.get('qty', 1))
 
-                # Get current stock
-                conn = sqlite3.connect('users.db')
-                c = conn.cursor()
-                c.execute('SELECT current_stock FROM inventory_items WHERE id = ? AND user_id = ?',
-                         (product_id, user_id))
-                result = c.fetchone()
-                conn.close()
+                with DB_ENGINE.begin() as conn:
+                    result = conn.execute(text("""
+                        SELECT current_stock FROM inventory_items
+                        WHERE id = :product_id AND user_id = :user_id
+                    """), {"product_id": product_id, "user_id": user_id}).fetchone()
 
                 if result:
                     current_stock = result[0]
 
-                    # 🆕 BUILD NOTES WITH INVOICE NUMBER
                     if invoice_type == 'P':
                         new_stock = current_stock + quantity
                         movement_type = 'purchase'
@@ -219,7 +329,6 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
                         movement_type = 'sale'
                         notes = f"Sold {quantity} units via Invoice: {invoice_number}" if invoice_number else f"Sold {quantity} units"
 
-                    # 🆕 PASS INVOICE NUMBER AS REFERENCE_ID
                     success = InventoryManager.update_stock(
                         user_id, product_id, new_stock, movement_type, invoice_number, notes
                     )
@@ -234,131 +343,76 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
 
 # unique invoice numbers
 def generate_unique_invoice_number(user_id):
-    """Generate unique invoice number with DB lock to prevent duplicates"""
     try:
-        conn = sqlite3.connect('users.db', timeout=30.0)  # Long timeout for lock
-        conn.execute("BEGIN EXCLUSIVE")  # Lock DB until commit
-        c = conn.cursor()
+        with DB_ENGINE.begin() as conn:
+            result = conn.execute(text("""
+                SELECT invoice_number FROM user_invoices
+                WHERE user_id = :user_id AND invoice_number LIKE 'INV-%'
+                ORDER BY id DESC LIMIT 1
+            """), {"user_id": user_id}).fetchone()
 
-        c.execute('''
-            SELECT invoice_number FROM user_invoices
-            WHERE user_id = ? AND invoice_number LIKE 'INV-%'
-            ORDER BY id DESC LIMIT 1
-        ''', (user_id,))
+            if result:
+                last_number = result[0]
+                if last_number.startswith('INV-'):
+                    try:
+                        last_num = int(last_number.split('-')[1])
+                        return f"INV-{last_num + 1:05d}"
+                    except:
+                        return "INV-00001"
+            return "INV-00001"
+    except Exception as e:
+        print(f"Invoice number generation error: {e}")
+        return f"INV-{int(time.time())}"
 
-        result = c.fetchone()
-
-        if result:
-            last_number = result[0]
-            if last_number.startswith('INV-'):
-                try:
-                    last_num = int(last_number.split('-')[1])
-                    new_num = f"INV-{last_num + 1:05d}"
-                except:
-                    new_num = "INV-00001"
-            else:
-                new_num = "INV-00001"
-        else:
-            new_num = "INV-00001"
-
-        conn.commit()
-        conn.close()
-        return new_num
-
-    except sqlite3.OperationalError as e:
-        if "database is locked" in str(e):
-            # Retry once
-            import time
-            time.sleep(1)
-            return generate_unique_invoice_number(user_id)
-        raise
-
-# unique purchase order number
-
+# unique purchase order numbers
 def generate_unique_po_number(user_id):
-    """Generate unique PO number with DB lock"""
     try:
-        conn = sqlite3.connect('users.db', timeout=30.0)
-        conn.execute("BEGIN EXCLUSIVE")
-        c = conn.cursor()
+        with DB_ENGINE.begin() as conn:
+            result = conn.execute(text("""
+                SELECT po_number FROM purchase_orders
+                WHERE user_id = :user_id AND po_number LIKE 'PO-%'
+                ORDER BY id DESC LIMIT 1
+            """), {"user_id": user_id}).fetchone()
 
-        c.execute('''
-            SELECT po_number FROM purchase_orders
-            WHERE user_id = ? AND po_number LIKE 'PO-%'
-            ORDER BY id DESC LIMIT 1
-        ''', (user_id,))
-
-        result = c.fetchone()
-
-        if result:
-            last_number = result[0]
-            if last_number.startswith('PO-'):
-                try:
-                    last_num = int(last_number.split('-')[1])
-                    new_num = f"PO-{last_num + 1:05d}"
-                except:
-                    new_num = "PO-00001"
-            else:
-                new_num = "PO-00001"
-        else:
-            new_num = "PO-00001"
-
-        conn.commit()
-        conn.close()
-        return new_num
-
-    except sqlite3.OperationalError as e:
-        if "database is locked" in str(e):
-            import time
-            time.sleep(1)
-            return generate_unique_po_number(user_id)
-        raise
+            if result:
+                last_number = result[0]
+                if last_number.startswith('PO-'):
+                    try:
+                        last_num = int(last_number.split('-')[1])
+                        return f"PO-{last_num + 1:05d}"
+                    except:
+                        return "PO-00001"
+            return "PO-00001"
+    except Exception as e:
+        print(f"PO number generation error: {e}")
+        return f"PO-{int(time.time())}"
 
 # save pending invoice
 def save_pending_invoice(user_id, invoice_data):
-    """Save pending invoice to database temporarily"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    # Create temp table if not exists
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS pending_invoices (
-            user_id INTEGER PRIMARY KEY,
-            invoice_data TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Delete old pending invoice
-    c.execute('DELETE FROM pending_invoices WHERE user_id = ?', (user_id,))
-
-    # Save new one
-    c.execute('INSERT INTO pending_invoices (user_id, invoice_data) VALUES (?, ?)',
-              (user_id, json.dumps(invoice_data)))
-
-    conn.commit()
-    conn.close()
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pending_invoices (
+                user_id INTEGER PRIMARY KEY,
+                invoice_data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
+        conn.execute(text("""
+            INSERT INTO pending_invoices (user_id, invoice_data)
+            VALUES (:user_id, :invoice_data)
+        """), {"user_id": user_id, "invoice_data": json.dumps(invoice_data)})
 
 def get_pending_invoice(user_id):
-    """Retrieve pending invoice from database"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    c.execute('SELECT invoice_data FROM pending_invoices WHERE user_id = ?', (user_id,))
-    result = c.fetchone()
-    conn.close()
-
-    if result:
-        return json.loads(result[0])
-    return None
+    with DB_ENGINE.connect() as conn:  # Read-only, no begin()
+        result = conn.execute(text("""
+            SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id
+        """), {"user_id": user_id}).fetchone()
+        return json.loads(result[0]) if result else None
 
 def clear_pending_invoice(user_id):
-    """Clear pending invoice after successful download"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('DELETE FROM pending_invoices WHERE user_id = ?', (user_id,))
-    conn.commit()
-    conn.close()
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
 
 #custom QR
 def generate_custom_qr(invoice_data):
@@ -474,31 +528,26 @@ def generate_simple_qr(invoice_data):
         print(f"Simple QR generation also failed: {e}")
         return None
 
+# password reset
 @app.route("/forgot_password", methods=['GET', 'POST'])
 @limiter.limit("3 per hour")
 def forgot_password():
     """Simple password reset request with email simulation"""
     if request.method == 'POST':
         email = request.form.get('email')
-
         # Check if email exists in database
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute('SELECT id FROM users WHERE email = ?', (email,))
-        user = c.fetchone()
-        conn.close()
+        with DB_ENGINE.connect() as conn:  # Read-only
+            result = conn.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
 
-        if user:
-            # In production: Send actual email with reset link
-            # For now: Show reset instructions on screen
+        if result:
             flash('📧 Password reset instructions have been sent to your email.', 'success')
             flash('🔐 Development Note: In production, you would receive an email with reset link.', 'info')
             return render_template('reset_instructions.html', email=email, nonce=g.nonce)
         else:
             flash('❌ No account found with this email address.', 'error')
-
     return render_template('forgot_password.html', nonce=g.nonce)
 
+#PW token
 @app.route("/reset_password/<token>", methods=['GET', 'POST'])
 def reset_password(token):
     """Password reset page (placeholder)"""
@@ -506,6 +555,7 @@ def reset_password(token):
     flash('Password reset functionality coming soon!', 'info')
     return redirect(url_for('login'))
 
+# home
 @app.route('/')
 def home():
     """Home page - redirect to login or dashboard"""
@@ -514,6 +564,7 @@ def home():
     else:
         return redirect(url_for('login'))
 
+# create invoice
 @app.route('/create_invoice')
 def create_invoice():
     if 'user_id' not in session:
@@ -544,54 +595,30 @@ def debug():
     }
     return jsonify(debug_info)
 
-# NEW ROUTES INVENTORY AND USER SETTINGS
-
+# INVENTORY
 @app.route("/inventory")
 def inventory():
-    """Inventory management dashboard - FIXED VERSION"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    with DB_ENGINE.connect() as conn:
+        items = conn.execute(text("""
+            SELECT id, name, sku, category, current_stock, min_stock_level,
+                   cost_price, selling_price, supplier, location
+            FROM inventory_items
+            WHERE user_id = :user_id AND is_active = TRUE
+            ORDER BY name
+        """), {"user_id": session['user_id']}).fetchall()
+
+    # Convert to dicts
+    inventory_items = [dict(row._mapping) for row in items]
+
     from core.inventory import InventoryManager
-
-    # Get inventory items
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('''
-        SELECT id, name, sku, category, current_stock, min_stock_level,
-               cost_price, selling_price, supplier, location
-        FROM inventory_items
-        WHERE user_id = ? AND is_active = TRUE
-        ORDER BY name
-    ''', (session['user_id'],))
-
-    # Convert tuples to dictionaries for template
-    raw_items = c.fetchall()
-    conn.close()
-
-    inventory_items = []
-    for item in raw_items:
-        inventory_items.append({
-            'id': item[0],
-            'name': item[1],
-            'sku': item[2],
-            'category': item[3],
-            'current_stock': item[4],
-            'min_stock_level': item[5],
-            'cost_price': item[6],
-            'selling_price': item[7],
-            'supplier': item[8],
-            'location': item[9]
-        })
-
-    # Get low stock alerts
     low_stock_alerts = InventoryManager.get_low_stock_alerts(session['user_id'])
 
-    return render_template("inventory.html",
-                         inventory_items=inventory_items,
-                         low_stock_alerts=low_stock_alerts,
-                         nonce=g.nonce)
+    return render_template("inventory.html", inventory_items=inventory_items, low_stock_alerts=low_stock_alerts, nonce=g.nonce)
 
+# inventory reports
 @app.route("/inventory_reports")
 def inventory_reports():
     """Inventory analytics and reports dashboard"""
@@ -678,25 +705,20 @@ def delete_product():
 
     return redirect(url_for('inventory'))
 
-# stock adjustment and auto popualate routes
+# API inventory items
 @app.route("/api/inventory_items")
 def get_inventory_items_api():
     """API endpoint for inventory items (for invoice form)"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
 
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    c.execute('''
-        SELECT id, name, selling_price, current_stock
-        FROM inventory_items
-        WHERE user_id = ? AND is_active = TRUE AND current_stock > 0
-        ORDER BY name
-    ''', (session['user_id'],))
-
-    items = c.fetchall()
-    conn.close()
+    with DB_ENGINE.connect() as conn:
+        items = conn.execute(text("""
+            SELECT id, name, selling_price, current_stock
+            FROM inventory_items
+            WHERE user_id = :user_id AND is_active = TRUE AND current_stock > 0
+            ORDER BY name
+        """), {"user_id": session['user_id']}).fetchall()
 
     inventory_data = [{
         'id': item[0],
@@ -736,6 +758,7 @@ def adjust_stock():
 
     return redirect(url_for('inventory'))
 
+# inventory report
 @app.route("/download_inventory_report")
 def download_inventory_report():
     """Download inventory as CSV"""
@@ -840,7 +863,7 @@ def devices():
                          sessions=active_sessions,
                          current_token=session.get('session_token'),
                          nonce=g.nonce)
-
+# revoke tokens
 @app.route("/revoke_device/<token>")
 def revoke_device(token):
     """Revoke specific device session"""
@@ -858,6 +881,7 @@ def revoke_device(token):
 
     return redirect(url_for('devices'))
 
+# revoke devices
 @app.route("/revoke_all_devices")
 def revoke_all_devices():
     """Revoke all other sessions"""
@@ -870,7 +894,7 @@ def revoke_all_devices():
     flash('✅ All other devices logged out', 'success')
     return redirect(url_for('devices'))
 
-# Login (RATE LIMITS TO ROUTES)
+# Login
 @app.route("/login", methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def login():
@@ -915,7 +939,7 @@ def privacy():
 def about():
     return render_template("about.html", nonce=g.nonce)
 
-#register
+# register
 @app.route("/register", methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def register():
@@ -946,7 +970,7 @@ def register():
     # GET request - show form
     return render_template('register.html', nonce=g.nonce)
 
-#dashboard
+# dashboard
 @app.route("/dashboard")
 def dashboard():
     if 'user_id' not in session:
@@ -954,27 +978,21 @@ def dashboard():
 
     from core.auth import get_business_summary, get_client_analytics
 
-    # Get inventory stats
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
+    with DB_ENGINE.connect() as conn:
+        total_products = conn.execute(text("""
+            SELECT COUNT(*) FROM inventory_items
+            WHERE user_id = :user_id AND is_active = TRUE
+        """), {"user_id": session['user_id']}).scalar()
 
-    # Total products
-    c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND is_active = TRUE',
-              (session['user_id'],))
-    total_products = c.fetchone()[0]
+        low_stock_items = conn.execute(text("""
+            SELECT COUNT(*) FROM inventory_items
+            WHERE user_id = :user_id AND current_stock <= min_stock_level AND current_stock > 0
+        """), {"user_id": session['user_id']}).scalar()
 
-    # Low stock items
-    c.execute('''SELECT COUNT(*) FROM inventory_items
-                 WHERE user_id = ? AND current_stock <= min_stock_level AND current_stock > 0''',
-              (session['user_id'],))
-    low_stock_items = c.fetchone()[0]
-
-    # Out of stock items
-    c.execute('SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND current_stock = 0',
-              (session['user_id'],))
-    out_of_stock_items = c.fetchone()[0]
-
-    conn.close()
+        out_of_stock_items = conn.execute(text("""
+            SELECT COUNT(*) FROM inventory_items
+            WHERE user_id = :user_id AND current_stock = 0
+        """), {"user_id": session['user_id']}).scalar()
 
     return render_template(
         "dashboard.html",
@@ -987,166 +1005,48 @@ def dashboard():
         nonce=g.nonce
     )
 
+# logout
 @app.route("/logout")
 def logout():
     session.clear()
     flash('You have been logged out successfully.', 'info')
     return redirect(url_for('login'))  # Changed from 'home' to 'login'
 
+# donate
 @app.route("/donate")
 def donate():
     return render_template("donate.html", nonce=g.nonce)
 
-# Service worker route REMOVED - was causing CSP issues
+# preview and download
+from flask.views import MethodView
+from core.services import InvoiceService
+from tasks import generate_preview  # For polling
 
-# preview invoice
-@app.route('/preview_invoice', methods=['POST'])
-@limiter.limit("5 per minute")
-def preview_invoice():
-    try:
-        invoice_data = prepare_invoice_data(request.form, request.files)
+class InvoiceView(MethodView):
+    def post(self):
+        user_id = session['user_id']
+        service = InvoiceService(user_id)
+        form_data = request.form
+        files = request.files
+        action = request.args.get('action', 'preview')
+        result = service.process(form_data, files, action)
 
-        # Stock validation for SALE/EXPORT only
-        if 'user_id' in session and 'items' in invoice_data:
-            invoice_type = invoice_data.get('invoice_type', 'S')
-            if invoice_type in ['S', 'E']:
-                stock_validation = validate_stock_availability(session['user_id'], invoice_data['items'])
-                if not stock_validation['success']:
-                    flash(f'❌ Cannot create invoice: {stock_validation["message"]}', 'error')
-                    return redirect(url_for('create_invoice'))
+        if action == 'preview':
+            return render_template('generating.html', user_id=user_id, nonce=g.nonce)
+        return result  # PDF response
 
-        # Generate unique number based on type
-        if 'user_id' in session:
-            invoice_type = invoice_data.get('invoice_type', 'S')
-            if invoice_type == 'P':
-                invoice_data['invoice_number'] = generate_unique_po_number(session['user_id'])
-            else:
-                invoice_data['invoice_number'] = generate_unique_invoice_number(session['user_id'])
-        # Generate QR codes
-        fbr_invoice = FBRInvoice(invoice_data)
-        fbr_summary = fbr_invoice.get_fbr_summary()
-        fbr_qr_code = fbr_summary['qr_code'] if fbr_summary['is_compliant'] else None
-        custom_qr_b64 = generate_custom_qr(invoice_data)
+app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
 
-        # 🆕 SAVE TO DATABASE (not session)
-        save_pending_invoice(session['user_id'], invoice_data)
-        session['invoice_finalized'] = False
+# poll route
+@app.route('/invoice/status/<user_id>')
+def status(user_id):
+    service = InvoiceService(int(user_id))
+    result = service.redis_client.get(f"preview:{user_id}")
+    if result:
+        return jsonify({'ready': True, 'data': json.loads(result)})
+    return jsonify({'ready': False})
 
-        print("DEBUG: Invoice saved to database for preview")
-
-        return render_template('invoice.html',
-                             data=invoice_data,
-                             preview=True,
-                             custom_qr_b64=custom_qr_b64,
-                             fbr_qr_code=fbr_qr_code,
-                             fbr_compliant=fbr_summary['is_compliant'],
-                             fbr_errors=fbr_summary['errors'],
-                             nonce=g.nonce)
-
-    except Exception as e:
-        flash(f'Error generating preview: {str(e)}', 'error')
-        return redirect(url_for('create_invoice'))
-
-#download route
-@app.route('/download_invoice', methods=['POST'])
-def download_invoice():
-    try:
-        # 🛡️ CHECK IF ALREADY DOWNLOADED
-        if session.get('invoice_finalized'):
-            flash('⚠️ Invoice already downloaded. Create a new one.', 'warning')
-            return redirect(url_for('create_invoice'))
-
-        # PRIORITY: Use JSON from frontend (clean logo_b64)
-        data = None
-        if request.is_json:
-            try:
-                data = request.get_json()
-                print("✅ Using clean JSON data from frontend (with processed logo)")
-            except Exception as e:
-                print(f"❌ JSON parse failed: {e}")
-
-        # Fallback to pending_invoice only if no JSON
-        if not data:
-            data = get_pending_invoice(session['user_id'])
-            print("⚠️ Fallback: Using pending_invoice data (may have dirty logo)")
-
-        if not data:
-            flash('❌ No invoice to download. Please create an invoice first.', 'error')
-            return redirect(url_for('create_invoice'))
-
-        # Re-validate stock for SALE/EXPORT
-        if 'user_id' in session and 'items' in data:
-            invoice_type = data.get('invoice_type', 'S')
-            if invoice_type in ['S', 'E']:
-                stock_validation = validate_stock_availability(session['user_id'], data['items'])
-                if not stock_validation['success']:
-                    flash(f'❌ Stock changed! {stock_validation["message"]}', 'error')
-                    clear_pending_invoice(session['user_id'])
-                    session.pop('invoice_finalized', None)
-                    return redirect(url_for('create_invoice'))
-
-        # Generate QR codes (uses data, which now has clean logo_b64)
-        fbr_invoice = FBRInvoice(data)
-        fbr_summary = fbr_invoice.get_fbr_summary()
-        fbr_qr_code = fbr_summary['qr_code'] if fbr_summary['is_compliant'] else None
-        custom_qr_b64 = generate_custom_qr(data)
-
-        print("DEBUG: Generating PDF with data:", data.keys())
-        print(f"DEBUG: PDF size before generation: logo_b64 length = {len(data.get('logo_b64', '')) if data.get('logo_b64') else 0}")
-
-        # Get currency symbol for PDF
-        currency_symbol = CURRENCY_SYMBOLS.get(data.get('currency', 'PKR'), 'Rs.')
-
-        # Render HTML
-        html_content = render_template('invoice_pdf.html',
-                                     data=data,
-                                     preview=False,
-                                     custom_qr_b64=custom_qr_b64,
-                                     fbr_qr_code=fbr_qr_code,
-                                     fbr_compliant=fbr_summary['is_compliant'],
-                                     currency_symbol=currency_symbol)
-
-        # Generate PDF
-        pdf_bytes = generate_pdf(html_content, app.root_path)
-        print(f"✅ Final PDF generated: {len(pdf_bytes)} bytes")
-
-        # Update stock & save invoice
-        if 'user_id' in session and 'items' in data:
-            invoice_type = data.get('invoice_type', 'S')
-            try:
-                update_stock_on_invoice(session['user_id'], data['items'], invoice_type, data.get('invoice_number'))
-                if invoice_type == 'P':
-                    from core.purchases import save_purchase_order
-                    save_purchase_order(session['user_id'], data)
-                else:
-                    save_user_invoice(session['user_id'], data)
-                session['invoice_finalized'] = True
-                flash(random_success_message('invoice_created'), 'success')
-                print("✅ Invoice saved and stock updated successfully")
-            except Exception as e:
-                print(f"❌ CRITICAL: Invoice save failed: {e}")
-                flash('⚠️ Invoice generated but not saved. Contact support.', 'error')
-
-        # CLEAR DATABASE ENTRY
-        clear_pending_invoice(session['user_id'])
-
-        # Return PDF
-        response = Response(pdf_bytes, mimetype='application/pdf')
-        response.headers['Content-Disposition'] = f'attachment; filename=invoice_{data["invoice_number"]}.pdf'
-        response.headers['Content-Length'] = len(pdf_bytes)
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Content-Encoding'] = 'identity'
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        return response
-
-    except Exception as e:
-        print(f"❌ PDF download error: {e}")
-        import traceback
-        traceback.print_exc()
-        flash(f'Error generating PDF: {str(e)}', 'error')
-        return redirect(url_for('create_invoice'))
 #clean up
-
 @app.route('/cancel_invoice')
 def cancel_invoice():
     """Cancel pending invoice"""
@@ -1156,9 +1056,7 @@ def cancel_invoice():
         flash('Invoice cancelled', 'info')
     return redirect(url_for('create_invoice'))
 
-
 # invoice history
-
 @app.route("/invoice_history")
 def invoice_history():
     """Invoice history and management page"""
@@ -1189,7 +1087,6 @@ def invoice_history():
     )
 
 # purchase order
-
 @app.route("/purchase_orders")
 def purchase_orders():
     """Purchase order history"""
@@ -1216,25 +1113,21 @@ def stock_transactions():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    c.execute('''
-        SELECT sm.id, ii.name, sm.movement_type, sm.quantity,
-               sm.reference_id, sm.notes, sm.created_at
-        FROM stock_movements sm
-        JOIN inventory_items ii ON sm.product_id = ii.id
-        WHERE sm.user_id = ?
-        ORDER BY sm.created_at DESC
-        LIMIT 100
-    ''', (session['user_id'],))
-
-    transactions = c.fetchall()
-    conn.close()
+    with DB_ENGINE.connect() as conn:
+        transactions = conn.execute(text("""
+            SELECT sm.id, ii.name, sm.movement_type, sm.quantity,
+                   sm.reference_id, sm.notes, sm.created_at
+            FROM stock_movements sm
+            JOIN inventory_items ii ON sm.product_id = ii.id
+            WHERE sm.user_id = :user_id
+            ORDER BY sm.created_at DESC
+            LIMIT 100
+        """), {"user_id": session['user_id']}).fetchall()
 
     return render_template("stock_transactions.html",
                          transactions=transactions,
                          nonce=g.nonce)
+
 # supplier management
 @app.route("/suppliers")
 def suppliers():
@@ -1249,7 +1142,7 @@ def suppliers():
                          suppliers=supplier_list,
                          nonce=g.nonce)
 
-# ===== CUSTOMER MANAGEMENT ROUTES =====
+# CUSTOMER MANAGEMENT ROUTES
 @app.route("/customers")
 def customers():
     """Customer management page"""
@@ -1261,7 +1154,7 @@ def customers():
 
     return render_template("customers.html", customers=customer_list, nonce=g.nonce)
 
-# ===== EXPENSE TRACKING ROUTES =====
+# EXPENSE TRACKING ROUTES
 @app.route("/expenses")
 def expenses():
     """Expense tracking page"""
@@ -1281,6 +1174,7 @@ def expenses():
                          today_date=today_date,
                          nonce=g.nonce)
 
+#add expense
 @app.route("/add_expense", methods=['POST'])
 def add_expense():
     """Add new expense"""
@@ -1305,107 +1199,76 @@ def add_expense():
     return redirect(url_for('expenses'))
 
 #fix customer
-
 @app.route("/fix_customers")
 def fix_customers():
     """One-time fix to populate customers from existing invoices"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    import sqlite3
+    with DB_ENGINE.begin() as conn:
+        invoices = conn.execute(text("""
+            SELECT invoice_number, client_name, grand_total
+            FROM user_invoices WHERE user_id = :user_id
+        """), {"user_id": session['user_id']}).fetchall()
 
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
+        results = []
+        for invoice in invoices:
+            invoice_number, client_name, grand_total = invoice
+            conn.execute(text("""
+                INSERT OR IGNORE INTO customers
+                (user_id, name, total_spent, invoice_count)
+                VALUES (:user_id, :name, :total, 1)
+            """), {"user_id": session['user_id'], "name": client_name, "total": grand_total})
+            results.append(f"Added: {client_name} (Invoice: {invoice_number})")
 
-    # Get all invoices for this user
-    c.execute('SELECT invoice_number, client_name, grand_total FROM user_invoices WHERE user_id = ?', (session['user_id'],))
-    invoices = c.fetchall()
-
-    results = []
-    for invoice in invoices:
-        invoice_number, client_name, grand_total = invoice
-
-        # Insert customer if not exists
-        c.execute('''
-            INSERT OR IGNORE INTO customers
-            (user_id, name, total_spent, invoice_count)
-            VALUES (?, ?, ?, 1)
-        ''', (session['user_id'], client_name, grand_total))
-
-        results.append(f"Added: {client_name} (Invoice: {invoice_number})")
-
-    conn.commit()
-    conn.close()
     return "<br>".join(results)
-#debug invnetory
 
+#debug invnetory
 @app.route("/debug_inventory")
 def debug_inventory():
-    """Debug inventory state"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'})
 
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
+    with DB_ENGINE.connect() as conn:
+        items = conn.execute(text("""
+            SELECT id, name, current_stock, min_stock_level, selling_price
+            FROM inventory_items WHERE user_id = :user_id
+        """), {"user_id": session['user_id']}).fetchall()
 
-    # Get all inventory data
-    c.execute('''
-        SELECT id, name, current_stock, min_stock_level, selling_price
-        FROM inventory_items WHERE user_id = ?
-    ''', (session['user_id'],))
-
-    items = c.fetchall()
-
-    # Get stock movements
-    c.execute('''
-        SELECT product_id, movement_type, quantity, created_at
-        FROM stock_movements WHERE user_id = ? ORDER BY created_at DESC LIMIT 10
-    ''', (session['user_id'],))
-
-    movements = c.fetchall()
-
-    conn.close()
+        movements = conn.execute(text("""
+            SELECT product_id, movement_type, quantity, created_at
+            FROM stock_movements WHERE user_id = :user_id
+            ORDER BY created_at DESC LIMIT 10
+        """), {"user_id": session['user_id']}).fetchall()
 
     return jsonify({
         'inventory_items': [{
-            'id': item[0],
-            'name': item[1],
-            'current_stock': item[2],
-            'min_stock': item[3],
-            'price': item[4]
+            'id': item[0], 'name': item[1], 'current_stock': item[2],
+            'min_stock': item[3], 'price': item[4]
         } for item in items],
         'recent_movements': [{
-            'product_id': mov[0],
-            'type': mov[1],
-            'quantity': mov[2],
-            'time': mov[3]
+            'product_id': mov[0], 'type': mov[1], 'quantity': mov[2], 'time': mov[3]
         } for mov in movements]
     })
 
 #debug stock
-
 @app.route("/debug_stock")
 def debug_stock():
-    """Debug stock update issues"""
     if 'user_id' not in session:
         return "Not logged in"
 
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    # Check inventory items
-    c.execute('SELECT id, name, current_stock FROM inventory_items WHERE user_id = ?', (session['user_id'],))
-    items = c.fetchall()
+    with DB_ENGINE.connect() as conn:
+        items = conn.execute(text("""
+            SELECT id, name, current_stock FROM inventory_items
+            WHERE user_id = :user_id
+        """), {"user_id": session['user_id']}).fetchall()
 
     result = "<h3>Current Inventory:</h3>"
     for item in items:
         result += f"<p>ID: {item[0]}, Name: {item[1]}, Stock: {item[2]}</p>"
-
-    conn.close()
     return result
 
 # debug invoice data
-
 def debug_invoice_data():
     """Debug function to check what data is being passed to template"""
     sample_data = {
@@ -1440,7 +1303,6 @@ def debug_invoice_data():
     return sample_data
 
 #Backup Route (Manual Trigger)
-
 @app.route('/admin/backup')
 def admin_backup():
     """Manual database backup trigger (admin only)"""
@@ -1473,19 +1335,13 @@ def admin_backup():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Health and API
+# Health status
 @app.route('/health')
 def health_check():
-    """Health check endpoint for monitoring"""
     try:
-        # Check database connectivity
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute('SELECT COUNT(*) FROM users')
-        user_count = c.fetchone()[0]
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
 
-        # Check disk space
         import shutil
         total, used, free = shutil.disk_usage(".")
         disk_free_gb = free // (2**30)
@@ -1498,7 +1354,6 @@ def health_check():
             'disk_free_gb': disk_free_gb,
             'version': '1.0.0'
         }), 200
-
     except Exception as e:
         return jsonify({
             'status': 'unhealthy',
@@ -1506,6 +1361,7 @@ def health_check():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+#API status
 @app.route('/api/status')
 def system_status():
     """Detailed system status"""
@@ -1513,32 +1369,29 @@ def system_status():
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
+        with DB_ENGINE.connect() as conn:  # Read-only → connect(), not begin()
+            total_users = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
 
-        # System stats
-        c.execute('SELECT COUNT(*) FROM users')
-        total_users = c.fetchone()[0]
+            total_invoices = conn.execute(text("SELECT COUNT(*) FROM user_invoices")).scalar()
 
-        c.execute('SELECT COUNT(*) FROM user_invoices')
-        total_invoices = c.fetchone()[0]
-
-        c.execute('SELECT COUNT(*) FROM inventory_items WHERE is_active = TRUE')
-        total_products = c.fetchone()[0]
-
-        conn.close()
+            total_products = conn.execute(text("""
+                SELECT COUNT(*) FROM inventory_items
+                WHERE is_active = TRUE
+            """)).scalar()
 
         return jsonify({
             'status': 'operational',
             'stats': {
-                'total_users': total_users,
-                'total_invoices': total_invoices,
-                'total_products': total_products
+                'total_users': total_users or 0,
+                'total_invoices': total_invoices or 0,
+                'total_products': total_products or 0
             },
             'timestamp': datetime.now().isoformat()
         }), 200
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"System status error: {e}")
+        return jsonify({'error': 'Database error'}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=False)

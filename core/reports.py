@@ -1,5 +1,6 @@
-# core/reports.py - Business Intelligence & Analytics
-import sqlite3
+# core/reports.py - Business Intelligence & Analytics (Postgres Ready)
+from app import DB_ENGINE
+from sqlalchemy import text
 from datetime import datetime, timedelta
 
 class InventoryReports:
@@ -7,81 +8,48 @@ class InventoryReports:
     @staticmethod
     def get_bcg_matrix(user_id):
         """BCG Matrix: Stars, Cash Cows, Question Marks, Dogs"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
+        with DB_ENGINE.connect() as conn:
+            results = conn.execute(text('''
+                SELECT
+                    ii.id,
+                    ii.name,
+                    ii.current_stock,
+                    ii.selling_price,
+                    ii.cost_price,
+                    COALESCE(SUM(CASE WHEN sm.movement_type = 'sale' THEN ABS(sm.quantity) ELSE 0 END), 0) as units_sold,
+                    COUNT(CASE WHEN sm.movement_type = 'sale' THEN 1 END) as sale_count
+                FROM inventory_items ii
+                LEFT JOIN stock_movements sm ON ii.id = sm.product_id
+                WHERE ii.user_id = :user_id AND ii.is_active = TRUE
+                GROUP BY ii.id
+            '''), {"user_id": user_id}).fetchall()
 
-        # Get all products with sales data
-        c.execute('''
-            SELECT
-                ii.id,
-                ii.name,
-                ii.current_stock,
-                ii.selling_price,
-                ii.cost_price,
-                SUM(CASE WHEN sm.movement_type = 'sale' THEN ABS(sm.quantity) ELSE 0 END) as units_sold,
-                COUNT(CASE WHEN sm.movement_type = 'sale' THEN 1 END) as sale_count
-            FROM inventory_items ii
-            LEFT JOIN stock_movements sm ON ii.id = sm.product_id
-            WHERE ii.user_id = ? AND ii.is_active = TRUE
-            GROUP BY ii.id
-        ''', (user_id,))
-
-        products = c.fetchall()
-        conn.close()
-
-        if not products:
+        if not results:
             return {'stars': [], 'cash_cows': [], 'question_marks': [], 'dogs': []}
 
-        # Calculate metrics
-        results = []
-        for p in products:
+        products = []
+        for p in results:
             product_id, name, stock, price, cost, units_sold, sale_count = p
-
-            # Calculate profit margin
-            if price and cost:
-                profit_margin = ((price - cost) / price) * 100 if price > 0 else 0
-            else:
-                profit_margin = 0
-
-            # Calculate market share (relative to total sales)
-            market_share = units_sold or 0
-
-            results.append({
+            profit_margin = ((price - cost) / price * 100) if price and cost and price > 0 else 0
+            products.append({
                 'id': product_id,
                 'name': name,
                 'units_sold': units_sold or 0,
                 'profit_margin': profit_margin,
                 'stock': stock,
-                'price': float(price) if price else 0,
-                'sale_count': sale_count
+                'price': float(price or 0)
             })
 
-        # Calculate medians for classification
-        if results:
-            sorted_by_sales = sorted(results, key=lambda x: x['units_sold'])
-            sorted_by_margin = sorted(results, key=lambda x: x['profit_margin'])
-
-            median_sales = sorted_by_sales[len(sorted_by_sales)//2]['units_sold']
-            median_margin = sorted_by_margin[len(sorted_by_margin)//2]['profit_margin']
+        if products:
+            median_sales = sorted(products, key=lambda x: x['units_sold'])[len(products)//2]['units_sold']
+            median_margin = sorted(products, key=lambda x: x['profit_margin'])[len(products)//2]['profit_margin']
         else:
-            median_sales = 0
-            median_margin = 0
+            median_sales = median_margin = 0
 
-        # Classify products
-        stars = []
-        cash_cows = []
-        question_marks = []
-        dogs = []
-
-        for product in results:
-            if product['units_sold'] >= median_sales and product['profit_margin'] >= median_margin:
-                stars.append(product)  # High sales, high margin
-            elif product['units_sold'] >= median_sales and product['profit_margin'] < median_margin:
-                cash_cows.append(product)  # High sales, lower margin (but volume)
-            elif product['units_sold'] < median_sales and product['profit_margin'] >= median_margin:
-                question_marks.append(product)  # Low sales, high margin (potential)
-            else:
-                dogs.append(product)  # Low sales, low margin
+        stars = [p for p in products if p['units_sold'] >= median_sales and p['profit_margin'] >= median_margin]
+        cash_cows = [p for p in products if p['units_sold'] >= median_sales and p['profit_margin'] < median_margin]
+        question_marks = [p for p in products if p['units_sold'] < median_sales and p['profit_margin'] >= median_margin]
+        dogs = [p for p in products if p['units_sold'] < median_sales and p['profit_margin'] < median_margin]
 
         return {
             'stars': sorted(stars, key=lambda x: x['units_sold'], reverse=True),
@@ -93,39 +61,30 @@ class InventoryReports:
     @staticmethod
     def get_stock_turnover(user_id, days=30):
         """Calculate stock turnover ratio"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
         date_threshold = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-        c.execute('''
-            SELECT
-                ii.id,
-                ii.name,
-                ii.current_stock,
-                ii.cost_price,
-                ii.selling_price,
-                SUM(CASE WHEN sm.movement_type = 'sale' AND sm.created_at >= ?
-                    THEN ABS(sm.quantity) ELSE 0 END) as units_sold_period,
-                AVG(ii.current_stock) as avg_stock
-            FROM inventory_items ii
-            LEFT JOIN stock_movements sm ON ii.id = sm.product_id
-            WHERE ii.user_id = ? AND ii.is_active = TRUE
-            GROUP BY ii.id
-            HAVING units_sold_period > 0
-        ''', (date_threshold, user_id))
-
-        results = c.fetchall()
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            results = conn.execute(text('''
+                SELECT
+                    ii.id,
+                    ii.name,
+                    ii.current_stock,
+                    ii.cost_price,
+                    ii.selling_price,
+                    COALESCE(SUM(CASE WHEN sm.movement_type = 'sale' AND sm.created_at >= :date_threshold
+                        THEN ABS(sm.quantity) ELSE 0 END), 0) as units_sold_period,
+                    ii.current_stock as avg_stock
+                FROM inventory_items ii
+                LEFT JOIN stock_movements sm ON ii.id = sm.product_id
+                WHERE ii.user_id = :user_id AND ii.is_active = TRUE
+                GROUP BY ii.id
+                HAVING units_sold_period > 0
+            '''), {"date_threshold": date_threshold, "user_id": user_id}).fetchall()
 
         turnover_data = []
         for row in results:
             product_id, name, current_stock, cost, price, sold, avg_stock = row
-
-            # Turnover ratio = Units Sold / Average Stock
             turnover_ratio = (sold / avg_stock) if avg_stock > 0 else 0
-
-            # Days to sell current stock
             if sold > 0:
                 daily_sales = sold / days
                 days_to_sell = current_stock / daily_sales if daily_sales > 0 else 999
@@ -147,29 +106,23 @@ class InventoryReports:
     @staticmethod
     def get_profitability_analysis(user_id):
         """Analyze product profitability"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-        c.execute('''
-            SELECT
-                ii.id,
-                ii.name,
-                ii.cost_price,
-                ii.selling_price,
-                SUM(CASE WHEN sm.movement_type = 'sale' THEN ABS(sm.quantity) ELSE 0 END) as total_sold
-            FROM inventory_items ii
-            LEFT JOIN stock_movements sm ON ii.id = sm.product_id
-            WHERE ii.user_id = ? AND ii.is_active = TRUE
-            GROUP BY ii.id
-        ''', (user_id,))
-
-        results = c.fetchall()
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            results = conn.execute(text('''
+                SELECT
+                    ii.id,
+                    ii.name,
+                    ii.cost_price,
+                    ii.selling_price,
+                    COALESCE(SUM(CASE WHEN sm.movement_type = 'sale' THEN ABS(sm.quantity) ELSE 0 END), 0) as total_sold
+                FROM inventory_items ii
+                LEFT JOIN stock_movements sm ON ii.id = sm.product_id
+                WHERE ii.user_id = :user_id AND ii.is_active = TRUE
+                GROUP BY ii.id
+            '''), {"user_id": user_id}).fetchall()
 
         profitability = []
         for row in results:
             product_id, name, cost, price, sold = row
-
             if cost and price and sold:
                 profit_per_unit = price - cost
                 total_profit = profit_per_unit * sold
@@ -191,34 +144,28 @@ class InventoryReports:
     @staticmethod
     def get_slow_movers(user_id, days_threshold=90):
         """Identify slow-moving inventory"""
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
         date_threshold = (datetime.now() - timedelta(days=days_threshold)).strftime('%Y-%m-%d')
 
-        c.execute('''
-            SELECT
-                ii.id,
-                ii.name,
-                ii.current_stock,
-                ii.cost_price,
-                MAX(sm.created_at) as last_sale_date,
-                SUM(CASE WHEN sm.movement_type = 'sale' AND sm.created_at >= ?
-                    THEN ABS(sm.quantity) ELSE 0 END) as recent_sales
-            FROM inventory_items ii
-            LEFT JOIN stock_movements sm ON ii.id = sm.product_id AND sm.movement_type = 'sale'
-            WHERE ii.user_id = ? AND ii.is_active = TRUE AND ii.current_stock > 0
-            GROUP BY ii.id
-            HAVING recent_sales = 0 OR recent_sales IS NULL
-        ''', (date_threshold, user_id))
-
-        results = c.fetchall()
-        conn.close()
+        with DB_ENGINE.connect() as conn:
+            results = conn.execute(text('''
+                SELECT
+                    ii.id,
+                    ii.name,
+                    ii.current_stock,
+                    ii.cost_price,
+                    MAX(sm.created_at) as last_sale_date,
+                    COALESCE(SUM(CASE WHEN sm.movement_type = 'sale' AND sm.created_at >= :date_threshold
+                        THEN ABS(sm.quantity) ELSE 0 END), 0) as recent_sales
+                FROM inventory_items ii
+                LEFT JOIN stock_movements sm ON ii.id = sm.product_id AND sm.movement_type = 'sale'
+                WHERE ii.user_id = :user_id AND ii.is_active = TRUE AND ii.current_stock > 0
+                GROUP BY ii.id
+                HAVING recent_sales = 0
+            '''), {"date_threshold": date_threshold, "user_id": user_id}).fetchall()
 
         slow_movers = []
         for row in results:
             product_id, name, stock, cost, last_sale, recent_sales = row
-
             if last_sale:
                 days_since_sale = (datetime.now() - datetime.strptime(last_sale[:10], '%Y-%m-%d')).days
             else:

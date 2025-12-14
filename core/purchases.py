@@ -1,79 +1,67 @@
-# core/purchases.py - Purchase Order & Supplier Management
-import sqlite3
+# core/purchases.py - Purchase Order & Supplier Management (Postgres Ready)
+from app import DB_ENGINE
+from sqlalchemy import text
 import json
 from datetime import datetime
 
 def init_purchase_tables():
     """Initialize purchase order and supplier tables"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS suppliers (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                tax_id TEXT,
+                total_purchased DECIMAL(10,2) DEFAULT 0,
+                order_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        '''))
 
-    # Suppliers table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS suppliers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            email TEXT,
-            phone TEXT,
-            address TEXT,
-            tax_id TEXT,
-            total_purchased DECIMAL(10,2) DEFAULT 0,
-            order_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-    ''')
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                po_number TEXT NOT NULL,
+                supplier_name TEXT NOT NULL,
+                order_date DATE NOT NULL,
+                delivery_date DATE,
+                grand_total DECIMAL(10,2) NOT NULL,
+                status TEXT DEFAULT 'pending',
+                order_data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        '''))
 
-    # Purchase Orders table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS purchase_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            po_number TEXT NOT NULL,
-            supplier_name TEXT NOT NULL,
-            order_date DATE NOT NULL,
-            delivery_date DATE,
-            grand_total DECIMAL(10,2) NOT NULL,
-            status TEXT DEFAULT 'pending',
-            order_data TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-    ''')
-
-    c.execute('CREATE INDEX IF NOT EXISTS idx_purchase_orders ON purchase_orders(user_id, order_date)')
-
-    conn.commit()
-    conn.close()
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_purchase_orders ON purchase_orders(user_id, order_date)"))
 
 def save_purchase_order(user_id, order_data):
     """Save purchase order and auto-update supplier"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
+    with DB_ENGINE.begin() as conn:
+        po_number = order_data.get('invoice_number', 'PO-001')
+        supplier_name = order_data.get('client_name', 'Unknown Supplier')
+        order_date = order_data.get('invoice_date', '')
+        delivery_date = order_data.get('due_date', '')
+        grand_total = float(order_data.get('grand_total', 0))
+        order_json = json.dumps(order_data)
 
-    # Ensure tables exist
-    init_purchase_tables()
+        conn.execute(text('''
+            INSERT INTO purchase_orders
+            (user_id, po_number, supplier_name, order_date, delivery_date, grand_total, order_data)
+            VALUES (:user_id, :po_number, :supplier_name, :order_date, :delivery_date, :grand_total, :order_json)
+        '''), {
+            "user_id": user_id, "po_number": po_number, "supplier_name": supplier_name,
+            "order_date": order_date, "delivery_date": delivery_date, "grand_total": grand_total,
+            "order_json": order_json
+        })
 
-    # Extract metadata
-    po_number = order_data.get('invoice_number', 'PO-001')
-    supplier_name = order_data.get('client_name', 'Unknown Supplier')
-    order_date = order_data.get('invoice_date', '')
-    delivery_date = order_data.get('due_date', '')
-    grand_total = float(order_data.get('grand_total', 0))
-
-    # Save purchase order
-    order_json = json.dumps(order_data)
-    c.execute('''
-        INSERT INTO purchase_orders
-        (user_id, po_number, supplier_name, order_date, delivery_date, grand_total, order_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, po_number, supplier_name, order_date, delivery_date, grand_total, order_json))
-
-    # Auto-save supplier
-    try:
+        # Auto-save supplier
         supplier_data = {
             'name': supplier_name,
             'email': order_data.get('client_email', ''),
@@ -82,69 +70,46 @@ def save_purchase_order(user_id, order_data):
             'tax_id': order_data.get('buyer_ntn', '')
         }
 
-        c.execute('SELECT id FROM suppliers WHERE user_id = ? AND name = ?',
-                 (user_id, supplier_data['name']))
-        existing = c.fetchone()
+        result = conn.execute(text("SELECT id FROM suppliers WHERE user_id = :user_id AND name = :name"),
+                             {"user_id": user_id, "name": supplier_data['name']}).fetchone()
 
-        if existing:
-            c.execute('''
+        if result:
+            conn.execute(text('''
                 UPDATE suppliers SET
-                email=?, phone=?, address=?, tax_id=?,
+                email=:email, phone=:phone, address=:address, tax_id=:tax_id,
                 order_count = order_count + 1,
-                total_purchased = total_purchased + ?,
+                total_purchased = total_purchased + :grand_total,
                 updated_at=CURRENT_TIMESTAMP
-                WHERE id=?
-            ''', (supplier_data.get('email'), supplier_data.get('phone'),
-                  supplier_data.get('address'), supplier_data.get('tax_id'),
-                  grand_total, existing[0]))
+                WHERE id=:id
+            '''), {
+                "email": supplier_data['email'], "phone": supplier_data['phone'],
+                "address": supplier_data['address'], "tax_id": supplier_data['tax_id'],
+                "grand_total": grand_total, "id": result[0]
+            })
         else:
-            c.execute('''
+            conn.execute(text('''
                 INSERT INTO suppliers
                 (user_id, name, email, phone, address, tax_id, total_purchased, order_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-            ''', (user_id, supplier_data['name'], supplier_data.get('email'),
-                  supplier_data.get('phone'), supplier_data.get('address'),
-                  supplier_data.get('tax_id'), grand_total))
+                VALUES (:user_id, :name, :email, :phone, :address, :tax_id, :grand_total, 1)
+            '''), {
+                "user_id": user_id, "name": supplier_data['name'], "email": supplier_data['email'],
+                "phone": supplier_data['phone'], "address": supplier_data['address'],
+                "tax_id": supplier_data['tax_id'], "grand_total": grand_total
+            })
 
-    except Exception as e:
-        print(f"Supplier auto-save error: {e}")
-
-    conn.commit()
-    conn.close()
     return True
 
 def get_purchase_orders(user_id, limit=50, offset=0):
     """Get purchase orders for user"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    # Ensure table exists before querying
-    try:
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='purchase_orders'")
-        if not c.fetchone():
-            print("⚠️ purchase_orders table not found, creating...")
-            conn.close()
-            init_purchase_tables()
-            conn = sqlite3.connect('users.db')
-            c = conn.cursor()
-    except Exception as e:
-        print(f"❌ Table check error: {e}")
-        conn.close()
-        init_purchase_tables()
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-    c.execute('''
-        SELECT id, po_number, supplier_name, order_date, delivery_date,
-               grand_total, status, created_at, order_data
-        FROM purchase_orders
-        WHERE user_id = ?
-        ORDER BY order_date DESC, created_at DESC
-        LIMIT ? OFFSET ?
-    ''', (user_id, limit, offset))
-
-    orders = c.fetchall()
-    conn.close()
+    with DB_ENGINE.connect() as conn:
+        orders = conn.execute(text('''
+            SELECT id, po_number, supplier_name, order_date, delivery_date,
+                   grand_total, status, created_at, order_data
+            FROM purchase_orders
+            WHERE user_id = :user_id
+            ORDER BY order_date DESC, created_at DESC
+            LIMIT :limit OFFSET :offset
+        '''), {"user_id": user_id, "limit": limit, "offset": offset}).fetchall()
 
     result = []
     for order in orders:
@@ -163,32 +128,11 @@ def get_purchase_orders(user_id, limit=50, offset=0):
 
 def get_suppliers(user_id):
     """Get all suppliers"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-
-    # Ensure table exists before querying
-    try:
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='suppliers'")
-        if not c.fetchone():
-            print("⚠️ suppliers table not found, creating...")
-            conn.close()
-            init_purchase_tables()
-            conn = sqlite3.connect('users.db')
-            c = conn.cursor()
-    except Exception as e:
-        print(f"❌ Table check error: {e}")
-        conn.close()
-        init_purchase_tables()
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-
-    c.execute('''
-        SELECT id, name, email, phone, address, tax_id, total_purchased, order_count
-        FROM suppliers WHERE user_id = ? ORDER BY name
-    ''', (user_id,))
-
-    suppliers = c.fetchall()
-    conn.close()
+    with DB_ENGINE.connect() as conn:
+        suppliers = conn.execute(text('''
+            SELECT id, name, email, phone, address, tax_id, total_purchased, order_count
+            FROM suppliers WHERE user_id = :user_id ORDER BY name
+        '''), {"user_id": user_id}).fetchall()
 
     result = []
     for supplier in suppliers:

@@ -1,6 +1,4 @@
 # core/pdf_engine.py
-# Fixed PDF generation with proper CSS loading for WeasyPrint
-# Last updated: December 2025
 
 import os
 from pathlib import Path

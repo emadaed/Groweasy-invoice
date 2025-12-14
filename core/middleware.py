@@ -1,6 +1,4 @@
 # core/middleware.py
-# Security middleware for Flask application
-# Updated: December 2025 - Fixed CSP for proper nonce handling
 
 from flask import g, request
 import secrets

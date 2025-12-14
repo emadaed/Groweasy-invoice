@@ -1,4 +1,5 @@
-# invoice_logic.py - FINAL FIXED VERSION WITH LOGO PROCESSING
+# invoice_logic.py
+
 from core.utils import process_uploaded_logo  # ← NEW IMPORT
 
 def prepare_invoice_data(form_data, files=None):
@@ -115,41 +116,35 @@ def prepare_invoice_data(form_data, files=None):
 # Keep your manual entry validation function unchanged
 def validate_manual_entry_items(form_data, user_id):
     """Validate manual entry items against inventory for suggestions"""
-    import sqlite3
+    with DB_ENGINE.connect() as conn:
+        manual_items = []
+        item_names = form_data.getlist('item_name[]')
+        item_qtys = form_data.getlist('item_qty[]')
+        item_prices = form_data.getlist('item_price[]')
 
-    manual_items = []
-    item_names = form_data.getlist('item_name[]')
-    item_qtys = form_data.getlist('item_qty[]')
-    item_prices = form_data.getlist('item_price[]')
+        for i in range(len(item_names)):
+            if item_names[i].strip() and not form_data.getlist('item_id[]')[i]:
+                item_name = item_names[i].strip().lower()
 
-    for i in range(len(item_names)):
-        if item_names[i].strip() and not form_data.getlist('item_id[]')[i]:
-            item_name = item_names[i].strip().lower()
+                suggestions = conn.execute(text('''
+                    SELECT id, name, selling_price, current_stock
+                    FROM inventory_items
+                    WHERE user_id = :user_id AND LOWER(name) LIKE :pattern AND is_active = TRUE
+                    LIMIT 3
+                '''), {"user_id": user_id, "pattern": f'%{item_name}%'}).fetchall()
 
-            conn = sqlite3.connect('users.db')
-            c = conn.cursor()
-            c.execute('''
-                SELECT id, name, selling_price, current_stock
-                FROM inventory_items
-                WHERE user_id = ? AND LOWER(name) LIKE ? AND is_active = TRUE
-                LIMIT 3
-            ''', (user_id, f'%{item_name}%'))
+                manual_items.append({
+                    'name': item_names[i],
+                    'qty': item_qtys[i] if i < len(item_qtys) else '1',
+                    'price': item_prices[i] if i < len(item_prices) else '0',
+                    'suggestions': [
+                        {
+                            'id': sug[0],
+                            'name': sug[1],
+                            'price': float(sug[2]) if sug[2] else 0,
+                            'stock': sug[3]
+                        } for sug in suggestions
+                    ]
+                })
 
-            suggestions = c.fetchall()
-            conn.close()
-
-            manual_items.append({
-                'name': item_names[i],
-                'qty': item_qtys[i] if i < len(item_qtys) else '1',
-                'price': item_prices[i] if i < len(item_prices) else '0',
-                'suggestions': [
-                    {
-                        'id': sug[0],
-                        'name': sug[1],
-                        'price': float(sug[2]) if sug[2] else 0,
-                        'stock': sug[3]
-                    } for sug in suggestions
-                ]
-            })
-
-    return manual_items
+        return manual_items
