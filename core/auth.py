@@ -281,3 +281,10 @@ def get_expense_summary(user_id):
             'count': item[2]
         })
     return result
+
+def change_user_password(user_id, new_password):
+    """Change user password"""
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text("UPDATE users SET password_hash = :hash WHERE id = :id"),
+                     {"id": user_id, "hash": hash_password(new_password)})
+    return True
