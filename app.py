@@ -78,8 +78,8 @@ def random_success_message(category='default'):
 # App creation
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
-from tasks import celery
-celery.conf.update(app.config)
+##from tasks import celery
+##celery.conf.update(app.config)
 from core.cache import init_cache, get_user_profile_cached
 init_cache(app)
 from werkzeug.middleware.proxy_fix import ProxyFix
