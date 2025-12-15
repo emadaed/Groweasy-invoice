@@ -24,7 +24,7 @@ def check_health(url):
         return False
 
 if __name__ == '__main__':
-    URL = input("Enter your app URL (e.g., https://groweasy.com.pk): ")
+    URL = input("Enter your app URL (e.g., https://growe.up.railway.app): ")
     INTERVAL = 300  # Check every 5 minutes
 
     print(f"🔍 Monitoring {URL} every {INTERVAL} seconds...")
