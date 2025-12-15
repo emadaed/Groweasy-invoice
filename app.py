@@ -502,6 +502,7 @@ def inventory():
     # Convert to dicts
     inventory_items = [dict(row._mapping) for row in items]
 
+    from sqlalchemy import text
     from core.inventory import InventoryManager
     low_stock_alerts = InventoryManager.get_low_stock_alerts(session['user_id'])
 
@@ -952,7 +953,7 @@ def invoice_history():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    from core.auth import get_user_invoices, get_invoice_count
+    #from core.auth import get_user_invoices, get_invoice_count
 
     # Get pagination parameters
     page = request.args.get('page', 1, type=int)

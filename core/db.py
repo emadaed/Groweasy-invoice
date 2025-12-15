@@ -22,7 +22,9 @@ def create_all_tables():
                 company_tax_id TEXT,
                 seller_ntn TEXT,
                 seller_strn TEXT,
-                preferred_currency TEXT DEFAULT 'PKR'
+                preferred_currency TEXT DEFAULT 'PKR',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS user_invoices (
@@ -30,7 +32,8 @@ def create_all_tables():
                 user_id INTEGER NOT NULL,
                 invoice_number TEXT,
                 invoice_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS inventory_items (
@@ -40,7 +43,9 @@ def create_all_tables():
                 current_stock INTEGER DEFAULT 0,
                 min_stock_level INTEGER DEFAULT 5,
                 selling_price DECIMAL(10,2),
-                is_active BOOLEAN DEFAULT TRUE
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS stock_movements (
@@ -49,7 +54,8 @@ def create_all_tables():
                 product_id INTEGER NOT NULL,
                 movement_type TEXT,
                 quantity INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS pending_invoices (
@@ -62,7 +68,9 @@ def create_all_tables():
                 user_id INTEGER NOT NULL,
                 po_number TEXT,
                 supplier_name TEXT,
-                grand_total DECIMAL(10,2)
+                grand_total DECIMAL(10,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS customers (
@@ -70,7 +78,9 @@ def create_all_tables():
                 user_id INTEGER NOT NULL,
                 name TEXT,
                 total_spent DECIMAL(10,2) DEFAULT 0,
-                invoice_count INTEGER DEFAULT 0
+                invoice_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS expenses (
@@ -79,7 +89,9 @@ def create_all_tables():
                 description TEXT,
                 amount DECIMAL(10,2),
                 category TEXT,
-                expense_date DATE
+                expense_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS suppliers (
@@ -91,7 +103,9 @@ def create_all_tables():
                 address TEXT,
                 tax_id TEXT,
                 total_purchased DECIMAL(10,2) DEFAULT 0,
-                order_count INTEGER DEFAULT 0
+                order_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         '''))
         print("✅ All tables created/verified in Postgres")
