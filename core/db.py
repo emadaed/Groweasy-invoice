@@ -7,8 +7,9 @@ DB_ENGINE = create_engine(DATABASE_URL)
 
 print(f"✅ Database connected: {DATABASE_URL[:50]}...")  # Debug
 
+#tabels
 def create_all_tables():
-    """Create all required tables with ALL columns"""
+    """Create all required tables with correct column order and syntax"""
     with DB_ENGINE.begin() as conn:
         conn.execute(text('''
             CREATE TABLE IF NOT EXISTS users (
@@ -106,7 +107,7 @@ def create_all_tables():
                 alert_type TEXT NOT NULL,
                 message TEXT NOT NULL,
                 is_resolved BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP.
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -159,7 +160,6 @@ def create_all_tables():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         '''))
-        print("✅ All tables created/verified in Postgres with full schema")
-
+        print("✅ All tables created/verified with correct schema")
 # Run on import (safe — IF NOT EXISTS)
 create_all_tables()
