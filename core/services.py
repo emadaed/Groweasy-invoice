@@ -10,10 +10,10 @@ from sqlalchemy import text
 class InvoiceService:
     def __init__(self, user_id):
         self.user_id = user_id
-        self.redis_client = redis.from_url(current_app.config['REDIS_URL'])
-        self.data = None
-        self.celery = Celery(current_app.name, broker=self.redis_client.url)
-
+        redis_url = current_app.config.get('REDIS_URL', 'memory://')
+        self.redis_client = redis.from_url(redis_url)
+        # Use the string URL for Celery broker
+        self.celery = Celery(current_app.name, broker=redis_url)
     def process(self, form_data, files, action='preview'):
         self.data = prepare_invoice_data(form_data, files)
         self.save_state()  # Redis + DB
