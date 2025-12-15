@@ -115,5 +115,14 @@ def create_all_tables():
         '''))
         print("✅ All tables created/verified in Postgres")
 
+        conn.execute(text('''
+            ALTER TABLE user_invoices ADD COLUMN IF NOT EXISTS grand_total DECIMAL(10,2) NOT NULL DEFAULT 0;
+            ALTER TABLE user_invoices ADD COLUMN IF NOT EXISTS client_name TEXT;
+            ALTER TABLE user_invoices ADD COLUMN IF NOT EXISTS invoice_date DATE;
+            ALTER TABLE user_invoices ADD COLUMN IF NOT EXISTS due_date DATE;
+            ALTER TABLE user_invoices ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'paid';
+            ALTER TABLE user_invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+        '''))
+
 # Run on import (safe — IF NOT EXISTS)
 create_all_tables()
