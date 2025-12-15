@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import secrets
 
 # Third-party
+from sqlalchemy import text
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
@@ -502,7 +503,7 @@ def inventory():
     # Convert to dicts
     inventory_items = [dict(row._mapping) for row in items]
 
-    from sqlalchemy import text
+
     from core.inventory import InventoryManager
     low_stock_alerts = InventoryManager.get_low_stock_alerts(session['user_id'])
 
