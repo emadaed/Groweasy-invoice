@@ -19,7 +19,8 @@
                         Seller NTN is required for tax compliance.
                     </div>
 
-                    <form method="POST" action="{{ url_for('preview_invoice') }}" enctype="multipart/form-data">
+                     <form method="POST" action="{{ url_for('invoice_process') }}" enctype="multipart/form-data">
+                     <input type="hidden" name="action" value="preview">
 
                         <!-- Professional Business Information -->
                         <div class="card mb-4 border-success">
