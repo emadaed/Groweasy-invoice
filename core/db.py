@@ -31,7 +31,12 @@ def create_all_tables():
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 invoice_number TEXT,
-                invoice_data TEXT,
+                client_name TEXT,
+                invoice_date DATE,
+                due_date DATE,
+                grand_total DECIMAL(10,2) NOT NULL,
+                status TEXT DEFAULT 'paid',
+                invoice_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
