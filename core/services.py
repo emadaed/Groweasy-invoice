@@ -6,14 +6,17 @@ import json
 from .invoice_logic import prepare_invoice_data
 from .qr_engine import make_qr_with_logo as generate_simple_qr  # Use existing, but no logo
 from sqlalchemy import text
+from core.db import DB_ENGINE #added now
 
 class InvoiceService:
     def __init__(self, user_id):
         self.user_id = user_id
         redis_url = current_app.config.get('REDIS_URL', 'memory://')
         self.redis_client = redis.from_url(redis_url)
+
         # Use the string URL for Celery broker
         self.celery = Celery(current_app.name, broker=redis_url)
+
     def process(self, form_data, files, action='preview'):
         self.data = prepare_invoice_data(form_data, files)
         self.save_state()  # Redis + DB
