@@ -954,17 +954,54 @@ def invoice_history():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    #from core.auth import get_user_invoices, get_invoice_count
-
     # Get pagination parameters
     page = request.args.get('page', 1, type=int)
-    search = request.args.get('search', '')
+    search = request.args.get('search', '').strip()
     limit = 10  # Invoices per page
     offset = (page - 1) * limit
 
-    # Get invoices
-    invoices = get_user_invoices(session['user_id'], limit=limit, offset=offset, search=search)
-    total_invoices = get_invoice_count(session['user_id'], search=search)
+    user_id = session['user_id']
+
+    with DB_ENGINE.connect() as conn:
+        # Base query
+        base_sql = '''
+            SELECT id, invoice_number, client_name, invoice_date, due_date, grand_total, status, created_at
+            FROM user_invoices
+            WHERE user_id = :user_id
+        '''
+        params = {"user_id": user_id}
+
+        # Add search if provided
+        if search:
+            base_sql += ' AND (invoice_number ILIKE :search OR client_name ILIKE :search)'
+            params["search"] = f"%{search}%"
+
+        # Get total count for pagination
+        count_sql = f"SELECT COUNT(*) FROM ({base_sql}) AS count_query"
+        total_invoices = conn.execute(text(count_sql), params).scalar()
+
+        # Get paginated invoices
+        invoices_sql = base_sql + '''
+            ORDER BY invoice_date DESC, created_at DESC
+            LIMIT :limit OFFSET :offset
+        '''
+        params.update({"limit": limit, "offset": offset})
+        invoices_result = conn.execute(text(invoices_sql), params).fetchall()
+
+    # Convert to list of dicts for template
+    invoices = []
+    for row in invoices_result:
+        invoices.append({
+            'id': row[0],
+            'invoice_number': row[1],
+            'client_name': row[2],
+            'invoice_date': row[3],
+            'due_date': row[4],
+            'grand_total': float(row[5]) if row[5] else 0.0,
+            'status': row[6],
+            'created_at': row[7]
+        })
+
     total_pages = (total_invoices + limit - 1) // limit  # Ceiling division
 
     return render_template(
