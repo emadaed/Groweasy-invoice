@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install system dependencies for WeasyPrint, Pillow, and QR
+# Install system dependencies for WeasyPrint, Pillow, QR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libcairo2 \
@@ -21,18 +21,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy all files
+# Copy files
 COPY . .
 
 # Install Python dependencies
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
+# Railway uses $PORT
 EXPOSE 8080
 
-# Use port 8080 directly (Railway's default)
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "300", "--workers", "2", "--worker-class", "gevent", "app:app"]
-
-#CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "120", "--workers", "1", "--preload", "app:app"]
-
-# CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "app:app"]
+CMD exec gunicorn --bind 0.0.0.0:$PORT --timeout 300 --workers 2 --worker-class gevent app:app
