@@ -18,6 +18,7 @@ from flask_compress import Compress
 from dotenv import load_dotenv
 # Local application
 from fbr_integration import FBRInvoice
+from core.inventory import InventoryManager
 from core.invoice_logic import prepare_invoice_data
 from core.qr_engine import make_qr_with_logo
 from core.pdf_engine import generate_pdf, HAS_WEASYPRINT
@@ -202,7 +203,6 @@ def validate_stock_availability(user_id, invoice_items):
 def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_number=None):
     """Update stock with invoice reference number"""
     try:
-        from core.inventory import InventoryManager
 
         for item in invoice_items:
             if item.get('product_id'):
