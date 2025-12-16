@@ -923,18 +923,35 @@ from core.services import InvoiceService
 
 class InvoiceView(MethodView):
     def post(self):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+
         user_id = session['user_id']
         service = InvoiceService(user_id)
         form_data = request.form
         files = request.files
         action = request.args.get('action', 'preview')
-        result = service.process(form_data, files, action)
 
-        if action == 'preview':
-            return render_template('generating.html', user_id=user_id, nonce=g.nonce)
-        return result  # PDF response
+        try:
+            result = service.process(form_data, files, action)
 
-app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
+            if action == 'preview':
+                return render_template('generating.html', user_id=user_id, nonce=g.nonce)
+            elif action == 'download':
+                return result  # PDF response
+
+        except ValueError as e:
+            # Validation errors (no items, bad data, etc.)
+            flash(str(e), 'error')
+            return redirect(url_for('create_invoice'))
+
+        except Exception as e:
+            # Unexpected errors — log to Sentry
+            current_app.logger.error(f"Invoice processing error: {str(e)}")
+            flash("An unexpected error occurred. Please try again.", 'error')
+            return redirect(url_for('create_invoice'))
+
+        return redirect(url_for('dashboard'))
 
 # poll route
 @app.route('/invoice/status/<user_id>')
