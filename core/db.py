@@ -7,6 +7,24 @@ DB_ENGINE = create_engine(DATABASE_URL)
 
 print(f"✅ Database connected: {DATABASE_URL[:50]}...")  # Debug
 
+def drop_all_tables():
+    """Drop all tables to start fresh"""
+    with DB_ENGINE.begin() as conn:
+        conn.execute(text('''
+            DROP TABLE IF EXISTS user_sessions CASCADE;
+            DROP TABLE IF EXISTS suppliers CASCADE;
+            DROP TABLE IF EXISTS purchase_orders CASCADE;
+            DROP TABLE IF EXISTS pending_invoices CASCADE;
+            DROP TABLE IF EXISTS stock_alerts CASCADE;
+            DROP TABLE IF EXISTS stock_movements CASCADE;
+            DROP TABLE IF EXISTS inventory_items CASCADE;
+            DROP TABLE IF EXISTS expenses CASCADE;
+            DROP TABLE IF EXISTS customers CASCADE;
+            DROP TABLE IF EXISTS user_invoices CASCADE;
+            DROP TABLE IF EXISTS users CASCADE;
+        '''))
+        print("✅ All tables dropped")
+
 #tabels
 def create_all_tables():
     """Create all required tables with correct column order and syntax"""
@@ -161,5 +179,7 @@ def create_all_tables():
             );
         '''))
         print("✅ All tables created/verified with correct schema")
-# Run on import (safe — IF NOT EXISTS)
-create_all_tables()
+
+# Run on import (safe – IF NOT EXISTS)
+drop_all_tables()  # This will drop all tables first
+create_all_tables()  # Then recreate them with correct schema
