@@ -79,6 +79,13 @@ def random_success_message(category='default'):
 # App creation
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+# Fix template/static path for Railway
+app_root = Path(__file__).parent
+app.template_folder = str(app_root / "templates")
+app.static_folder = str(app_root / "static")
+print(f"✅ Templates folder: {app.template_folder}")
+print(f"✅ Static folder: {app.static_folder}")
+
 ##from tasks import celery
 ##celery.conf.update(app.config)
 from core.cache import init_cache, get_user_profile_cached
