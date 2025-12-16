@@ -919,7 +919,7 @@ def donate():
 # preview and download
 from flask.views import MethodView
 from core.services import InvoiceService
-from flask import send_file
+from flask import send_file, current_app  # ← ADD current_app here
 import io
 
 class InvoiceView(MethodView):
@@ -935,14 +935,12 @@ class InvoiceView(MethodView):
 
         try:
             if action == 'preview':
-                # Only process form for preview
                 service.process(form_data, files, action)
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
             elif action == 'download':
-                # Load saved data from DB — no re-processing
                 with DB_ENGINE.connect() as conn:
                     result = conn.execute(text("SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id"),
                                           {"user_id": user_id}).fetchone()
@@ -953,7 +951,7 @@ class InvoiceView(MethodView):
                 service.data = json.loads(result[0])
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
-                pdf_bytes = generate_pdf(html, current_app.root_path)
+                pdf_bytes = generate_pdf(html, current_app.root_path)  # ← Now works
                 return send_file(
                     io.BytesIO(pdf_bytes),
                     as_attachment=True,
@@ -965,11 +963,10 @@ class InvoiceView(MethodView):
             flash(str(e), 'error')
             return redirect(url_for('create_invoice'))
         except Exception as e:
-            current_app.logger.error(f"Invoice processing error: {str(e)}")
+            current_app.logger.error(f"Invoice processing error: {str(e)}")  # ← Now works
             flash("An unexpected error occurred. Please try again.", 'error')
             return redirect(url_for('create_invoice'))
 
-        # This line must be OUTSIDE the try block
         return redirect(url_for('dashboard'))
 
 # Register route
