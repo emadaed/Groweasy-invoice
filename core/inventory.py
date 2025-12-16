@@ -239,3 +239,19 @@ class InventoryManager:
                 'min_stock_level': result[5]
             }
         return None
+
+    @staticmethod
+    def deduct_stock_for_invoice(user_id, items):
+        with DB_ENGINE.begin() as conn:
+            for item in items:
+                product_id = item['product_id']
+                qty = item['qty']
+                conn.execute(text("""
+                    UPDATE inventory_items SET current_stock = current_stock - :qty
+                    WHERE id = :id AND user_id = :user_id
+                """), {"qty": qty, "id": product_id, "user_id": user_id})
+                # Log movement
+                conn.execute(text("""
+                    INSERT INTO stock_movements (user_id, product_id, movement_type, quantity, notes)
+                    VALUES (:user_id, :product_id, 'sale', :qty, 'Invoice sale')
+                """), {"user_id": user_id, "product_id": product_id, "qty": -qty})

@@ -938,9 +938,15 @@ class InvoiceView(MethodView):
                 service.process(form_data, files, action)
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
+
+                # Save invoice, update stock, save customer — AFTER preview success
+                save_user_invoice(user_id, service.data)  # from core.auth
+                InventoryManager.deduct_stock_for_invoice(user_id, service.data['items'])
+
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
             elif action == 'download':
+                # Load saved data from DB
                 with DB_ENGINE.connect() as conn:
                     result = conn.execute(text("SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id"),
                                           {"user_id": user_id}).fetchone()
@@ -951,7 +957,13 @@ class InvoiceView(MethodView):
                 service.data = json.loads(result[0])
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
-                pdf_bytes = generate_pdf(html, current_app.root_path)  # ← Now works
+                pdf_bytes = generate_pdf(html, current_app.root_path)
+
+                # Optional: Clear pending after download
+                with DB_ENGINE.begin() as conn:
+                    conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
+
+                flash("Invoice downloaded successfully!", "success")
                 return send_file(
                     io.BytesIO(pdf_bytes),
                     as_attachment=True,
@@ -963,7 +975,7 @@ class InvoiceView(MethodView):
             flash(str(e), 'error')
             return redirect(url_for('create_invoice'))
         except Exception as e:
-            current_app.logger.error(f"Invoice processing error: {str(e)}")  # ← Now works
+            current_app.logger.error(f"Invoice processing error: {str(e)}")
             flash("An unexpected error occurred. Please try again.", 'error')
             return redirect(url_for('create_invoice'))
 
@@ -971,7 +983,6 @@ class InvoiceView(MethodView):
 
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
-
 # poll route
 @app.route('/invoice/status/<user_id>')
 def status(user_id):
