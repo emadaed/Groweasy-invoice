@@ -181,5 +181,5 @@ def create_all_tables():
         print("✅ All tables created/verified with correct schema")
 
 # Run on import (safe – IF NOT EXISTS)
-drop_all_tables()  # This will drop all tables first
+#drop_all_tables()  # This will drop all tables first
 create_all_tables()  # Then recreate them with correct schema
