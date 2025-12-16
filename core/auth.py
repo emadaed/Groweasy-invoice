@@ -6,7 +6,7 @@ import os
 import json
 from datetime import datetime
 
-# No more sqlite3 import!
+
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -153,20 +153,29 @@ def save_user_invoice(user_id, invoice_data):
     with DB_ENGINE.begin() as conn:
         invoice_number = invoice_data.get('invoice_number', 'Unknown')
         client_name = invoice_data.get('client_name', 'Unknown Client')
-        invoice_date = invoice_data.get('invoice_date', '')
-        due_date = invoice_data.get('due_date', '')
+        invoice_date_str = invoice_data.get('invoice_date', '')
+        due_date_str = invoice_data.get('due_date', '')
         grand_total = float(invoice_data.get('grand_total', 0))
         invoice_json = json.dumps(invoice_data)
+
+        # Convert date strings to proper format or None
+        invoice_date = invoice_date_str if invoice_date_str else None
+        due_date = due_date_str if due_date_str else None
 
         conn.execute(text('''
             INSERT INTO user_invoices
             (user_id, invoice_number, client_name, invoice_date, due_date, grand_total, invoice_data)
             VALUES (:user_id, :invoice_number, :client_name, :invoice_date, :due_date, :grand_total, :invoice_json)
         '''), {
-            "user_id": user_id, "invoice_number": invoice_number, "client_name": client_name,
-            "invoice_date": invoice_date, "due_date": due_date, "grand_total": grand_total,
+            "user_id": user_id,
+            "invoice_number": invoice_number,
+            "client_name": client_name,
+            "invoice_date": invoice_date,
+            "due_date": due_date,
+            "grand_total": grand_total,
             "invoice_json": invoice_json
         })
+
 
         # Auto-save customer
         customer_data = {
