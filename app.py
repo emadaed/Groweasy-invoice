@@ -952,6 +952,9 @@ class InvoiceView(MethodView):
             return redirect(url_for('create_invoice'))
 
         return redirect(url_for('dashboard'))
+    # Register InvoiceView as a route
+    app.add_url_rule('/invoice_process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
+
 
 # poll route
 @app.route('/invoice/status/<user_id>')
