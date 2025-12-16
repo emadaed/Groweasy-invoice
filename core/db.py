@@ -180,6 +180,23 @@ def create_all_tables():
         '''))
         print("✅ All tables created/verified with correct schema")
 
+def check_schema():
+    """Check the actual schema of user_invoices table"""
+    try:
+        with DB_ENGINE.connect() as conn:
+            result = conn.execute(text("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'user_invoices'
+                ORDER BY ordinal_position
+            """)).fetchall()
+            print("📋 CURRENT user_invoices SCHEMA:")
+            for col in result:
+                print(f"  {col[0]}: {col[1]}")
+    except Exception as e:
+        print(f"⚠️ Schema check failed: {e}")
+
 # Run on import (safe – IF NOT EXISTS)
-#drop_all_tables()  # This will drop all tables first
-create_all_tables()  # Then recreate them with correct schema
+# drop_all_tables()  # Comment this out after first successful run
+create_all_tables()
+check_schema()  # Check what schema we actually have
