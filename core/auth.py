@@ -148,6 +148,8 @@ def get_client_analytics(user_id):
 
     return clients
 
+from datetime import datetime
+
 def save_user_invoice(user_id, invoice_data):
     """Save invoice data with metadata"""
     with DB_ENGINE.begin() as conn:
@@ -158,9 +160,20 @@ def save_user_invoice(user_id, invoice_data):
         grand_total = float(invoice_data.get('grand_total', 0))
         invoice_json = json.dumps(invoice_data)
 
-        # Convert date strings to proper format or None
-        invoice_date = invoice_date_str if invoice_date_str else None
-        due_date = due_date_str if due_date_str else None
+        # Convert date strings to date objects or None
+        invoice_date = None
+        if invoice_date_str:
+            try:
+                invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                invoice_date = None
+
+        due_date = None
+        if due_date_str:
+            try:
+                due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                due_date = None
 
         conn.execute(text('''
             INSERT INTO user_invoices
@@ -175,6 +188,7 @@ def save_user_invoice(user_id, invoice_data):
             "grand_total": grand_total,
             "invoice_json": invoice_json
         })
+
 
 
         # Auto-save customer
