@@ -924,61 +924,52 @@ import io
 
 class InvoiceView(MethodView):
     def post(self):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
 
-        user_id = session['user_id']
-        service = InvoiceService(user_id)
-        form_data = request.form
-        files = request.files
-        action = request.args.get('action', 'preview')
+    user_id = session['user_id']
+    service = InvoiceService(user_id)
+    form_data = request.form
+    files = request.files
+    action = request.args.get('action', 'preview')
 
-        try:
-            result = service.process(form_data, files, action)
+    try:
+        if action == 'preview':
+            # Only process form for preview
+            service.process(form_data, files, action)
+            qr_b64 = generate_simple_qr(service.data)
+            html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
+            return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
-            if action == 'preview':
-                # Sync preview — immediate
-                qr_b64 = generate_simple_qr(service.data)
-                html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
-                return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
+        elif action == 'download':
+            # Load saved data from DB — no re-processing
+            with DB_ENGINE.connect() as conn:
+                result = conn.execute(text("SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id"),
+                                      {"user_id": user_id}).fetchone()
+            if not result:
+                flash("No invoice data found. Please generate preview first.", "error")
+                return redirect(url_for('create_invoice'))
 
-            elif action == 'download':
-                # Load saved invoice data from DB (from preview step)
-                with DB_ENGINE.connect() as conn:
-                    result = conn.execute(text("""
-                        SELECT invoice_data FROM pending_invoices
-                        WHERE user_id = :user_id
-                    """), {"user_id": user_id}).fetchone()
+            service.data = json.loads(result[0])
+            qr_b64 = generate_simple_qr(service.data)
+            html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
+            pdf_bytes = generate_pdf(html, current_app.root_path)
+            return send_file(
+                io.BytesIO(pdf_bytes),
+                as_attachment=True,
+                download_name=f"invoice_{service.data.get('invoice_number', 'unknown')}.pdf",
+                mimetype='application/pdf'
+            )
 
-                if not result:
-                    flash("No invoice data found. Please generate preview first.", "error")
-                    return redirect(url_for('create_invoice'))
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('create_invoice'))
+    except Exception as e:
+        current_app.logger.error(f"Invoice processing error: {str(e)}")
+        flash("An unexpected error occurred. Please try again.", 'error')
+        return redirect(url_for('create_invoice'))
 
-                # Load the saved data
-                service.data = json.loads(result[0])
-
-                # Generate QR and PDF
-                qr_b64 = generate_simple_qr(service.data)
-                html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
-                pdf_bytes = generate_pdf(html, current_app.root_path)
-
-                return send_file(
-                    io.BytesIO(pdf_bytes),
-                    as_attachment=True,
-                    download_name=f"invoice_{service.data.get('invoice_number', 'unknown')}.pdf",
-                    mimetype='application/pdf'
-                )
-
-        except ValueError as e:
-            flash(str(e), 'error')
-            return redirect(url_for('create_invoice'))
-        except Exception as e:
-            current_app.logger.error(f"Invoice processing error: {str(e)}")
-            flash("An unexpected error occurred. Please try again.", 'error')
-            return redirect(url_for('create_invoice'))
-
-        return redirect(url_for('dashboard'))
-
+    return redirect(url_for('dashboard'))
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
 
