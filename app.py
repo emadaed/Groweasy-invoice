@@ -919,7 +919,8 @@ def donate():
 # preview and download
 from flask.views import MethodView
 from core.services import InvoiceService
-##from tasks import generate_preview  # For polling
+from flask import send_file
+import io
 
 class InvoiceView(MethodView):
     def post(self):
@@ -936,25 +937,34 @@ class InvoiceView(MethodView):
             result = service.process(form_data, files, action)
 
             if action == 'preview':
-                return render_template('generating.html', user_id=user_id, nonce=g.nonce)
+                # Sync preview — immediate
+                qr_b64 = generate_simple_qr(service.data)
+                html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
+                return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
+
             elif action == 'download':
-                return result  # PDF response
+                qr_b64 = generate_simple_qr(service.data)
+                html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
+                pdf_bytes = generate_pdf(html, current_app.root_path)
+                return send_file(
+                    io.BytesIO(pdf_bytes),
+                    as_attachment=True,
+                    download_name=f"invoice_{service.data['invoice_number']}.pdf",
+                    mimetype='application/pdf'
+                )
 
         except ValueError as e:
-            # Validation errors (no items, bad data, etc.)
             flash(str(e), 'error')
             return redirect(url_for('create_invoice'))
-
         except Exception as e:
-            # Unexpected errors — log to Sentry
             current_app.logger.error(f"Invoice processing error: {str(e)}")
             flash("An unexpected error occurred. Please try again.", 'error')
             return redirect(url_for('create_invoice'))
 
         return redirect(url_for('dashboard'))
-# Register InvoiceView as a route
-app.add_url_rule('/invoice_process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
 
+# Register route
+app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
 
 # poll route
 @app.route('/invoice/status/<user_id>')

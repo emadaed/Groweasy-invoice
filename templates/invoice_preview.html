@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-body">
+            {{ html | safe }}
+        </div>
+    </div>
+    <div class="text-center mt-4">
+        <a href="{{ url_for('invoice_process') }}?action=download" class="btn btn-success btn-lg">
+            Download PDF
+        </a>
+        <a href="{{ url_for('create_invoice') }}" class="btn btn-secondary btn-lg ms-3">
+            Create New
+        </a>
+    </div>
+</div>
+{% endblock %}
