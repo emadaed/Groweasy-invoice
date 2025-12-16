@@ -199,4 +199,4 @@ def check_schema():
 # Run on import (safe – IF NOT EXISTS)
 # drop_all_tables()  # Comment this out after first successful run
 create_all_tables()
-check_schema()  # Check what schema we actually have
+# Check what schema we actually have check_schema()
