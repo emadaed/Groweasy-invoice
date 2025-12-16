@@ -27,13 +27,20 @@ class InvoiceService:
             return self.generate_download()
 
     def save_state(self):
-        # Save to Redis (fast)
-        self.redis_client.setex(f"invoice:{self.user_id}", 3600, json.dumps(self.data))
-        # Save to DB (persistent)
-        with DB_ENGINE.connect() as conn:
-            conn.execute(text("INSERT OR REPLACE INTO pending_invoices (user_id, invoice_data) VALUES (:u, :d)"),
-                        {'u': self.user_id, 'd': json.dumps(self.data)})
-            conn.commit()
+        """Save invoice data to Redis and DB"""
+        invoice_json = json.dumps(self.data)
+
+        # Redis (fast)
+        if self.redis_client:
+            self.redis_client.setex(f"invoice:{self.user_id}", 3600, invoice_json)
+
+        # DB (persistent) - Postgres syntax
+        with DB_ENGINE.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO pending_invoices (user_id, invoice_data)
+                VALUES (:u, :d)
+                ON CONFLICT (user_id) DO UPDATE SET invoice_data = EXCLUDED.invoice_data
+            """), {"u": self.user_id, "d": invoice_json})
 
     def get_state(self):
         cached = self.redis_client.get(f"invoice:{self.user_id}")
