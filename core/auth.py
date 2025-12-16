@@ -74,7 +74,8 @@ def get_user_profile(user_id):
     with DB_ENGINE.connect() as conn:
         result = conn.execute(text('''
             SELECT company_name, company_address, company_phone, company_email,
-                   company_tax_id, seller_ntn, seller_strn, preferred_currency
+                   company_tax_id, seller_ntn, seller_strn, preferred_currency,
+                   created_at, id, email
             FROM users WHERE id = :user_id
         '''), {"user_id": user_id}).fetchone()
 
@@ -87,7 +88,10 @@ def get_user_profile(user_id):
             'company_tax_id': result[4],
             'seller_ntn': result[5],
             'seller_strn': result[6],
-            'preferred_currency': result[7] or 'PKR'
+            'preferred_currency': result[7] or 'PKR',
+            'created_at': result[8].strftime('%Y-%m-%d') if result[8] else None,
+            'id': result[9],
+            'email': result[10]
         }
     return {}
 
@@ -110,8 +114,8 @@ def get_business_summary(user_id):
             'total_invoices': result[0],
             'total_revenue': float(result[1]),
             'avg_invoice': float(result[2]),
-            'first_invoice': result[3],
-            'last_invoice': result[4]
+            'first_invoice': result[3].isoformat() if result[3] else None,
+            'last_invoice': result[4].isoformat() if result[4] else None
         }
     return {
         'total_invoices': 0,

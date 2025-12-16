@@ -128,7 +128,7 @@ class InventoryManager:
             'current_stock': alert[2],
             'min_stock': alert[3],
             'message': alert[4],
-            'created_at': alert[5]
+            'created_at': alert[5].strftime('%Y-%m-%d %H:%M:%S') if alert[5] else ''
         } for alert in alerts]
 
     @staticmethod

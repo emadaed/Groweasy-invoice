@@ -1054,7 +1054,7 @@ def invoice_history():
             'due_date': row[4],
             'grand_total': float(row[5]) if row[5] else 0.0,
             'status': row[6],
-            'created_at': row[7]
+            'created_at': row[7].strftime('%Y-%m-%d %H:%M:%S') if row[7] else ''
         })
 
     total_pages = (total_invoices + limit - 1) // limit  # Ceiling division

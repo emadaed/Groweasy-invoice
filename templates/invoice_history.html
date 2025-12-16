@@ -67,7 +67,7 @@
                                     <td>
                                         <strong>{{ invoice.invoice_number }}</strong>
                                         <br>
-                                        <small class="text-muted">{{ invoice.created_at[:10] }}</small>
+                                        <small class="text-muted">{{ invoice.created_at[:10] if invoice.created_at else '' }}</small>
                                     </td>
                                     <td>{{ invoice.client_name }}</td>
                                     <td>{{ invoice.invoice_date }}</td>
