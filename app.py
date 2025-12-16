@@ -125,12 +125,10 @@ import logging
 # Set root logger to INFO (your own prints stay)
 logging.getLogger().setLevel(logging.INFO)
 # Silence the very noisy third-party libraries
-logging.getLogger('weasyprint').setLevel(logging.WARNING)
-logging.getLogger('fontTools').setLevel(logging.WARNING)
-logging.getLogger('PIL').setLevel(logging.WARNING)
-logging.getLogger('urllib3').setLevel(logging.WARNING)
-
-# Initiate Database
+logging.getLogger('weasyprint').setLevel(logging.ERROR)
+logging.getLogger('fontTools').setLevel(logging.ERROR)
+logging.getLogger('PIL').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 # Initialize purchase tables
 from core.purchases import init_purchase_tables
