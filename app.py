@@ -943,13 +943,29 @@ class InvoiceView(MethodView):
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
             elif action == 'download':
+                # Load saved invoice data from DB (from preview step)
+                with DB_ENGINE.connect() as conn:
+                    result = conn.execute(text("""
+                        SELECT invoice_data FROM pending_invoices
+                        WHERE user_id = :user_id
+                    """), {"user_id": user_id}).fetchone()
+
+                if not result:
+                    flash("No invoice data found. Please generate preview first.", "error")
+                    return redirect(url_for('create_invoice'))
+
+                # Load the saved data
+                service.data = json.loads(result[0])
+
+                # Generate QR and PDF
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
                 pdf_bytes = generate_pdf(html, current_app.root_path)
+
                 return send_file(
                     io.BytesIO(pdf_bytes),
                     as_attachment=True,
-                    download_name=f"invoice_{service.data['invoice_number']}.pdf",
+                    download_name=f"invoice_{service.data.get('invoice_number', 'unknown')}.pdf",
                     mimetype='application/pdf'
                 )
 
