@@ -198,7 +198,7 @@ def check_schema():
 
 # Run on import (safe – IF NOT EXISTS)
 # drop_all_tables()  # Comment this out after first successful run
-create_all_tables()
+#create_all_tables()
 # Check what schema we actually have check_schema()
 
 def fix_reference_id_column():
@@ -217,5 +217,5 @@ def fix_reference_id_column():
                 print(f"⚠️  Column fix note: {e}")
 
 # Run the fix
-fix_reference_id_column()
+#fix_reference_id_column()
 

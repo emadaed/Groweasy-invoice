@@ -237,51 +237,51 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
     except Exception as e:
         print(f"Stock update error: {e}")
 
-# unique invoice numbers
-def generate_unique_invoice_number(user_id):
-    try:
-        with DB_ENGINE.begin() as conn:
-            result = conn.execute(text("""
-                SELECT invoice_number FROM user_invoices
-                WHERE user_id = :user_id AND invoice_number LIKE 'INV-%'
-                ORDER BY id DESC LIMIT 1
-            """), {"user_id": user_id}).fetchone()
-
-            if result:
-                last_number = result[0]
-                if last_number.startswith('INV-'):
-                    try:
-                        last_num = int(last_number.split('-')[1])
-                        return f"INV-{last_num + 1:05d}"
-                    except:
-                        return "INV-00001"
-            return "INV-00001"
-    except Exception as e:
-        print(f"Invoice number generation error: {e}")
-        return f"INV-{int(time.time())}"
-
-# unique purchase order numbers
-def generate_unique_po_number(user_id):
-    try:
-        with DB_ENGINE.begin() as conn:
-            result = conn.execute(text("""
-                SELECT po_number FROM purchase_orders
-                WHERE user_id = :user_id AND po_number LIKE 'PO-%'
-                ORDER BY id DESC LIMIT 1
-            """), {"user_id": user_id}).fetchone()
-
-            if result:
-                last_number = result[0]
-                if last_number.startswith('PO-'):
-                    try:
-                        last_num = int(last_number.split('-')[1])
-                        return f"PO-{last_num + 1:05d}"
-                    except:
-                        return "PO-00001"
-            return "PO-00001"
-    except Exception as e:
-        print(f"PO number generation error: {e}")
-        return f"PO-{int(time.time())}"
+### unique invoice numbers
+##def generate_unique_invoice_number(user_id):
+##    try:
+##        with DB_ENGINE.begin() as conn:
+##            result = conn.execute(text("""
+##                SELECT invoice_number FROM user_invoices
+##                WHERE user_id = :user_id AND invoice_number LIKE 'INV-%'
+##                ORDER BY id DESC LIMIT 1
+##            """), {"user_id": user_id}).fetchone()
+##
+##            if result:
+##                last_number = result[0]
+##                if last_number.startswith('INV-'):
+##                    try:
+##                        last_num = int(last_number.split('-')[1])
+##                        return f"INV-{last_num + 1:05d}"
+##                    except:
+##                        return "INV-00001"
+##            return "INV-00001"
+##    except Exception as e:
+##        print(f"Invoice number generation error: {e}")
+##        return f"INV-{int(time.time())}"
+##
+### unique purchase order numbers
+##def generate_unique_po_number(user_id):
+##    try:
+##        with DB_ENGINE.begin() as conn:
+##            result = conn.execute(text("""
+##                SELECT po_number FROM purchase_orders
+##                WHERE user_id = :user_id AND po_number LIKE 'PO-%'
+##                ORDER BY id DESC LIMIT 1
+##            """), {"user_id": user_id}).fetchone()
+##
+##            if result:
+##                last_number = result[0]
+##                if last_number.startswith('PO-'):
+##                    try:
+##                        last_num = int(last_number.split('-')[1])
+##                        return f"PO-{last_num + 1:05d}"
+##                    except:
+##                        return "PO-00001"
+##            return "PO-00001"
+##    except Exception as e:
+##        print(f"PO number generation error: {e}")
+##        return f"PO-{int(time.time())}"
 
 # save pending invoice
 def save_pending_invoice(user_id, invoice_data):
@@ -917,8 +917,13 @@ def donate():
 # preview and download
 from flask.views import MethodView
 from core.services import InvoiceService
+from core.number_generator import NumberGenerator  #
+from core.purchases import save_purchase_order    # ADD
 from flask import send_file, current_app
 import io
+import json  # ADD THIS IMPORT
+from sqlalchemy import text  # ADD
+from core.db import DB_ENGINE  # ADD
 
 class InvoiceView(MethodView):
     def post(self):
@@ -934,12 +939,52 @@ class InvoiceView(MethodView):
         try:
             if action == 'preview':
                 service.process(form_data, files, action)
+
+                # FIX 1: Generate proper invoice/PO numbers
+                invoice_type = service.data.get('invoice_type', 'S')  # S = Sale, P = Purchase
+
+                if invoice_type == 'P':  # Purchase Order
+                    # Generate PO number
+                    po_number = NumberGenerator.generate_po_number(user_id)
+                    print(f"🔍 Generating PO number...")
+                    po_number = NumberGenerator.generate_po_number(user_id)
+                    service.data['invoice_number'] = po_number
+                    print(f"🔍 Generated PO Number: {po_number}")
+
+                    # Save purchase order to separate table
+                    save_purchase_order(user_id, service.data)
+
+                    # ADD stock for purchases (not deduct!)
+                    update_stock_on_invoice(
+                        user_id,
+                        service.data['items'],
+                        invoice_type='P',  # 'P' for purchase
+                        invoice_number=po_number
+                    )
+
+                    flash(f"✅ Purchase Order {po_number} created! Stock added to inventory.", "success")
+
+                else:  # Regular Invoice (Sale)
+                    # Generate invoice number
+                    inv_number = NumberGenerator.generate_invoice_number(user_id)
+                    service.data['invoice_number'] = inv_number
+                    print(f"🔍 Generated Invoice Number: {inv_number}")
+
+                    # Save invoice to invoices table
+                    save_user_invoice(user_id, service.data)  # from core.auth
+
+                    # DEDUCT stock for sales
+                    update_stock_on_invoice(
+                        user_id,
+                        service.data['items'],
+                        invoice_type='S',  # 'S' for sale
+                        invoice_number=inv_number
+                    )
+
+                    flash(f"✅ Invoice {inv_number} created! Stock deducted from inventory.", "success")
+
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
-
-                # Save invoice, update stock, save customer — AFTER preview success
-                save_user_invoice(user_id, service.data)  # from core.auth
-                InventoryManager.deduct_stock_for_invoice(user_id, service.data['items'])
 
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
@@ -961,11 +1006,19 @@ class InvoiceView(MethodView):
                 with DB_ENGINE.begin() as conn:
                     conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
 
-                flash("Invoice downloaded successfully!", "success")
+                # Determine filename based on type
+                invoice_type = service.data.get('invoice_type', 'S')
+                if invoice_type == 'P':
+                    filename = f"purchase_order_{service.data.get('invoice_number', 'unknown')}.pdf"
+                    flash("Purchase Order downloaded successfully!", "success")
+                else:
+                    filename = f"invoice_{service.data.get('invoice_number', 'unknown')}.pdf"
+                    flash("Invoice downloaded successfully!", "success")
+
                 return send_file(
                     io.BytesIO(pdf_bytes),
                     as_attachment=True,
-                    download_name=f"invoice_{service.data.get('invoice_number', 'unknown')}.pdf",
+                    download_name=filename,
                     mimetype='application/pdf'
                 )
 
@@ -979,9 +1032,9 @@ class InvoiceView(MethodView):
 
         return redirect(url_for('dashboard'))
 
-
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
+
 # poll route
 @app.route('/invoice/status/<user_id>')
 def status(user_id):

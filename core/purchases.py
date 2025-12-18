@@ -44,7 +44,15 @@ def init_purchase_tables():
 def save_purchase_order(user_id, order_data):
     """Save purchase order and auto-update supplier"""
     with DB_ENGINE.begin() as conn:
-        po_number = order_data.get('invoice_number', 'PO-001')
+        # ALWAYS generate a fresh PO number, don't trust incoming data
+        from core.number_generator import NumberGenerator
+        po_number = NumberGenerator.generate_po_number(user_id)
+
+        print(f"🔍 Generated fresh PO number: {po_number}")
+
+        # Update order_data with correct PO number for JSON storage
+        order_data['invoice_number'] = po_number
+
         supplier_name = order_data.get('client_name', 'Unknown Supplier')
         order_date = order_data.get('invoice_date', '')
         delivery_date = order_data.get('due_date', '')
@@ -60,6 +68,9 @@ def save_purchase_order(user_id, order_data):
             "order_date": order_date, "delivery_date": delivery_date, "grand_total": grand_total,
             "order_json": order_json
         })
+
+        print(f"✅ Purchase Order {po_number} saved for {supplier_name}")
+
 
         # Auto-save supplier
         supplier_data = {
@@ -97,7 +108,10 @@ def save_purchase_order(user_id, order_data):
                 "tax_id": supplier_data['tax_id'], "grand_total": grand_total
             })
 
+        print(f"✅ Purchase Order {po_number} saved for supplier {supplier_name}")
+
     return True
+
 
 def get_purchase_orders(user_id, limit=50, offset=0):
     """Get purchase orders for user"""
