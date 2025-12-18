@@ -397,32 +397,32 @@ Client: {invoice_data['client_name']}
         # Fallback: generate simple QR code
         return generate_simple_qr(invoice_data)
 
-##def generate_simple_qr(invoice_data):
-##    """Generate simple QR code as fallback"""
-##    try:
-##        import qrcode
-##        import io
-##
-##        qr_content = f"Invoice: {invoice_data['invoice_number']}\nAmount: ${invoice_data['grand_total']:.2f}"
-##
-##        qr = qrcode.QRCode(
-##            version=1,
-##            error_correction=qrcode.constants.ERROR_CORRECT_L,
-##            box_size=10,
-##            border=4,
-##        )
-##        qr.add_data(qr_content)
-##        qr.make(fit=True)
-##
-##        qr_img = qr.make_image(fill_color="#2c5aa0", back_color="#ffffff")
-##
-##        buffer = io.BytesIO()
-##        qr_img.save(buffer, format='PNG')
-##        return base64.b64encode(buffer.getvalue()).decode('utf-8')
-##
-##    except Exception as e:
-##        print(f"Simple QR generation also failed: {e}")
-##        return None
+def generate_simple_qr(invoice_data):
+    """Generate simple QR code as fallback"""
+    try:
+        import qrcode
+        import io
+
+        qr_content = f"Invoice: {invoice_data['invoice_number']}\nAmount: ${invoice_data['grand_total']:.2f}"
+
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_content)
+        qr.make(fit=True)
+
+        qr_img = qr.make_image(fill_color="#2c5aa0", back_color="#ffffff")
+
+        buffer = io.BytesIO()
+        qr_img.save(buffer, format='PNG')
+        return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+    except Exception as e:
+        print(f"Simple QR generation also failed: {e}")
+        return None
 
 # password reset
 @app.route("/forgot_password", methods=['GET', 'POST'])
