@@ -18,7 +18,6 @@ from flask_compress import Compress
 from dotenv import load_dotenv
 # Local application
 from fbr_integration import FBRInvoice
-from core.order_processor import OrderProcessor, OrderProcessingError
 from core.inventory import InventoryManager
 from core.invoice_logic import prepare_invoice_data
 from core.qr_engine import make_qr_with_logo
