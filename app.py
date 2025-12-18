@@ -397,32 +397,32 @@ Client: {invoice_data['client_name']}
         # Fallback: generate simple QR code
         return generate_simple_qr(invoice_data)
 
-def generate_simple_qr(invoice_data):
-    """Generate simple QR code as fallback"""
-    try:
-        import qrcode
-        import io
-
-        qr_content = f"Invoice: {invoice_data['invoice_number']}\nAmount: ${invoice_data['grand_total']:.2f}"
-
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_content)
-        qr.make(fit=True)
-
-        qr_img = qr.make_image(fill_color="#2c5aa0", back_color="#ffffff")
-
-        buffer = io.BytesIO()
-        qr_img.save(buffer, format='PNG')
-        return base64.b64encode(buffer.getvalue()).decode('utf-8')
-
-    except Exception as e:
-        print(f"Simple QR generation also failed: {e}")
-        return None
+##def generate_simple_qr(invoice_data):
+##    """Generate simple QR code as fallback"""
+##    try:
+##        import qrcode
+##        import io
+##
+##        qr_content = f"Invoice: {invoice_data['invoice_number']}\nAmount: ${invoice_data['grand_total']:.2f}"
+##
+##        qr = qrcode.QRCode(
+##            version=1,
+##            error_correction=qrcode.constants.ERROR_CORRECT_L,
+##            box_size=10,
+##            border=4,
+##        )
+##        qr.add_data(qr_content)
+##        qr.make(fit=True)
+##
+##        qr_img = qr.make_image(fill_color="#2c5aa0", back_color="#ffffff")
+##
+##        buffer = io.BytesIO()
+##        qr_img.save(buffer, format='PNG')
+##        return base64.b64encode(buffer.getvalue()).decode('utf-8')
+##
+##    except Exception as e:
+##        print(f"Simple QR generation also failed: {e}")
+##        return None
 
 # password reset
 @app.route("/forgot_password", methods=['GET', 'POST'])
@@ -1089,191 +1089,29 @@ def purchase_orders():
                          nonce=g.nonce)
 
 
-### Purchase Order Form
-##@app.route('/purchase-order')
-##def purchase_order():
-##    """Display purchase order creation form"""
+
+### stock transaction
+##@app.route("/stock_transactions")
+##def stock_transactions():
+##    """View all stock movements"""
 ##    if 'user_id' not in session:
 ##        return redirect(url_for('login'))
 ##
-##    # Get user profile for prefilling
-##    user_profile = get_user_profile_cached(session['user_id'])
-##    prefill_data = {
-##        'company_name': user_profile.get('company_name', ''),
-##        'company_address': user_profile.get('company_address', ''),
-##        'company_phone': user_profile.get('company_phone', ''),
-##        'company_email': user_profile.get('email', ''),
-##        'company_tax_id': user_profile.get('company_tax_id', ''),
-##        'seller_ntn': user_profile.get('seller_ntn', ''),
-##        'seller_strn': user_profile.get('seller_strn', '')
-##    }
+##    with DB_ENGINE.connect() as conn:
+##        transactions = conn.execute(text("""
+##            SELECT sm.id, ii.name, sm.movement_type, sm.quantity,
+##                   sm.reference_id, sm.notes, sm.created_at
+##            FROM stock_movements sm
+##            JOIN inventory_items ii ON sm.product_id = ii.id
+##            WHERE sm.user_id = :user_id
+##            ORDER BY sm.created_at DESC
+##            LIMIT 100
+##        """), {"user_id": session['user_id']}).fetchall()
 ##
-##    # Get inventory items for PO form
-##    from core.inventory import InventoryManager
-##    inventory_items = InventoryManager.get_inventory_report(session['user_id'])
-##
-##    return render_template('purchase_order_form.html',
-##                         prefill_data=prefill_data,
-##                         inventory_items=inventory_items,
+##    return render_template("stock_transactions.html",
+##                         transactions=transactions,
 ##                         nonce=g.nonce)
 ##
-##
-### Purchase Order Processing
-### Purchase Order Processing
-##@app.route('/purchase-order/process', methods=['POST'])
-##def process_purchase_order():
-##    """Process purchase order submission"""
-##    if 'user_id' not in session:
-##        return redirect(url_for('login'))
-##
-##    user_id = session['user_id']
-##
-##    try:
-##        # Build PO data directly from form (skip InvoiceService validation)
-##        po_data = {
-##            'client_name': request.form.get('client_name', 'Unknown Supplier'),
-##            'client_email': request.form.get('client_email', ''),
-##            'client_phone': request.form.get('client_phone', ''),
-##            'client_address': request.form.get('client_address', ''),
-##            'company_name': request.form.get('company_name', ''),
-##            'company_address': request.form.get('company_address', ''),
-##            'company_phone': request.form.get('company_phone', ''),
-##            'invoice_date': request.form.get('invoice_date', ''),
-##            'due_date': request.form.get('due_date', ''),
-##            'grand_total': float(request.form.get('grand_total', 0)),
-##            'subtotal': float(request.form.get('subtotal', 0)),
-##            'tax_amount': float(request.form.get('tax_amount', 0)),
-##            'tax_rate': float(request.form.get('tax_rate', 0)),
-##            'invoice_type': 'P',
-##            'buyer_ntn': request.form.get('buyer_ntn', ''),
-##            'seller_ntn': request.form.get('seller_ntn', ''),
-##            'items': []
-##        }
-##
-##        # Extract items from form
-##        item_index = 1
-##        while True:
-##            product_name = request.form.get(f'item_product_{item_index}')
-##            if not product_name:
-##                break
-##
-##            qty = float(request.form.get(f'item_qty_{item_index}', 0))
-##            price = float(request.form.get(f'item_price_{item_index}', 0))
-##
-##            # Try to find product_id from inventory
-##            product_id = None
-##            with DB_ENGINE.connect() as conn:
-##                result = conn.execute(text("""
-##                    SELECT id FROM inventory_items
-##                    WHERE name = :name AND user_id = :user_id AND is_active = TRUE
-##                """), {"name": product_name, "user_id": user_id}).fetchone()
-##                if result:
-##                    product_id = result[0]
-##
-##            po_data['items'].append({
-##                'product_id': product_id,
-##                'name': product_name,
-##                'qty': qty,
-##                'price': price,
-##                'total': qty * price
-##            })
-##
-##            item_index += 1
-##
-##        # ✅ Use OrderProcessor for atomic transaction
-##        po_number = OrderProcessor.process_purchase_order(user_id, po_data)
-##
-##        # Update PO number in data
-##        po_data['po_number'] = po_number
-##        po_data['invoice_number'] = po_number
-##
-##        # Generate preview
-##        qr_b64 = generate_simple_qr(po_data)
-##        html = render_template('purchase_order_pdf.html',
-##                             data=po_data,
-##                             preview=True,
-##                             custom_qr_b64=qr_b64)
-##
-##        flash(f'✅ Purchase Order {po_number} created successfully!', 'success')
-##        return render_template('purchase_order_preview.html',
-##                             html=html,
-##                             data=po_data,
-##                             nonce=g.nonce)
-##
-##    except OrderProcessingError as e:
-##        current_app.logger.error(f"PO processing failed: {str(e)}")
-##        flash(f'❌ Failed to create purchase order: {str(e)}', 'error')
-##        return redirect(url_for('purchase_order'))
-##    except Exception as e:
-##        current_app.logger.error(f"Unexpected PO error: {str(e)}")
-##        flash('An unexpected error occurred. Please try again.', 'error')
-##        return redirect(url_for('purchase_order'))
-##
-### Purchase Order Download
-##@app.route('/purchase-order/download/<po_number>')
-##def download_purchase_order(po_number):
-##    """Download purchase order as PDF"""
-##    if 'user_id' not in session:
-##        return redirect(url_for('login'))
-##
-##    user_id = session['user_id']
-##
-##    try:
-##        # Load PO from database
-##        with DB_ENGINE.connect() as conn:
-##            result = conn.execute(text("""
-##                SELECT order_data FROM purchase_orders
-##                WHERE user_id = :user_id AND po_number = :po_number
-##            """), {"user_id": user_id, "po_number": po_number}).fetchone()
-##
-##        if not result:
-##            flash('Purchase order not found', 'error')
-##            return redirect(url_for('purchase_orders'))
-##
-##        po_data = json.loads(result[0])
-##
-##        # Generate PDF
-##        qr_b64 = generate_simple_qr(po_data)
-##        html = render_template('purchase_order_pdf.html',
-##                             data=po_data,
-##                             preview=False,
-##                             custom_qr_b64=qr_b64)
-##        pdf_bytes = generate_pdf(html, current_app.root_path)
-##
-##        return send_file(
-##            io.BytesIO(pdf_bytes),
-##            as_attachment=True,
-##            download_name=f"PO_{po_number}.pdf",
-##            mimetype='application/pdf'
-##        )
-##
-##    except Exception as e:
-##        current_app.logger.error(f"PO download error: {str(e)}")
-##        flash('Failed to download purchase order', 'error')
-##        return redirect(url_for('purchase_orders'))
-
-# stock transaction
-@app.route("/stock_transactions")
-def stock_transactions():
-    """View all stock movements"""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    with DB_ENGINE.connect() as conn:
-        transactions = conn.execute(text("""
-            SELECT sm.id, ii.name, sm.movement_type, sm.quantity,
-                   sm.reference_id, sm.notes, sm.created_at
-            FROM stock_movements sm
-            JOIN inventory_items ii ON sm.product_id = ii.id
-            WHERE sm.user_id = :user_id
-            ORDER BY sm.created_at DESC
-            LIMIT 100
-        """), {"user_id": session['user_id']}).fetchall()
-
-    return render_template("stock_transactions.html",
-                         transactions=transactions,
-                         nonce=g.nonce)
-
 # supplier management
 @app.route("/suppliers")
 def suppliers():
@@ -1369,84 +1207,84 @@ def fix_customers():
 
     return "<br>".join(results)
 
-#debug invnetory
-@app.route("/debug_inventory")
-def debug_inventory():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'})
-
-    with DB_ENGINE.connect() as conn:
-        items = conn.execute(text("""
-            SELECT id, name, current_stock, min_stock_level, selling_price
-            FROM inventory_items WHERE user_id = :user_id
-        """), {"user_id": session['user_id']}).fetchall()
-
-        movements = conn.execute(text("""
-            SELECT product_id, movement_type, quantity, created_at
-            FROM stock_movements WHERE user_id = :user_id
-            ORDER BY created_at DESC LIMIT 10
-        """), {"user_id": session['user_id']}).fetchall()
-
-    return jsonify({
-        'inventory_items': [{
-            'id': item[0], 'name': item[1], 'current_stock': item[2],
-            'min_stock': item[3], 'price': item[4]
-        } for item in items],
-        'recent_movements': [{
-            'product_id': mov[0], 'type': mov[1], 'quantity': mov[2], 'time': mov[3]
-        } for mov in movements]
-    })
-
-#debug stock
-@app.route("/debug_stock")
-def debug_stock():
-    if 'user_id' not in session:
-        return "Not logged in"
-
-    with DB_ENGINE.connect() as conn:
-        items = conn.execute(text("""
-            SELECT id, name, current_stock FROM inventory_items
-            WHERE user_id = :user_id
-        """), {"user_id": session['user_id']}).fetchall()
-
-    result = "<h3>Current Inventory:</h3>"
-    for item in items:
-        result += f"<p>ID: {item[0]}, Name: {item[1]}, Stock: {item[2]}</p>"
-    return result
-
-# debug invoice data
-def debug_invoice_data():
-    """Debug function to check what data is being passed to template"""
-    sample_data = {
-        'company_name': 'Test Company',
-        'company_address': '123 Test St',
-        'company_phone': '+1234567890',
-        'company_email': 'test@company.com',
-        'company_tax_id': 'TAX123',
-        'invoice_number': 'INV-001',
-        'invoice_date': '2024-01-01',
-        'due_date': '2024-01-31',
-        'client_name': 'Test Client',
-        'client_email': 'client@test.com',
-        'client_phone': '+0987654321',
-        'client_address': '456 Client Ave',
-        'seller_ntn': '1234567-8',
-        'buyer_ntn': '8765432-1',
-        'payment_terms': 'Net 30',
-        'payment_methods': 'Bank Transfer, Credit Card',
-        'items': [
-            {'name': 'Test Item 1', 'qty': 2, 'price': 100.00, 'total': 200.00},
-            {'name': 'Test Item 2', 'qty': 1, 'price': 50.00, 'total': 50.00}
-        ],
-        'subtotal': 250.00,
-        'discount_rate': 10.0,
-        'discount_amount': 25.00,
-        'tax_rate': 17.0,
-        'tax_amount': 42.50,
-        'grand_total': 267.50,
-        'notes': 'Test note'
-    }
-    return sample_data
+###debug invnetory
+##@app.route("/debug_inventory")
+##def debug_inventory():
+##    if 'user_id' not in session:
+##        return jsonify({'error': 'Not logged in'})
+##
+##    with DB_ENGINE.connect() as conn:
+##        items = conn.execute(text("""
+##            SELECT id, name, current_stock, min_stock_level, selling_price
+##            FROM inventory_items WHERE user_id = :user_id
+##        """), {"user_id": session['user_id']}).fetchall()
+##
+##        movements = conn.execute(text("""
+##            SELECT product_id, movement_type, quantity, created_at
+##            FROM stock_movements WHERE user_id = :user_id
+##            ORDER BY created_at DESC LIMIT 10
+##        """), {"user_id": session['user_id']}).fetchall()
+##
+##    return jsonify({
+##        'inventory_items': [{
+##            'id': item[0], 'name': item[1], 'current_stock': item[2],
+##            'min_stock': item[3], 'price': item[4]
+##        } for item in items],
+##        'recent_movements': [{
+##            'product_id': mov[0], 'type': mov[1], 'quantity': mov[2], 'time': mov[3]
+##        } for mov in movements]
+##    })
+##
+###debug stock
+##@app.route("/debug_stock")
+##def debug_stock():
+##    if 'user_id' not in session:
+##        return "Not logged in"
+##
+##    with DB_ENGINE.connect() as conn:
+##        items = conn.execute(text("""
+##            SELECT id, name, current_stock FROM inventory_items
+##            WHERE user_id = :user_id
+##        """), {"user_id": session['user_id']}).fetchall()
+##
+##    result = "<h3>Current Inventory:</h3>"
+##    for item in items:
+##        result += f"<p>ID: {item[0]}, Name: {item[1]}, Stock: {item[2]}</p>"
+##    return result
+##
+### debug invoice data
+##def debug_invoice_data():
+##    """Debug function to check what data is being passed to template"""
+##    sample_data = {
+##        'company_name': 'Test Company',
+##        'company_address': '123 Test St',
+##        'company_phone': '+1234567890',
+##        'company_email': 'test@company.com',
+##        'company_tax_id': 'TAX123',
+##        'invoice_number': 'INV-001',
+##        'invoice_date': '2024-01-01',
+##        'due_date': '2024-01-31',
+##        'client_name': 'Test Client',
+##        'client_email': 'client@test.com',
+##        'client_phone': '+0987654321',
+##        'client_address': '456 Client Ave',
+##        'seller_ntn': '1234567-8',
+##        'buyer_ntn': '8765432-1',
+##        'payment_terms': 'Net 30',
+##        'payment_methods': 'Bank Transfer, Credit Card',
+##        'items': [
+##            {'name': 'Test Item 1', 'qty': 2, 'price': 100.00, 'total': 200.00},
+##            {'name': 'Test Item 2', 'qty': 1, 'price': 50.00, 'total': 50.00}
+##        ],
+##        'subtotal': 250.00,
+##        'discount_rate': 10.0,
+##        'discount_amount': 25.00,
+##        'tax_rate': 17.0,
+##        'tax_amount': 42.50,
+##        'grand_total': 267.50,
+##        'notes': 'Test note'
+##    }
+##    return sample_data
 
 #Backup Route (Manual Trigger)
 @app.route('/admin/backup')
