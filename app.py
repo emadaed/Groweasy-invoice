@@ -933,25 +933,13 @@ class InvoiceView(MethodView):
 
         try:
             if action == 'preview':
-                # Process form data
                 service.process(form_data, files, action)
-
-                # Generate QR code
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
 
-                # ✅ NEW: Use OrderProcessor for atomic transaction
-                try:
-                    invoice_number = OrderProcessor.process_sale_invoice(user_id, service.data)
-                    # Update invoice number in service data
-                    service.data['invoice_number'] = invoice_number
-                except InsufficientStockError as e:
-                    flash(f'❌ {str(e)}', 'error')
-                    return redirect(url_for('create_invoice'))
-                except OrderProcessingError as e:
-                    current_app.logger.error(f"Order processing failed: {str(e)}")
-                    flash('Failed to process invoice. Please try again.', 'error')
-                    return redirect(url_for('create_invoice'))
+                # Save invoice, update stock, save customer — AFTER preview success
+                save_user_invoice(user_id, service.data)  # from core.auth
+                InventoryManager.deduct_stock_for_invoice(user_id, service.data['items'])
 
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
@@ -969,7 +957,7 @@ class InvoiceView(MethodView):
                 html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
                 pdf_bytes = generate_pdf(html, current_app.root_path)
 
-                # Clear pending after download
+                # Optional: Clear pending after download
                 with DB_ENGINE.begin() as conn:
                     conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
 
@@ -990,6 +978,7 @@ class InvoiceView(MethodView):
             return redirect(url_for('create_invoice'))
 
         return redirect(url_for('dashboard'))
+
 
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
@@ -1100,168 +1089,168 @@ def purchase_orders():
                          nonce=g.nonce)
 
 
-# Purchase Order Form
-@app.route('/purchase-order')
-def purchase_order():
-    """Display purchase order creation form"""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    # Get user profile for prefilling
-    user_profile = get_user_profile_cached(session['user_id'])
-    prefill_data = {
-        'company_name': user_profile.get('company_name', ''),
-        'company_address': user_profile.get('company_address', ''),
-        'company_phone': user_profile.get('company_phone', ''),
-        'company_email': user_profile.get('email', ''),
-        'company_tax_id': user_profile.get('company_tax_id', ''),
-        'seller_ntn': user_profile.get('seller_ntn', ''),
-        'seller_strn': user_profile.get('seller_strn', '')
-    }
-
-    # Get inventory items for PO form
-    from core.inventory import InventoryManager
-    inventory_items = InventoryManager.get_inventory_report(session['user_id'])
-
-    return render_template('purchase_order_form.html',
-                         prefill_data=prefill_data,
-                         inventory_items=inventory_items,
-                         nonce=g.nonce)
-
-
-# Purchase Order Processing
-# Purchase Order Processing
-@app.route('/purchase-order/process', methods=['POST'])
-def process_purchase_order():
-    """Process purchase order submission"""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-
-    try:
-        # Build PO data directly from form (skip InvoiceService validation)
-        po_data = {
-            'client_name': request.form.get('client_name', 'Unknown Supplier'),
-            'client_email': request.form.get('client_email', ''),
-            'client_phone': request.form.get('client_phone', ''),
-            'client_address': request.form.get('client_address', ''),
-            'company_name': request.form.get('company_name', ''),
-            'company_address': request.form.get('company_address', ''),
-            'company_phone': request.form.get('company_phone', ''),
-            'invoice_date': request.form.get('invoice_date', ''),
-            'due_date': request.form.get('due_date', ''),
-            'grand_total': float(request.form.get('grand_total', 0)),
-            'subtotal': float(request.form.get('subtotal', 0)),
-            'tax_amount': float(request.form.get('tax_amount', 0)),
-            'tax_rate': float(request.form.get('tax_rate', 0)),
-            'invoice_type': 'P',
-            'buyer_ntn': request.form.get('buyer_ntn', ''),
-            'seller_ntn': request.form.get('seller_ntn', ''),
-            'items': []
-        }
-
-        # Extract items from form
-        item_index = 1
-        while True:
-            product_name = request.form.get(f'item_product_{item_index}')
-            if not product_name:
-                break
-
-            qty = float(request.form.get(f'item_qty_{item_index}', 0))
-            price = float(request.form.get(f'item_price_{item_index}', 0))
-
-            # Try to find product_id from inventory
-            product_id = None
-            with DB_ENGINE.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT id FROM inventory_items
-                    WHERE name = :name AND user_id = :user_id AND is_active = TRUE
-                """), {"name": product_name, "user_id": user_id}).fetchone()
-                if result:
-                    product_id = result[0]
-
-            po_data['items'].append({
-                'product_id': product_id,
-                'name': product_name,
-                'qty': qty,
-                'price': price,
-                'total': qty * price
-            })
-
-            item_index += 1
-
-        # ✅ Use OrderProcessor for atomic transaction
-        po_number = OrderProcessor.process_purchase_order(user_id, po_data)
-
-        # Update PO number in data
-        po_data['po_number'] = po_number
-        po_data['invoice_number'] = po_number
-
-        # Generate preview
-        qr_b64 = generate_simple_qr(po_data)
-        html = render_template('purchase_order_pdf.html',
-                             data=po_data,
-                             preview=True,
-                             custom_qr_b64=qr_b64)
-
-        flash(f'✅ Purchase Order {po_number} created successfully!', 'success')
-        return render_template('purchase_order_preview.html',
-                             html=html,
-                             data=po_data,
-                             nonce=g.nonce)
-
-    except OrderProcessingError as e:
-        current_app.logger.error(f"PO processing failed: {str(e)}")
-        flash(f'❌ Failed to create purchase order: {str(e)}', 'error')
-        return redirect(url_for('purchase_order'))
-    except Exception as e:
-        current_app.logger.error(f"Unexpected PO error: {str(e)}")
-        flash('An unexpected error occurred. Please try again.', 'error')
-        return redirect(url_for('purchase_order'))
-
-# Purchase Order Download
-@app.route('/purchase-order/download/<po_number>')
-def download_purchase_order(po_number):
-    """Download purchase order as PDF"""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-
-    try:
-        # Load PO from database
-        with DB_ENGINE.connect() as conn:
-            result = conn.execute(text("""
-                SELECT order_data FROM purchase_orders
-                WHERE user_id = :user_id AND po_number = :po_number
-            """), {"user_id": user_id, "po_number": po_number}).fetchone()
-
-        if not result:
-            flash('Purchase order not found', 'error')
-            return redirect(url_for('purchase_orders'))
-
-        po_data = json.loads(result[0])
-
-        # Generate PDF
-        qr_b64 = generate_simple_qr(po_data)
-        html = render_template('purchase_order_pdf.html',
-                             data=po_data,
-                             preview=False,
-                             custom_qr_b64=qr_b64)
-        pdf_bytes = generate_pdf(html, current_app.root_path)
-
-        return send_file(
-            io.BytesIO(pdf_bytes),
-            as_attachment=True,
-            download_name=f"PO_{po_number}.pdf",
-            mimetype='application/pdf'
-        )
-
-    except Exception as e:
-        current_app.logger.error(f"PO download error: {str(e)}")
-        flash('Failed to download purchase order', 'error')
-        return redirect(url_for('purchase_orders'))
+### Purchase Order Form
+##@app.route('/purchase-order')
+##def purchase_order():
+##    """Display purchase order creation form"""
+##    if 'user_id' not in session:
+##        return redirect(url_for('login'))
+##
+##    # Get user profile for prefilling
+##    user_profile = get_user_profile_cached(session['user_id'])
+##    prefill_data = {
+##        'company_name': user_profile.get('company_name', ''),
+##        'company_address': user_profile.get('company_address', ''),
+##        'company_phone': user_profile.get('company_phone', ''),
+##        'company_email': user_profile.get('email', ''),
+##        'company_tax_id': user_profile.get('company_tax_id', ''),
+##        'seller_ntn': user_profile.get('seller_ntn', ''),
+##        'seller_strn': user_profile.get('seller_strn', '')
+##    }
+##
+##    # Get inventory items for PO form
+##    from core.inventory import InventoryManager
+##    inventory_items = InventoryManager.get_inventory_report(session['user_id'])
+##
+##    return render_template('purchase_order_form.html',
+##                         prefill_data=prefill_data,
+##                         inventory_items=inventory_items,
+##                         nonce=g.nonce)
+##
+##
+### Purchase Order Processing
+### Purchase Order Processing
+##@app.route('/purchase-order/process', methods=['POST'])
+##def process_purchase_order():
+##    """Process purchase order submission"""
+##    if 'user_id' not in session:
+##        return redirect(url_for('login'))
+##
+##    user_id = session['user_id']
+##
+##    try:
+##        # Build PO data directly from form (skip InvoiceService validation)
+##        po_data = {
+##            'client_name': request.form.get('client_name', 'Unknown Supplier'),
+##            'client_email': request.form.get('client_email', ''),
+##            'client_phone': request.form.get('client_phone', ''),
+##            'client_address': request.form.get('client_address', ''),
+##            'company_name': request.form.get('company_name', ''),
+##            'company_address': request.form.get('company_address', ''),
+##            'company_phone': request.form.get('company_phone', ''),
+##            'invoice_date': request.form.get('invoice_date', ''),
+##            'due_date': request.form.get('due_date', ''),
+##            'grand_total': float(request.form.get('grand_total', 0)),
+##            'subtotal': float(request.form.get('subtotal', 0)),
+##            'tax_amount': float(request.form.get('tax_amount', 0)),
+##            'tax_rate': float(request.form.get('tax_rate', 0)),
+##            'invoice_type': 'P',
+##            'buyer_ntn': request.form.get('buyer_ntn', ''),
+##            'seller_ntn': request.form.get('seller_ntn', ''),
+##            'items': []
+##        }
+##
+##        # Extract items from form
+##        item_index = 1
+##        while True:
+##            product_name = request.form.get(f'item_product_{item_index}')
+##            if not product_name:
+##                break
+##
+##            qty = float(request.form.get(f'item_qty_{item_index}', 0))
+##            price = float(request.form.get(f'item_price_{item_index}', 0))
+##
+##            # Try to find product_id from inventory
+##            product_id = None
+##            with DB_ENGINE.connect() as conn:
+##                result = conn.execute(text("""
+##                    SELECT id FROM inventory_items
+##                    WHERE name = :name AND user_id = :user_id AND is_active = TRUE
+##                """), {"name": product_name, "user_id": user_id}).fetchone()
+##                if result:
+##                    product_id = result[0]
+##
+##            po_data['items'].append({
+##                'product_id': product_id,
+##                'name': product_name,
+##                'qty': qty,
+##                'price': price,
+##                'total': qty * price
+##            })
+##
+##            item_index += 1
+##
+##        # ✅ Use OrderProcessor for atomic transaction
+##        po_number = OrderProcessor.process_purchase_order(user_id, po_data)
+##
+##        # Update PO number in data
+##        po_data['po_number'] = po_number
+##        po_data['invoice_number'] = po_number
+##
+##        # Generate preview
+##        qr_b64 = generate_simple_qr(po_data)
+##        html = render_template('purchase_order_pdf.html',
+##                             data=po_data,
+##                             preview=True,
+##                             custom_qr_b64=qr_b64)
+##
+##        flash(f'✅ Purchase Order {po_number} created successfully!', 'success')
+##        return render_template('purchase_order_preview.html',
+##                             html=html,
+##                             data=po_data,
+##                             nonce=g.nonce)
+##
+##    except OrderProcessingError as e:
+##        current_app.logger.error(f"PO processing failed: {str(e)}")
+##        flash(f'❌ Failed to create purchase order: {str(e)}', 'error')
+##        return redirect(url_for('purchase_order'))
+##    except Exception as e:
+##        current_app.logger.error(f"Unexpected PO error: {str(e)}")
+##        flash('An unexpected error occurred. Please try again.', 'error')
+##        return redirect(url_for('purchase_order'))
+##
+### Purchase Order Download
+##@app.route('/purchase-order/download/<po_number>')
+##def download_purchase_order(po_number):
+##    """Download purchase order as PDF"""
+##    if 'user_id' not in session:
+##        return redirect(url_for('login'))
+##
+##    user_id = session['user_id']
+##
+##    try:
+##        # Load PO from database
+##        with DB_ENGINE.connect() as conn:
+##            result = conn.execute(text("""
+##                SELECT order_data FROM purchase_orders
+##                WHERE user_id = :user_id AND po_number = :po_number
+##            """), {"user_id": user_id, "po_number": po_number}).fetchone()
+##
+##        if not result:
+##            flash('Purchase order not found', 'error')
+##            return redirect(url_for('purchase_orders'))
+##
+##        po_data = json.loads(result[0])
+##
+##        # Generate PDF
+##        qr_b64 = generate_simple_qr(po_data)
+##        html = render_template('purchase_order_pdf.html',
+##                             data=po_data,
+##                             preview=False,
+##                             custom_qr_b64=qr_b64)
+##        pdf_bytes = generate_pdf(html, current_app.root_path)
+##
+##        return send_file(
+##            io.BytesIO(pdf_bytes),
+##            as_attachment=True,
+##            download_name=f"PO_{po_number}.pdf",
+##            mimetype='application/pdf'
+##        )
+##
+##    except Exception as e:
+##        current_app.logger.error(f"PO download error: {str(e)}")
+##        flash('Failed to download purchase order', 'error')
+##        return redirect(url_for('purchase_orders'))
 
 # stock transaction
 @app.route("/stock_transactions")
