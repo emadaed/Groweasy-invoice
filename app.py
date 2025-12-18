@@ -935,30 +935,18 @@ class InvoiceView(MethodView):
 
         try:
             if action == 'preview':
-                # Process form data
                 service.process(form_data, files, action)
 
-                # Generate QR code
+                # ✅ Use OrderProcessor and UPDATE service.data with new number
+                invoice_number = OrderProcessor.process_sale_invoice(user_id, service.data)
+                service.data['invoice_number'] = invoice_number  # ← FIX: Update the number
+
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
-
-                # ✅ NEW: Use OrderProcessor for atomic transaction
-                try:
-                    invoice_number = OrderProcessor.process_sale_invoice(user_id, service.data)
-                    # Update invoice number in service data
-                    service.data['invoice_number'] = invoice_number
-                except InsufficientStockError as e:
-                    flash(f'❌ {str(e)}', 'error')
-                    return redirect(url_for('create_invoice'))
-                except OrderProcessingError as e:
-                    current_app.logger.error(f"Order processing failed: {str(e)}")
-                    flash('Failed to process invoice. Please try again.', 'error')
-                    return redirect(url_for('create_invoice'))
 
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
             elif action == 'download':
-                # Load saved data from DB
                 with DB_ENGINE.connect() as conn:
                     result = conn.execute(text("SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id"),
                                           {"user_id": user_id}).fetchone()
@@ -971,7 +959,6 @@ class InvoiceView(MethodView):
                 html = render_template('invoice_pdf.html', data=service.data, preview=False, custom_qr_b64=qr_b64)
                 pdf_bytes = generate_pdf(html, current_app.root_path)
 
-                # Clear pending after download
                 with DB_ENGINE.begin() as conn:
                     conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
 
@@ -983,6 +970,13 @@ class InvoiceView(MethodView):
                     mimetype='application/pdf'
                 )
 
+        except InsufficientStockError as e:
+            flash(f'❌ {str(e)}', 'error')
+            return redirect(url_for('create_invoice'))
+        except OrderProcessingError as e:
+            current_app.logger.error(f"Order processing failed: {str(e)}")
+            flash('Failed to process invoice. Please try again.', 'error')
+            return redirect(url_for('create_invoice'))
         except ValueError as e:
             flash(str(e), 'error')
             return redirect(url_for('create_invoice'))
@@ -992,7 +986,6 @@ class InvoiceView(MethodView):
             return redirect(url_for('create_invoice'))
 
         return redirect(url_for('dashboard'))
-
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['POST'])
 # poll route
@@ -1132,7 +1125,6 @@ def purchase_order():
 
 
 # Purchase Order Processing
-# Purchase Order Processing
 @app.route('/purchase-order/process', methods=['POST'])
 def process_purchase_order():
     """Process purchase order submission"""
@@ -1142,63 +1134,14 @@ def process_purchase_order():
     user_id = session['user_id']
 
     try:
-        # Build PO data directly from form (skip InvoiceService validation)
-        po_data = {
-            'client_name': request.form.get('client_name', 'Unknown Supplier'),
-            'client_email': request.form.get('client_email', ''),
-            'client_phone': request.form.get('client_phone', ''),
-            'client_address': request.form.get('client_address', ''),
-            'company_name': request.form.get('company_name', ''),
-            'company_address': request.form.get('company_address', ''),
-            'company_phone': request.form.get('company_phone', ''),
-            'invoice_date': request.form.get('invoice_date', ''),
-            'due_date': request.form.get('due_date', ''),
-            'grand_total': float(request.form.get('grand_total', 0)),
-            'subtotal': float(request.form.get('subtotal', 0)),
-            'tax_amount': float(request.form.get('tax_amount', 0)),
-            'tax_rate': float(request.form.get('tax_rate', 0)),
-            'invoice_type': 'P',
-            'buyer_ntn': request.form.get('buyer_ntn', ''),
-            'seller_ntn': request.form.get('seller_ntn', ''),
-            'items': []
-        }
+        # Use PO-specific data preparation (NO stock validation)
+        from core.invoice_logic_po import prepare_po_data
+        po_data = prepare_po_data(request.form, request.files)
 
-        # Extract items from form
-        item_index = 1
-        while True:
-            product_name = request.form.get(f'item_product_{item_index}')
-            if not product_name:
-                break
-
-            qty = float(request.form.get(f'item_qty_{item_index}', 0))
-            price = float(request.form.get(f'item_price_{item_index}', 0))
-
-            # Try to find product_id from inventory
-            product_id = None
-            with DB_ENGINE.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT id FROM inventory_items
-                    WHERE name = :name AND user_id = :user_id AND is_active = TRUE
-                """), {"name": product_name, "user_id": user_id}).fetchone()
-                if result:
-                    product_id = result[0]
-
-            po_data['items'].append({
-                'product_id': product_id,
-                'name': product_name,
-                'qty': qty,
-                'price': price,
-                'total': qty * price
-            })
-
-            item_index += 1
-
-        # ✅ Use OrderProcessor for atomic transaction
+        # ✅ Process with OrderProcessor
         po_number = OrderProcessor.process_purchase_order(user_id, po_data)
-
-        # Update PO number in data
         po_data['po_number'] = po_number
-        po_data['invoice_number'] = po_number
+        po_data['invoice_number'] = po_number  # For template compatibility
 
         # Generate preview
         qr_b64 = generate_simple_qr(po_data)
@@ -1215,12 +1158,13 @@ def process_purchase_order():
 
     except OrderProcessingError as e:
         current_app.logger.error(f"PO processing failed: {str(e)}")
-        flash(f'❌ Failed to create purchase order: {str(e)}', 'error')
+        flash(f'❌ {str(e)}', 'error')
         return redirect(url_for('purchase_order'))
     except Exception as e:
         current_app.logger.error(f"Unexpected PO error: {str(e)}")
-        flash('An unexpected error occurred. Please try again.', 'error')
+        flash(f'❌ {str(e)}', 'error')
         return redirect(url_for('purchase_order'))
+
 
 # Purchase Order Download
 @app.route('/purchase-order/download/<po_number>')
