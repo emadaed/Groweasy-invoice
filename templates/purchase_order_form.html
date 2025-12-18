@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Create Purchase Order{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>📦 Create Purchase Order</h2>
+            <p class="text-muted">Generate a purchase order to track inventory purchases from suppliers</p>
+        </div>
+    </div>
+
+    <form action="{{ url_for('process_purchase_order') }}" method="POST" enctype="multipart/form-data" id="poForm">
+        <input type="hidden" name="invoice_type" value="P">
+
+        <div class="row">
+            <!-- Supplier Information -->
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">🏢 Supplier Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Supplier Name *</label>
+                            <input type="text" class="form-control" name="client_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Supplier Email</label>
+                            <input type="email" class="form-control" name="client_email">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Supplier Phone</label>
+                            <input type="tel" class="form-control" name="client_phone">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Supplier Address</label>
+                            <textarea class="form-control" name="client_address" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Supplier NTN</label>
+                            <input type="text" class="form-control" name="buyer_ntn">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Your Company Information -->
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">🏭 Your Company Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Company Name *</label>
+                            <input type="text" class="form-control" name="company_name"
+                                   value="{{ prefill_data.company_name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Company Address</label>
+                            <textarea class="form-control" name="company_address"
+                                      rows="2">{{ prefill_data.company_address }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Company Phone</label>
+                            <input type="tel" class="form-control" name="company_phone"
+                                   value="{{ prefill_data.company_phone }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Company NTN</label>
+                            <input type="text" class="form-control" name="seller_ntn"
+                                   value="{{ prefill_data.seller_ntn }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Details -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">📋 Order Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Order Date *</label>
+                        <input type="date" class="form-control" name="invoice_date"
+                               value="{{ today }}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Expected Delivery Date</label>
+                        <input type="date" class="form-control" name="due_date">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Items Section (Reuse invoice form items structure) -->
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">📦 Items to Purchase</h5>
+            </div>
+            <div class="card-body">
+                <div id="items-container">
+                    <!-- Items will be added here -->
+                </div>
+                <button type="button" class="btn btn-primary mt-3" onclick="addItem()">
+                    ➕ Add Item
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 offset-md-6">
+                        <table class="table">
+                            <tr>
+                                <td><strong>Subtotal:</strong></td>
+                                <td class="text-end"><span id="subtotal">0.00</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tax (%):</strong></td>
+                                <td class="text-end">
+                                    <input type="number" name="tax_rate" id="taxRate"
+                                           class="form-control form-control-sm text-end"
+                                           value="0" min="0" max="100" step="0.01"
+                                           onchange="calculateTotal()">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tax Amount:</strong></td>
+                                <td class="text-end"><span id="taxAmount">0.00</span></td>
+                            </tr>
+                            <tr class="table-success">
+                                <td><strong>Total:</strong></td>
+                                <td class="text-end"><strong><span id="grandTotal">0.00</span></strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden totals for submission -->
+        <input type="hidden" name="subtotal" id="subtotalInput">
+        <input type="hidden" name="tax_amount" id="taxAmountInput">
+        <input type="hidden" name="grand_total" id="grandTotalInput">
+
+        <!-- Submit Buttons -->
+        <div class="text-center mb-4">
+            <button type="submit" class="btn btn-success btn-lg">
+                ✅ Create Purchase Order
+            </button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-lg">
+                ❌ Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+let itemCount = 0;
+const inventoryItems = {{ inventory_items|tojson }};
+
+function addItem() {
+    itemCount++;
+    const container = document.getElementById('items-container');
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'row mb-3 item-row';
+    itemDiv.id = `item-${itemCount}`;
+
+    itemDiv.innerHTML = `
+        <div class="col-md-4">
+            <label class="form-label">Product</label>
+            <select class="form-control" name="item_product_${itemCount}" onchange="updateItemPrice(${itemCount})">
+                <option value="">Select Product</option>
+                ${inventoryItems.map(item =>
+                    `<option value="${item.name}" data-price="${item.cost_price || 0}">${item.name}</option>`
+                ).join('')}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Quantity</label>
+            <input type="number" class="form-control" name="item_qty_${itemCount}"
+                   min="1" value="1" onchange="calculateTotal()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Unit Price</label>
+            <input type="number" class="form-control" name="item_price_${itemCount}"
+                   step="0.01" value="0" onchange="calculateTotal()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Total</label>
+            <input type="text" class="form-control" id="item_total_${itemCount}" readonly>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">&nbsp;</label>
+            <button type="button" class="btn btn-danger w-100" onclick="removeItem(${itemCount})">
+                🗑️ Remove
+            </button>
+        </div>
+    `;
+
+    container.appendChild(itemDiv);
+    calculateTotal();
+}
+
+function updateItemPrice(itemNum) {
+    const select = document.querySelector(`[name="item_product_${itemNum}"]`);
+    const priceInput = document.querySelector(`[name="item_price_${itemNum}"]`);
+    const option = select.options[select.selectedIndex];
+    const price = option.getAttribute('data-price') || 0;
+    priceInput.value = price;
+    calculateTotal();
+}
+
+function removeItem(itemNum) {
+    document.getElementById(`item-${itemNum}`).remove();
+    calculateTotal();
+}
+
+function calculateTotal() {
+    let subtotal = 0;
+    document.querySelectorAll('.item-row').forEach((row, index) => {
+        const qty = parseFloat(row.querySelector('[name^="item_qty_"]').value) || 0;
+        const price = parseFloat(row.querySelector('[name^="item_price_"]').value) || 0;
+        const total = qty * price;
+        const totalField = row.querySelector('[id^="item_total_"]');
+        if (totalField) totalField.value = total.toFixed(2);
+        subtotal += total;
+    });
+
+    const taxRate = parseFloat(document.getElementById('taxRate').value) || 0;
+    const taxAmount = (subtotal * taxRate) / 100;
+    const grandTotal = subtotal + taxAmount;
+
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('taxAmount').textContent = taxAmount.toFixed(2);
+    document.getElementById('grandTotal').textContent = grandTotal.toFixed(2);
+
+    document.getElementById('subtotalInput').value = subtotal.toFixed(2);
+    document.getElementById('taxAmountInput').value = taxAmount.toFixed(2);
+    document.getElementById('grandTotalInput').value = grandTotal.toFixed(2);
+}
+
+// Add first item on load
+document.addEventListener('DOMContentLoaded', function() {
+    addItem();
+});
+</script>
+
+{% endblock %}
