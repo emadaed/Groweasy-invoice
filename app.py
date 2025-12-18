@@ -1184,6 +1184,39 @@ def fix_customers():
 
     return "<br>".join(results)
 
+# debug invoice data
+def debug_invoice_data():
+    """Debug function to check what data is being passed to template"""
+    sample_data = {
+        'company_name': 'Test Company',
+        'company_address': '123 Test St',
+        'company_phone': '+1234567890',
+        'company_email': 'test@company.com',
+        'company_tax_id': 'TAX123',
+        'invoice_number': 'INV-001',
+        'invoice_date': '2024-01-01',
+        'due_date': '2024-01-31',
+        'client_name': 'Test Client',
+        'client_email': 'client@test.com',
+        'client_phone': '+0987654321',
+        'client_address': '456 Client Ave',
+        'seller_ntn': '1234567-8',
+        'buyer_ntn': '8765432-1',
+        'payment_terms': 'Net 30',
+        'payment_methods': 'Bank Transfer, Credit Card',
+        'items': [
+            {'name': 'Test Item 1', 'qty': 2, 'price': 100.00, 'total': 200.00},
+            {'name': 'Test Item 2', 'qty': 1, 'price': 50.00, 'total': 50.00}
+        ],
+        'subtotal': 250.00,
+        'discount_rate': 10.0,
+        'discount_amount': 25.00,
+        'tax_rate': 17.0,
+        'tax_amount': 42.50,
+        'grand_total': 267.50,
+        'notes': 'Test note'
+    }
+    return sample_data
 
 #Backup Route (Manual Trigger)
 @app.route('/admin/backup')
