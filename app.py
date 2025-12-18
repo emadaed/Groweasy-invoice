@@ -198,91 +198,91 @@ def validate_stock_availability(user_id, invoice_items):
         print(f"Stock validation error: {e}")
         return {'success': False, 'message': 'Stock validation failed'}
 
-# update stock
-def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_number=None):
-    """Update stock with invoice reference number"""
-    try:
-
-        for item in invoice_items:
-            if item.get('product_id'):
-                product_id = item['product_id']
-                quantity = int(item.get('qty', 1))
-
-                with DB_ENGINE.begin() as conn:
-                    result = conn.execute(text("""
-                        SELECT current_stock FROM inventory_items
-                        WHERE id = :product_id AND user_id = :user_id
-                    """), {"product_id": product_id, "user_id": user_id}).fetchone()
-
-                if result:
-                    current_stock = result[0]
-
-                    if invoice_type == 'P':
-                        new_stock = current_stock + quantity
-                        movement_type = 'purchase'
-                        notes = f"Purchased {quantity} units via PO: {invoice_number}" if invoice_number else f"Purchased {quantity} units"
-                    else:
-                        new_stock = current_stock - quantity
-                        movement_type = 'sale'
-                        notes = f"Sold {quantity} units via Invoice: {invoice_number}" if invoice_number else f"Sold {quantity} units"
-
-                    success = InventoryManager.update_stock(
-                        user_id, product_id, new_stock, movement_type, invoice_number, notes
-                    )
-
-                    if success:
-                        print(f"✅ Stock updated: {item.get('name')} ({movement_type})")
-                    else:
-                        print(f"⚠️ Stock update failed for {item.get('name')}")
-
-    except Exception as e:
-        print(f"Stock update error: {e}")
-
-# unique invoice numbers
-def generate_unique_invoice_number(user_id):
-    try:
-        with DB_ENGINE.begin() as conn:
-            result = conn.execute(text("""
-                SELECT invoice_number FROM user_invoices
-                WHERE user_id = :user_id AND invoice_number LIKE 'INV-%'
-                ORDER BY id DESC LIMIT 1
-            """), {"user_id": user_id}).fetchone()
-
-            if result:
-                last_number = result[0]
-                if last_number.startswith('INV-'):
-                    try:
-                        last_num = int(last_number.split('-')[1])
-                        return f"INV-{last_num + 1:05d}"
-                    except:
-                        return "INV-00001"
-            return "INV-00001"
-    except Exception as e:
-        print(f"Invoice number generation error: {e}")
-        return f"INV-{int(time.time())}"
-
-# unique purchase order numbers
-def generate_unique_po_number(user_id):
-    try:
-        with DB_ENGINE.begin() as conn:
-            result = conn.execute(text("""
-                SELECT po_number FROM purchase_orders
-                WHERE user_id = :user_id AND po_number LIKE 'PO-%'
-                ORDER BY id DESC LIMIT 1
-            """), {"user_id": user_id}).fetchone()
-
-            if result:
-                last_number = result[0]
-                if last_number.startswith('PO-'):
-                    try:
-                        last_num = int(last_number.split('-')[1])
-                        return f"PO-{last_num + 1:05d}"
-                    except:
-                        return "PO-00001"
-            return "PO-00001"
-    except Exception as e:
-        print(f"PO number generation error: {e}")
-        return f"PO-{int(time.time())}"
+### update stock
+##def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_number=None):
+##    """Update stock with invoice reference number"""
+##    try:
+##
+##        for item in invoice_items:
+##            if item.get('product_id'):
+##                product_id = item['product_id']
+##                quantity = int(item.get('qty', 1))
+##
+##                with DB_ENGINE.begin() as conn:
+##                    result = conn.execute(text("""
+##                        SELECT current_stock FROM inventory_items
+##                        WHERE id = :product_id AND user_id = :user_id
+##                    """), {"product_id": product_id, "user_id": user_id}).fetchone()
+##
+##                if result:
+##                    current_stock = result[0]
+##
+##                    if invoice_type == 'P':
+##                        new_stock = current_stock + quantity
+##                        movement_type = 'purchase'
+##                        notes = f"Purchased {quantity} units via PO: {invoice_number}" if invoice_number else f"Purchased {quantity} units"
+##                    else:
+##                        new_stock = current_stock - quantity
+##                        movement_type = 'sale'
+##                        notes = f"Sold {quantity} units via Invoice: {invoice_number}" if invoice_number else f"Sold {quantity} units"
+##
+##                    success = InventoryManager.update_stock(
+##                        user_id, product_id, new_stock, movement_type, invoice_number, notes
+##                    )
+##
+##                    if success:
+##                        print(f"✅ Stock updated: {item.get('name')} ({movement_type})")
+##                    else:
+##                        print(f"⚠️ Stock update failed for {item.get('name')}")
+##
+##    except Exception as e:
+##        print(f"Stock update error: {e}")
+##
+### unique invoice numbers
+##def generate_unique_invoice_number(user_id):
+##    try:
+##        with DB_ENGINE.begin() as conn:
+##            result = conn.execute(text("""
+##                SELECT invoice_number FROM user_invoices
+##                WHERE user_id = :user_id AND invoice_number LIKE 'INV-%'
+##                ORDER BY id DESC LIMIT 1
+##            """), {"user_id": user_id}).fetchone()
+##
+##            if result:
+##                last_number = result[0]
+##                if last_number.startswith('INV-'):
+##                    try:
+##                        last_num = int(last_number.split('-')[1])
+##                        return f"INV-{last_num + 1:05d}"
+##                    except:
+##                        return "INV-00001"
+##            return "INV-00001"
+##    except Exception as e:
+##        print(f"Invoice number generation error: {e}")
+##        return f"INV-{int(time.time())}"
+##
+### unique purchase order numbers
+##def generate_unique_po_number(user_id):
+##    try:
+##        with DB_ENGINE.begin() as conn:
+##            result = conn.execute(text("""
+##                SELECT po_number FROM purchase_orders
+##                WHERE user_id = :user_id AND po_number LIKE 'PO-%'
+##                ORDER BY id DESC LIMIT 1
+##            """), {"user_id": user_id}).fetchone()
+##
+##            if result:
+##                last_number = result[0]
+##                if last_number.startswith('PO-'):
+##                    try:
+##                        last_num = int(last_number.split('-')[1])
+##                        return f"PO-{last_num + 1:05d}"
+##                    except:
+##                        return "PO-00001"
+##            return "PO-00001"
+##    except Exception as e:
+##        print(f"PO number generation error: {e}")
+##        return f"PO-{int(time.time())}"
 
 # save pending invoice
 def save_pending_invoice(user_id, invoice_data):
@@ -1132,6 +1132,7 @@ def purchase_order():
 
 
 # Purchase Order Processing
+# Purchase Order Processing
 @app.route('/purchase-order/process', methods=['POST'])
 def process_purchase_order():
     """Process purchase order submission"""
@@ -1141,36 +1142,75 @@ def process_purchase_order():
     user_id = session['user_id']
 
     try:
-        # Build PO data from form (similar structure to invoice)
-        from core.services import InvoiceService
-        service = InvoiceService(user_id)
-        form_data = request.form
-        files = request.files
+        # Build PO data directly from form (skip InvoiceService validation)
+        po_data = {
+            'client_name': request.form.get('client_name', 'Unknown Supplier'),
+            'client_email': request.form.get('client_email', ''),
+            'client_phone': request.form.get('client_phone', ''),
+            'client_address': request.form.get('client_address', ''),
+            'company_name': request.form.get('company_name', ''),
+            'company_address': request.form.get('company_address', ''),
+            'company_phone': request.form.get('company_phone', ''),
+            'invoice_date': request.form.get('invoice_date', ''),
+            'due_date': request.form.get('due_date', ''),
+            'grand_total': float(request.form.get('grand_total', 0)),
+            'subtotal': float(request.form.get('subtotal', 0)),
+            'tax_amount': float(request.form.get('tax_amount', 0)),
+            'tax_rate': float(request.form.get('tax_rate', 0)),
+            'invoice_type': 'P',
+            'buyer_ntn': request.form.get('buyer_ntn', ''),
+            'seller_ntn': request.form.get('seller_ntn', ''),
+            'items': []
+        }
 
-        # Process form data (reusing invoice service processing logic)
-        service.process(form_data, files, 'preview')
+        # Extract items from form
+        item_index = 1
+        while True:
+            product_name = request.form.get(f'item_product_{item_index}')
+            if not product_name:
+                break
 
-        # Set order type to Purchase
-        service.data['invoice_type'] = 'P'
+            qty = float(request.form.get(f'item_qty_{item_index}', 0))
+            price = float(request.form.get(f'item_price_{item_index}', 0))
+
+            # Try to find product_id from inventory
+            product_id = None
+            with DB_ENGINE.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT id FROM inventory_items
+                    WHERE name = :name AND user_id = :user_id AND is_active = TRUE
+                """), {"name": product_name, "user_id": user_id}).fetchone()
+                if result:
+                    product_id = result[0]
+
+            po_data['items'].append({
+                'product_id': product_id,
+                'name': product_name,
+                'qty': qty,
+                'price': price,
+                'total': qty * price
+            })
+
+            item_index += 1
 
         # ✅ Use OrderProcessor for atomic transaction
-        po_number = OrderProcessor.process_purchase_order(user_id, service.data)
+        po_number = OrderProcessor.process_purchase_order(user_id, po_data)
 
         # Update PO number in data
-        service.data['po_number'] = po_number
-        service.data['invoice_number'] = po_number  # For display compatibility
+        po_data['po_number'] = po_number
+        po_data['invoice_number'] = po_number
 
         # Generate preview
-        qr_b64 = generate_simple_qr(service.data)
+        qr_b64 = generate_simple_qr(po_data)
         html = render_template('purchase_order_pdf.html',
-                             data=service.data,
+                             data=po_data,
                              preview=True,
                              custom_qr_b64=qr_b64)
 
         flash(f'✅ Purchase Order {po_number} created successfully!', 'success')
         return render_template('purchase_order_preview.html',
                              html=html,
-                             data=service.data,
+                             data=po_data,
                              nonce=g.nonce)
 
     except OrderProcessingError as e:
@@ -1181,7 +1221,6 @@ def process_purchase_order():
         current_app.logger.error(f"Unexpected PO error: {str(e)}")
         flash('An unexpected error occurred. Please try again.', 'error')
         return redirect(url_for('purchase_order'))
-
 
 # Purchase Order Download
 @app.route('/purchase-order/download/<po_number>')

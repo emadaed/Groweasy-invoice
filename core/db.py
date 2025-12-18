@@ -200,3 +200,22 @@ def check_schema():
 # drop_all_tables()  # Comment this out after first successful run
 create_all_tables()
 # Check what schema we actually have check_schema()
+
+def fix_reference_id_column():
+    """Fix reference_id column type from INTEGER to TEXT"""
+    with DB_ENGINE.begin() as conn:
+        try:
+            conn.execute(text("""
+                ALTER TABLE stock_movements
+                ALTER COLUMN reference_id TYPE TEXT
+            """))
+            print("✅ Fixed reference_id column to TEXT type")
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                print("ℹ️  Column already correct or table doesn't exist yet")
+            else:
+                print(f"⚠️  Column fix note: {e}")
+
+# Run the fix
+fix_reference_id_column()
+
