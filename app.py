@@ -1089,29 +1089,6 @@ def purchase_orders():
                          nonce=g.nonce)
 
 
-
-### stock transaction
-##@app.route("/stock_transactions")
-##def stock_transactions():
-##    """View all stock movements"""
-##    if 'user_id' not in session:
-##        return redirect(url_for('login'))
-##
-##    with DB_ENGINE.connect() as conn:
-##        transactions = conn.execute(text("""
-##            SELECT sm.id, ii.name, sm.movement_type, sm.quantity,
-##                   sm.reference_id, sm.notes, sm.created_at
-##            FROM stock_movements sm
-##            JOIN inventory_items ii ON sm.product_id = ii.id
-##            WHERE sm.user_id = :user_id
-##            ORDER BY sm.created_at DESC
-##            LIMIT 100
-##        """), {"user_id": session['user_id']}).fetchall()
-##
-##    return render_template("stock_transactions.html",
-##                         transactions=transactions,
-##                         nonce=g.nonce)
-##
 # supplier management
 @app.route("/suppliers")
 def suppliers():
@@ -1207,84 +1184,6 @@ def fix_customers():
 
     return "<br>".join(results)
 
-###debug invnetory
-##@app.route("/debug_inventory")
-##def debug_inventory():
-##    if 'user_id' not in session:
-##        return jsonify({'error': 'Not logged in'})
-##
-##    with DB_ENGINE.connect() as conn:
-##        items = conn.execute(text("""
-##            SELECT id, name, current_stock, min_stock_level, selling_price
-##            FROM inventory_items WHERE user_id = :user_id
-##        """), {"user_id": session['user_id']}).fetchall()
-##
-##        movements = conn.execute(text("""
-##            SELECT product_id, movement_type, quantity, created_at
-##            FROM stock_movements WHERE user_id = :user_id
-##            ORDER BY created_at DESC LIMIT 10
-##        """), {"user_id": session['user_id']}).fetchall()
-##
-##    return jsonify({
-##        'inventory_items': [{
-##            'id': item[0], 'name': item[1], 'current_stock': item[2],
-##            'min_stock': item[3], 'price': item[4]
-##        } for item in items],
-##        'recent_movements': [{
-##            'product_id': mov[0], 'type': mov[1], 'quantity': mov[2], 'time': mov[3]
-##        } for mov in movements]
-##    })
-##
-###debug stock
-##@app.route("/debug_stock")
-##def debug_stock():
-##    if 'user_id' not in session:
-##        return "Not logged in"
-##
-##    with DB_ENGINE.connect() as conn:
-##        items = conn.execute(text("""
-##            SELECT id, name, current_stock FROM inventory_items
-##            WHERE user_id = :user_id
-##        """), {"user_id": session['user_id']}).fetchall()
-##
-##    result = "<h3>Current Inventory:</h3>"
-##    for item in items:
-##        result += f"<p>ID: {item[0]}, Name: {item[1]}, Stock: {item[2]}</p>"
-##    return result
-##
-### debug invoice data
-##def debug_invoice_data():
-##    """Debug function to check what data is being passed to template"""
-##    sample_data = {
-##        'company_name': 'Test Company',
-##        'company_address': '123 Test St',
-##        'company_phone': '+1234567890',
-##        'company_email': 'test@company.com',
-##        'company_tax_id': 'TAX123',
-##        'invoice_number': 'INV-001',
-##        'invoice_date': '2024-01-01',
-##        'due_date': '2024-01-31',
-##        'client_name': 'Test Client',
-##        'client_email': 'client@test.com',
-##        'client_phone': '+0987654321',
-##        'client_address': '456 Client Ave',
-##        'seller_ntn': '1234567-8',
-##        'buyer_ntn': '8765432-1',
-##        'payment_terms': 'Net 30',
-##        'payment_methods': 'Bank Transfer, Credit Card',
-##        'items': [
-##            {'name': 'Test Item 1', 'qty': 2, 'price': 100.00, 'total': 200.00},
-##            {'name': 'Test Item 2', 'qty': 1, 'price': 50.00, 'total': 50.00}
-##        ],
-##        'subtotal': 250.00,
-##        'discount_rate': 10.0,
-##        'discount_amount': 25.00,
-##        'tax_rate': 17.0,
-##        'tax_amount': 42.50,
-##        'grand_total': 267.50,
-##        'notes': 'Test note'
-##    }
-##    return sample_data
 
 #Backup Route (Manual Trigger)
 @app.route('/admin/backup')
