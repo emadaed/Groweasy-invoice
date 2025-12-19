@@ -91,7 +91,7 @@ def create_all_tables():
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                sku TEXT UNIQUE,
+                sku TEXT,
                 category TEXT,
                 description TEXT,
                 current_stock INTEGER DEFAULT 0,
@@ -196,6 +196,32 @@ def check_schema():
     except Exception as e:
         print(f"⚠️ Schema check failed: {e}")
 
+def apply_inventory_constraints():
+    """Automates the ALTER TABLE commands for inventory_items"""
+    with DB_ENGINE.begin() as conn:
+        try:
+            # 1. Drop the old single-column unique constraint if it exists
+            # Note: PostgreSQL often names this 'inventory_items_sku_key' by default
+            conn.execute(text("""
+                ALTER TABLE inventory_items
+                DROP CONSTRAINT IF EXISTS inventory_items_sku_key;
+            """))
+
+            # 2. Add the new composite unique constraint (user_id + sku)
+            # We use a try/except block specifically for this because
+            # 'ADD UNIQUE' doesn't have an 'IF NOT EXISTS' clause in standard SQL
+            conn.execute(text("""
+                ALTER TABLE inventory_items
+                ADD CONSTRAINT unique_user_sku UNIQUE (user_id, sku);
+            """))
+            print("✅ Inventory constraints updated: (user_id, sku) is now unique")
+
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print("ℹ️ Inventory constraints are already up to date.")
+            else:
+                print(f"⚠️ Constraint update note: {e}")
+
 # Run on import (safe – IF NOT EXISTS)
 # drop_all_tables()  # Comment this out after first successful run
 #create_all_tables()
@@ -219,3 +245,4 @@ def fix_reference_id_column():
 # Run the fix
 #fix_reference_id_column()
 
+apply_inventory_constraints()
