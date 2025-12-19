@@ -1,4 +1,4 @@
-# app.py 16 Dec 2025 10:06 PM PKST
+# app.py 20 Dec 2025 04:44 AM PKST
 # Standard library
 import io
 import time
@@ -124,8 +124,9 @@ security_headers(app)
 # === REDUCE LOG NOISE (fixes Railway rate-limit warning) ===
 import logging
 # Set root logger to INFO (your own prints stay)
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.WARNING)
 # Silence the very noisy third-party libraries
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 logging.getLogger('weasyprint').setLevel(logging.ERROR)
 logging.getLogger('fontTools').setLevel(logging.ERROR)
 logging.getLogger('PIL').setLevel(logging.ERROR)
