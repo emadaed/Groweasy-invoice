@@ -86,6 +86,26 @@ app.template_folder = str(app_root / "templates")
 app.static_folder = str(app_root / "static")
 print(f"✅ Templates folder: {app.template_folder}")
 print(f"✅ Static folder: {app.static_folder}")
+# Run one-time fix on startup
+@app.before_first_request
+def fix_database_on_startup():
+    """Fix common database issues on first request"""
+    try:
+        with DB_ENGINE.begin() as conn:
+            # Fix empty dates (PostgreSQL compatibility)
+            conn.execute(text("""
+                UPDATE purchase_orders
+                SET delivery_date = NULL
+                WHERE delivery_date = '' OR delivery_date IS NULL
+            """))
+            conn.execute(text("""
+                UPDATE user_invoices
+                SET due_date = NULL
+                WHERE due_date = '' OR due_date IS NULL
+            """))
+            print("✅ Database date fields fixed on startup")
+    except Exception as e:
+        print(f"⚠️ Startup fix skipped: {e}")
 
 ##from tasks import celery
 ##celery.conf.update(app.config)
@@ -991,8 +1011,13 @@ class InvoiceView(MethodView):
             elif action == 'download':
                 # Load saved data from DB
                 with DB_ENGINE.connect() as conn:
-                    result = conn.execute(text("SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id"),
-                                          {"user_id": user_id}).fetchone()
+                    result = conn.execute(text("""
+                        SELECT invoice_data FROM user_invoices
+                        WHERE user_id = :user_id
+                        ORDER BY id DESC
+                        LIMIT 1
+                    """),{"user_id": user_id}).fetchone()
+
                 if not result:
                     flash("No invoice data found. Please generate preview first.", "error")
                     return redirect(url_for('create_invoice'))
@@ -1330,6 +1355,44 @@ def health_check():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+
+
+# Add this in app.py after other routes
+@app.route("/admin/fix_dates")
+def fix_date_issues():
+    """One-time fix for empty date strings in PostgreSQL"""
+    if 'user_id' not in session:
+        return "Not authorized"
+
+    # Simple admin check (first user is admin)
+    if session['user_id'] != 1:
+        return "Admin only"
+
+    try:
+        with DB_ENGINE.begin() as conn:
+            # Fix empty dates in purchase_orders
+            result1 = conn.execute(text("""
+                UPDATE purchase_orders
+                SET delivery_date = NULL
+                WHERE delivery_date = ''
+            """))
+
+            # Fix empty dates in user_invoices
+            result2 = conn.execute(text("""
+                UPDATE user_invoices
+                SET due_date = NULL
+                WHERE due_date = ''
+            """))
+
+            return f"""
+            ✅ Dates fixed!<br>
+            Purchase orders updated: {result1.rowcount}<br>
+            Invoices updated: {result2.rowcount}<br><br>
+            <strong>IMPORTANT:</strong> Remove this route after running!
+            """
+
+    except Exception as e:
+        return f"Error: {e}<br><br>You may need to run SQL directly (see below)."
 #API status
 @app.route('/api/status')
 def system_status():

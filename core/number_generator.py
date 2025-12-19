@@ -18,16 +18,19 @@ class NumberGenerator:
             user_id, 'PO-', 'purchase_orders', 'po_number'
         )
 
+    # _generate_number method:
     @staticmethod
     def _generate_number(user_id, prefix, table, column):
         """Generic number generator"""
         try:
+            from core.db import DB_ENGINE
             with DB_ENGINE.begin() as conn:
-                # Get the last number
+                # PostgreSQL-safe query
                 result = conn.execute(text(f"""
                     SELECT {column} FROM {table}
                     WHERE user_id = :user_id AND {column} LIKE :prefix
-                    ORDER BY id DESC LIMIT 1
+                    ORDER BY LENGTH({column}) DESC, {column} DESC
+                    LIMIT 1
                 """), {
                     "user_id": user_id,
                     "prefix": f"{prefix}%"
@@ -48,6 +51,7 @@ class NumberGenerator:
 
         except Exception as e:
             print(f"⚠️ Number generation error for {prefix}: {e}")
+            import time
             # Fallback: timestamp-based number
-            timestamp = int(time.time() % 100000)  # Last 5 digits
+            timestamp = int(time.time() % 100000)
             return f"{prefix}{timestamp:05d}"

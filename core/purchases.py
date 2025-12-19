@@ -44,13 +44,13 @@ def init_purchase_tables():
 def save_purchase_order(user_id, order_data):
     """Save purchase order and auto-update supplier"""
     with DB_ENGINE.begin() as conn:
-        # ALWAYS generate a fresh PO number, don't trust incoming data
+        # FIX: ALWAYS generate fresh PO number
         from core.number_generator import NumberGenerator
         po_number = NumberGenerator.generate_po_number(user_id)
 
         print(f"🔍 Generated fresh PO number: {po_number}")
 
-        # Update order_data with correct PO number for JSON storage
+        # Update order_data with correct PO number
         order_data['invoice_number'] = po_number
 
         supplier_name = order_data.get('client_name', 'Unknown Supplier')
@@ -58,6 +58,12 @@ def save_purchase_order(user_id, order_data):
         delivery_date = order_data.get('due_date', '')
         grand_total = float(order_data.get('grand_total', 0))
         order_json = json.dumps(order_data)
+
+        # FIX: Convert empty dates to None for PostgreSQL
+        if not order_date:
+            order_date = None
+        if not delivery_date:
+            delivery_date = None
 
         conn.execute(text('''
             INSERT INTO purchase_orders
