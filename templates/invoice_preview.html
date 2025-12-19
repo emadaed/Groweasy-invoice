@@ -7,12 +7,14 @@
         </div>
     </div>
     <div class="text-center mt-4">
-        <!-- Download uses POST -->
-        <form action="{{ url_for('invoice_process') }}?action=download" method="POST" style="display: inline;">
-            <button type="submit" class="btn btn-success btn-lg">
-                Download PDF
-            </button>
-        </form>
+        <!-- Simple GET request for download -->
+        <a href="{{ url_for('invoice_process', action='download',
+                          invoice_number=data.invoice_number,
+                          invoice_type=data.invoice_type) }}"
+           class="btn btn-success btn-lg">
+            Download {{ 'Purchase Order' if data.invoice_type == 'P' else 'Invoice' }}
+        </a>
+
         <a href="{{ url_for('create_invoice') }}" class="btn btn-secondary btn-lg ms-3">
             Create New
         </a>
