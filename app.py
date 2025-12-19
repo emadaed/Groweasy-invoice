@@ -1,6 +1,7 @@
 # app.py 16 Dec 2025 10:06 PM PKST
 # Standard library
 import io
+import time
 import json
 import base64
 import os
@@ -586,7 +587,6 @@ def get_inventory_items_api():
 @app.route("/adjust_stock_audit", methods=['POST'])
 @limiter.limit("10 per minute")
 def adjust_stock_audit():
-    """Enhanced stock adjustment using existing InventoryManager"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -594,7 +594,6 @@ def adjust_stock_audit():
     product_id = request.form.get('product_id')
     adjustment_type = request.form.get('adjustment_type')
     quantity = int(request.form.get('quantity', 0))
-    unit_cost = request.form.get('unit_cost')
     new_cost_price = request.form.get('new_cost_price')
     new_selling_price = request.form.get('new_selling_price')
     reason = request.form.get('reason', '')
@@ -604,15 +603,14 @@ def adjust_stock_audit():
         from core.inventory import InventoryManager
         from core.db import DB_ENGINE
         from sqlalchemy import text
-        import time
+        from core.auth import get_user_profile  # FIXED: remove "_cached"
 
-        # Get user's currency symbol from profile
-        from core.auth import get_user_profile_cached
-        user_profile = get_user_profile_cached(user_id)
+        # Get user's currency
+        user_profile = get_user_profile(user_id)
         currency_code = user_profile.get('preferred_currency', 'PKR') if user_profile else 'PKR'
         currency_symbol = CURRENCY_SYMBOLS.get(currency_code, 'Rs.')
 
-        # Get current product info
+        # Get product info
         product = InventoryManager.get_product_details(product_id, user_id)
         if not product:
             flash('Product not found', 'error')
@@ -639,22 +637,17 @@ def adjust_stock_audit():
             flash('Invalid adjustment type', 'error')
             return redirect(url_for('inventory'))
 
-        # Prepare notes with currency symbol
-        full_notes = f"{reason}. {notes}"
-        if unit_cost:
-            full_notes += f" | Unit cost: {currency_symbol}{unit_cost}"
-
-        # Use existing InventoryManager.update_stock()
+        # Update stock
         success = InventoryManager.update_stock(
             user_id=user_id,
             product_id=product_id,
             new_quantity=new_stock,
             movement_type=movement_type,
             reference_id=f"ADJ-{int(time.time())}",
-            notes=full_notes
+            notes=f"{reason}. {notes}"
         )
 
-        # Update prices if provided
+        # Update prices
         if success and (new_cost_price or new_selling_price):
             with DB_ENGINE.begin() as conn:
                 updates = []
@@ -673,7 +666,7 @@ def adjust_stock_audit():
                     conn.execute(text(sql), params)
 
         if success:
-            flash(f'✅ {product["name"]} updated successfully! Stock: {current_stock}→{new_stock}', 'success')
+            flash(f'✅ {product["name"]} updated! Stock: {current_stock}→{new_stock}', 'success')
         else:
             flash('Error updating product', 'error')
 
@@ -681,10 +674,9 @@ def adjust_stock_audit():
 
     except Exception as e:
         print(f"Stock adjustment error: {e}")
-        import traceback
-        traceback.print_exc()  # This will show full error in logs
-        flash(f'Error updating product: {str(e)[:100]}', 'error')
+        flash('Error updating product', 'error')
         return redirect(url_for('inventory'))
+
 # inventory report
 @app.route("/download_inventory_report")
 def download_inventory_report():
