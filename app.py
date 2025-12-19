@@ -239,52 +239,6 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
     except Exception as e:
         print(f"Stock update error: {e}")
 
-### unique invoice numbers
-##def generate_unique_invoice_number(user_id):
-##    try:
-##        with DB_ENGINE.begin() as conn:
-##            result = conn.execute(text("""
-##                SELECT invoice_number FROM user_invoices
-##                WHERE user_id = :user_id AND invoice_number LIKE 'INV-%'
-##                ORDER BY id DESC LIMIT 1
-##            """), {"user_id": user_id}).fetchone()
-##
-##            if result:
-##                last_number = result[0]
-##                if last_number.startswith('INV-'):
-##                    try:
-##                        last_num = int(last_number.split('-')[1])
-##                        return f"INV-{last_num + 1:05d}"
-##                    except:
-##                        return "INV-00001"
-##            return "INV-00001"
-##    except Exception as e:
-##        print(f"Invoice number generation error: {e}")
-##        return f"INV-{int(time.time())}"
-##
-### unique purchase order numbers
-##def generate_unique_po_number(user_id):
-##    try:
-##        with DB_ENGINE.begin() as conn:
-##            result = conn.execute(text("""
-##                SELECT po_number FROM purchase_orders
-##                WHERE user_id = :user_id AND po_number LIKE 'PO-%'
-##                ORDER BY id DESC LIMIT 1
-##            """), {"user_id": user_id}).fetchone()
-##
-##            if result:
-##                last_number = result[0]
-##                if last_number.startswith('PO-'):
-##                    try:
-##                        last_num = int(last_number.split('-')[1])
-##                        return f"PO-{last_num + 1:05d}"
-##                    except:
-##                        return "PO-00001"
-##            return "PO-00001"
-##    except Exception as e:
-##        print(f"PO number generation error: {e}")
-##        return f"PO-{int(time.time())}"
-
 # save pending invoice
 def save_pending_invoice(user_id, invoice_data):
     with DB_ENGINE.begin() as conn:
@@ -650,6 +604,13 @@ def adjust_stock_audit():
         from core.inventory import InventoryManager
         from core.db import DB_ENGINE
         from sqlalchemy import text
+        import time
+
+        # Get user's currency symbol from profile
+        from core.auth import get_user_profile_cached
+        user_profile = get_user_profile_cached(user_id)
+        currency_code = user_profile.get('preferred_currency', 'PKR') if user_profile else 'PKR'
+        currency_symbol = CURRENCY_SYMBOLS.get(currency_code, 'Rs.')
 
         # Get current product info
         product = InventoryManager.get_product_details(product_id, user_id)
@@ -678,7 +639,7 @@ def adjust_stock_audit():
             flash('Invalid adjustment type', 'error')
             return redirect(url_for('inventory'))
 
-        # Prepare notes
+        # Prepare notes with currency symbol
         full_notes = f"{reason}. {notes}"
         if unit_cost:
             full_notes += f" | Unit cost: {currency_symbol}{unit_cost}"
@@ -720,9 +681,10 @@ def adjust_stock_audit():
 
     except Exception as e:
         print(f"Stock adjustment error: {e}")
-        flash('Error updating product', 'error')
+        import traceback
+        traceback.print_exc()  # This will show full error in logs
+        flash(f'Error updating product: {str(e)[:100]}', 'error')
         return redirect(url_for('inventory'))
-
 # inventory report
 @app.route("/download_inventory_report")
 def download_inventory_report():
