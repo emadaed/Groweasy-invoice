@@ -3,7 +3,13 @@ from sqlalchemy import create_engine, text
 import os
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///users.db')
-DB_ENGINE = create_engine(DATABASE_URL)
+DB_ENGINE = create_engine(
+    DATABASE_URL,
+    pool_size=10,            # Keeps a few connections ready
+    max_overflow=20,        # Allows extra connections during busy times
+    pool_recycle=300,       # Closes and reopens connections every 5 mins to prevent "stale" SSL errors
+    pool_pre_ping=True      # IMPORTANT: Checks if the connection is alive before using it
+)
 
 print(f"✅ Database connected: {DATABASE_URL[:50]}...")  # Debug
 
