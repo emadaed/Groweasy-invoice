@@ -168,6 +168,8 @@ def inject_currency():
 # STOCK VALIDATION
 def validate_stock_availability(user_id, invoice_items):
     """Validate stock availability BEFORE invoice processing"""
+    if invoice_type == 'P':  # Purchase order - NO validation needed
+        return {'success': True, 'message': 'Purchase order - no stock check needed'}
     try:
         with DB_ENGINE.begin() as conn:
             for item in invoice_items:
@@ -627,33 +629,99 @@ def get_inventory_items_api():
     return jsonify(inventory_data)
 
 # stock adjustment
-@app.route("/adjust_stock", methods=['POST'])
-def adjust_stock():
-    """Adjust product stock quantity"""
+@app.route("/adjust_stock_audit", methods=['POST'])
+@limiter.limit("10 per minute")
+def adjust_stock_audit():
+    """Enhanced stock adjustment using existing InventoryManager"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    from core.inventory import InventoryManager
-
+    user_id = session['user_id']
     product_id = request.form.get('product_id')
-    new_quantity = int(request.form.get('new_quantity'))
-    notes = request.form.get('notes', 'Manual adjustment')
+    adjustment_type = request.form.get('adjustment_type')
+    quantity = int(request.form.get('quantity', 0))
+    unit_cost = request.form.get('unit_cost')
+    new_cost_price = request.form.get('new_cost_price')
+    new_selling_price = request.form.get('new_selling_price')
+    reason = request.form.get('reason', '')
+    notes = request.form.get('notes', '')
 
-    success = InventoryManager.update_stock(
-        session['user_id'],
-        product_id,
-        new_quantity,
-        'adjustment',
-        None,
-        notes
-    )
+    try:
+        from core.inventory import InventoryManager
+        from core.db import DB_ENGINE
+        from sqlalchemy import text
 
-    if success:
-        flash(random_success_message('stock_updated'), 'success')
-    else:
-        flash('Error updating stock', 'error')
+        # Get current product info
+        product = InventoryManager.get_product_details(product_id, user_id)
+        if not product:
+            flash('Product not found', 'error')
+            return redirect(url_for('inventory'))
 
-    return redirect(url_for('inventory'))
+        # Calculate new stock
+        current_stock = product['current_stock']
+        if adjustment_type == 'add_stock':
+            new_stock = current_stock + quantity
+            movement_type = 'stock_adjustment_add'
+        elif adjustment_type == 'remove_stock':
+            new_stock = current_stock - quantity
+            movement_type = 'stock_adjustment_remove'
+        elif adjustment_type == 'set_stock':
+            new_stock = quantity
+            movement_type = 'stock_adjustment_set'
+        elif adjustment_type == 'damaged':
+            new_stock = current_stock - quantity
+            movement_type = 'damaged_goods'
+        elif adjustment_type == 'found_stock':
+            new_stock = current_stock + quantity
+            movement_type = 'found_stock'
+        else:
+            flash('Invalid adjustment type', 'error')
+            return redirect(url_for('inventory'))
+
+        # Prepare notes
+        full_notes = f"{reason}. {notes}"
+        if unit_cost:
+            full_notes += f" | Unit cost: {currency_symbol}{unit_cost}"
+
+        # Use existing InventoryManager.update_stock()
+        success = InventoryManager.update_stock(
+            user_id=user_id,
+            product_id=product_id,
+            new_quantity=new_stock,
+            movement_type=movement_type,
+            reference_id=f"ADJ-{int(time.time())}",
+            notes=full_notes
+        )
+
+        # Update prices if provided
+        if success and (new_cost_price or new_selling_price):
+            with DB_ENGINE.begin() as conn:
+                updates = []
+                params = {"product_id": product_id, "user_id": user_id}
+
+                if new_cost_price and new_cost_price.strip():
+                    updates.append("cost_price = :cost_price")
+                    params["cost_price"] = float(new_cost_price)
+
+                if new_selling_price and new_selling_price.strip():
+                    updates.append("selling_price = :selling_price")
+                    params["selling_price"] = float(new_selling_price)
+
+                if updates:
+                    sql = f"UPDATE inventory_items SET {', '.join(updates)} WHERE id = :product_id AND user_id = :user_id"
+                    conn.execute(text(sql), params)
+
+        if success:
+            flash(f'✅ {product["name"]} updated successfully! Stock: {current_stock}→{new_stock}', 'success')
+        else:
+            flash('Error updating product', 'error')
+
+        return redirect(url_for('inventory'))
+
+    except Exception as e:
+        print(f"Stock adjustment error: {e}")
+        flash('Error updating product', 'error')
+        return redirect(url_for('inventory'))
 
 # inventory report
 @app.route("/download_inventory_report")
@@ -1330,43 +1398,6 @@ def health_check():
         }), 500
 
 
-
-# Add this in app.py after other routes
-@app.route("/admin/fix_dates")
-def fix_date_issues():
-    """One-time fix for empty date strings in PostgreSQL"""
-    if 'user_id' not in session:
-        return "Not authorized"
-
-    # Simple admin check (first user is admin)
-    if session['user_id'] != 1:
-        return "Admin only"
-
-    try:
-        with DB_ENGINE.begin() as conn:
-            # Fix empty dates in purchase_orders
-            result1 = conn.execute(text("""
-                UPDATE purchase_orders
-                SET delivery_date = NULL
-                WHERE delivery_date IS NOT NULL AND delivery_date::text = ''
-            """))
-
-            # Fix empty dates in user_invoices
-            result2 = conn.execute(text("""
-                UPDATE user_invoices
-                SET due_date = NULL
-                WHERE due_date = ''
-            """))
-
-            return f"""
-            ✅ Dates fixed!<br>
-            Purchase orders updated: {result1.rowcount}<br>
-            Invoices updated: {result2.rowcount}<br><br>
-            <strong>IMPORTANT:</strong> Remove this route after running!
-            """
-
-    except Exception as e:
-        return f"Error: {e}<br><br>You may need to run SQL directly (see below)."
 #API status
 @app.route('/api/status')
 def system_status():
