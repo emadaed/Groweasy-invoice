@@ -86,26 +86,6 @@ app.template_folder = str(app_root / "templates")
 app.static_folder = str(app_root / "static")
 print(f"✅ Templates folder: {app.template_folder}")
 print(f"✅ Static folder: {app.static_folder}")
-# Run one-time fix on startup
-@app.before_first_request
-def fix_database_on_startup():
-    """Fix common database issues on first request"""
-    try:
-        with DB_ENGINE.begin() as conn:
-            # Fix empty dates (PostgreSQL compatibility)
-            conn.execute(text("""
-                UPDATE purchase_orders
-                SET delivery_date = NULL
-                WHERE delivery_date = '' OR delivery_date IS NULL
-            """))
-            conn.execute(text("""
-                UPDATE user_invoices
-                SET due_date = NULL
-                WHERE due_date = '' OR due_date IS NULL
-            """))
-            print("✅ Database date fields fixed on startup")
-    except Exception as e:
-        print(f"⚠️ Startup fix skipped: {e}")
 
 ##from tasks import celery
 ##celery.conf.update(app.config)
