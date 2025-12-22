@@ -1,4 +1,6 @@
-// form_items.js - INVENTORY-ONLY VERSION (Manual Entry Removed)
+// form_items.js - Updated for modern polished UI (works with new form.html + custom.css)
+// Supports: + Add Item button → modal search, dynamic rows, real-time total, clean display
+
 class InvoiceFormManager {
     constructor() {
         this.inventoryData = [];
@@ -7,11 +9,11 @@ class InvoiceFormManager {
     }
 
     initialize() {
-        console.log('🔄 Initializing invoice form...');
+        console.log('🔄 Initializing invoice form (modern UI version)...');
         this.loadInventoryData();
         this.setupCoreEventListeners();
-        this.createInventorySection();
         this.updateEmptyState();
+        this.updateGrandTotal(); // Initial total
     }
 
     loadInventoryData() {
@@ -20,7 +22,7 @@ class InvoiceFormManager {
             .then(items => {
                 console.log(`📦 Loaded ${items.length} inventory items`);
                 this.inventoryData = items;
-                this.updateInventoryDropdown();
+                this.updateInventoryDropdown(); // Keep for legacy if needed
             })
             .catch(error => {
                 console.error('❌ Failed to load inventory:', error);
@@ -28,13 +30,13 @@ class InvoiceFormManager {
     }
 
     setupCoreEventListeners() {
+        // Remove item buttons
         document.addEventListener('click', (e) => {
-            // Remove item buttons
             if (e.target.classList.contains('removeItemBtn')) {
                 this.removeItem(e.target);
             }
 
-            // Inventory add button
+            // Legacy dropdown add (if still in DOM)
             if (e.target.id === 'addInventoryBtn') {
                 this.addInventoryItemFromDropdown();
             }
@@ -44,38 +46,46 @@ class InvoiceFormManager {
                 this.showAllInventory();
             }
 
-            // Search result add buttons
+            // Search result add buttons in modal
             if (e.target.classList.contains('add-inventory-search-item')) {
                 const productId = e.target.dataset.id;
                 const productName = e.target.dataset.name;
                 const productPrice = e.target.dataset.price;
                 const productStock = e.target.dataset.stock;
                 this.addInventoryItem(productId, productName, productPrice, productStock);
+                // Close modal after adding
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addItemModal'));
+                if (modal) modal.hide();
             }
         });
 
-        // Inventory search
+        // Live search in modal
         document.addEventListener('input', (e) => {
+            if (e.target.id === 'modalSearch') {
+                this.searchInventory(e.target.value);
+            }
             if (e.target.id === 'inventorySearch') {
                 this.searchInventory(e.target.value);
             }
-        });
 
-        // Real-time stock validation
-        document.addEventListener('input', (e) => {
-            if (e.target.name === 'item_qty[]') {
+            // Real-time quantity validation & total update
+            if (e.target.name === 'item_qty[]' || e.target.name === 'item_price[]') {
                 this.validateQuantityInRealTime(e.target);
+                this.updateGrandTotal();
             }
         });
-    }
 
-    createInventorySection() {
-        // ✅ Inventory section now exists in form.html - no need to create dynamically
-        if (document.getElementById('inventorySection')) {
-            console.log('✅ Inventory section found in HTML');
-            return;
-        } else {
-            console.error('❌ Inventory section missing from form.html');
+        // Modal shown — focus search and clear
+        const modalEl = document.getElementById('addItemModal');
+        if (modalEl) {
+            modalEl.addEventListener('shown.bs.modal', () => {
+                const searchInput = document.getElementById('modalSearch');
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.focus();
+                    document.getElementById('inventoryResults').style.display = 'none';
+                }
+            });
         }
     }
 
@@ -84,16 +94,11 @@ class InvoiceFormManager {
         if (!dropdown) return;
 
         dropdown.innerHTML = '<option value="">Select product...</option>';
-
         this.inventoryData.forEach(item => {
-            // Skip items already in invoice
-            if (this.usedProductIds.has(item.id.toString())) {
-                return;
-            }
-
+            if (this.usedProductIds.has(item.id.toString())) return;
             const option = document.createElement('option');
             option.value = item.id;
-            option.textContent = `${item.name} - $${item.price} (Stock: ${item.stock})`;
+            option.textContent = `${item.name} - Rs.${item.price} (Stock: ${item.stock})`;
             option.dataset.name = item.name;
             option.dataset.price = item.price;
             option.dataset.stock = item.stock;
@@ -136,28 +141,22 @@ class InvoiceFormManager {
         }
 
         const resultsHTML = `
-            <div class="alert alert-info">
+            <div class="alert alert-info mb-3">
                 <strong>Found ${items.length} product(s):</strong>
             </div>
             <div class="row g-3">
                 ${items.map(item => `
                     <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card h-100 shadow-sm hover-shadow">
-                            <div class="card-body">
-                                <h6 class="card-title text-primary mb-2">${this.escapeHtml(item.name)}</h6>
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">Price:</span>
-                                        <strong class="text-success">$${item.price}</strong>
-                                    </div>
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-muted">Stock:</span>
-                                        <span class="badge ${item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
-                                            ${item.stock} units
-                                        </span>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-success w-100 add-inventory-search-item"
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body text-center">
+                                <h6 class="card-title mb-3">${this.escapeHtml(item.name)}</h6>
+                                <p class="mb-2"><strong>Rs.${item.price}</strong></p>
+                                <p class="mb-3">
+                                    <span class="badge ${item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
+                                        Stock: ${item.stock}
+                                    </span>
+                                </p>
+                                <button type="button" class="btn btn-success w-100 add-inventory-search-item"
                                         data-id="${item.id}"
                                         data-name="${this.escapeHtml(item.name)}"
                                         data-price="${item.price}"
@@ -171,153 +170,129 @@ class InvoiceFormManager {
             </div>
         `;
 
-
         resultsDiv.innerHTML = resultsHTML;
         resultsDiv.style.display = 'block';
     }
 
     addInventoryItemFromDropdown() {
         const dropdown = document.getElementById('inventoryDropdown');
-        if (!dropdown) return;
-
-        const selectedOption = dropdown.options[dropdown.selectedIndex];
-
-        if (!selectedOption.value) {
-            this.showToast('⚠️ Please select a product first', 'warning');
-            return;
-        }
-
-        this.addInventoryItem(
-            selectedOption.value,
-            selectedOption.dataset.name,
-            selectedOption.dataset.price,
-            selectedOption.dataset.stock
-        );
-
+        if (!dropdown || !dropdown.value) return;
+        const opt = dropdown.options[dropdown.selectedIndex];
+        this.addInventoryItem(opt.value, opt.dataset.name, opt.dataset.price, opt.dataset.stock);
         dropdown.selectedIndex = 0;
     }
 
     addInventoryItem(productId, productName, productPrice, productStock) {
-        // Duplicate prevention check
         if (this.usedProductIds.has(productId)) {
             this.showToast('⚠️ This item is already in the invoice', 'warning');
             return;
         }
 
         const itemsContainer = document.getElementById('itemsContainer');
-        if (!itemsContainer) {
-            console.error('❌ Items container not found');
-            return;
-        }
+        if (!itemsContainer) return;
 
-        // Add to used products tracker
         this.usedProductIds.add(productId);
 
-        // Create new item row
         const newRow = document.createElement('div');
-        newRow.className = 'row g-2 align-items-end mb-2 item-row';
-        newRow.innerHTML = this.createItemRowHTML(productName, productPrice, productId, productStock);
-
-        // Add to container
-        itemsContainer.appendChild(newRow);
-
-        this.showToast(`📦 ${productName} added to invoice!`);
-        this.updateEmptyState();
-
-        // Update dropdown to exclude this item
-        this.updateInventoryDropdown();
-
-        // Clear search
-        const resultsDiv = document.getElementById('inventoryResults');
-        if (resultsDiv) resultsDiv.style.display = 'none';
-
-        const searchInput = document.getElementById('inventorySearch');
-        if (searchInput) searchInput.value = '';
-    }
-
-    createItemRowHTML(name = '', price = '', productId = '', stock = '') {
-        const stockInfo = `<small class="text-muted d-block">Available stock: ${stock}</small>`;
-
-        return `
-            <div class="col-md-6">
-                <label class="form-label small">Item/Service Name</label>
-                <input type="text" name="item_name[]" class="form-control"
-                       value="${this.escapeHtml(name)}" required readonly>
-                ${stockInfo}
+        newRow.className = 'row g-3 align-items-end mb-3 pb-3 border-bottom item-row';
+        newRow.innerHTML = `
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold">Item</label>
+                <input type="text" name="item_name[]" class="form-control" value="${this.escapeHtml(productName)}" readonly>
+                <small class="text-muted">Stock: ${productStock} units</small>
                 <input type="hidden" name="item_id[]" value="${productId}">
             </div>
-            <div class="col-md-3">
-                <label class="form-label small">Quantity</label>
-                <input type="number" name="item_qty[]" class="form-control"
-                       placeholder="Qty" required min="1" value="1" max="${stock}">
-                <small class="text-muted">Max: ${stock}</small>
-            </div>
             <div class="col-md-2">
-                <label class="form-label small">Price ($)</label>
-                <input type="number" name="item_price[]" class="form-control"
-                       value="${price}" required min="0" step="0.01" readonly>
+                <label class="form-label small fw-semibold">Qty</label>
+                <input type="number" name="item_qty[]" class="form-control" value="1" min="1" max="${productStock}" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Unit Price (Rs.)</label>
+                <input type="number" name="item_price[]" class="form-control" value="${productPrice}" step="0.01" readonly>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small opacity-0">Remove</label>
+                <button type="button" class="btn btn-outline-danger removeItemBtn w-100">&times;</button>
             </div>
             <div class="col-md-1 text-end">
-                <button type="button" class="btn btn-light removeItemBtn mt-3" title="Remove">&times;</button>
+                <div class="fw-bold text-success fs-6 line-total">Rs. ${productPrice}</div>
             </div>
         `;
+
+        itemsContainer.appendChild(newRow);
+
+        this.showToast(`${productName} added!`);
+        this.updateEmptyState();
+        this.updateInventoryDropdown();
+        this.updateGrandTotal();
+
+        // Clear search results
+        const resultsDiv = document.getElementById('inventoryResults');
+        if (resultsDiv) resultsDiv.style.display = 'none';
+        const searchInput = document.getElementById('modalSearch') || document.getElementById('inventorySearch');
+        if (searchInput) searchInput.value = '';
     }
 
     removeItem(button) {
         const row = button.closest('.item-row');
-        const itemsContainer = document.getElementById('itemsContainer');
+        if (!row) return;
 
-        if (!row || !itemsContainer) return;
-
-        // Remove from used products tracker
         const productIdInput = row.querySelector('input[name="item_id[]"]');
-        if (productIdInput && productIdInput.value) {
+        if (productIdInput) {
             this.usedProductIds.delete(productIdInput.value);
         }
 
-        // Remove row
         row.remove();
-        this.showToast('🗑️ Item removed', 'error');
-
-        // Update dropdown to include this item again
-        this.updateInventoryDropdown();
+        this.showToast('Item removed', 'error');
         this.updateEmptyState();
+        this.updateInventoryDropdown();
+        this.updateGrandTotal();
     }
 
     validateQuantityInRealTime(input) {
         const row = input.closest('.item-row');
+        const qty = parseInt(input.value) || 0;
         const productIdInput = row.querySelector('input[name="item_id[]"]');
+        if (!productIdInput) return;
 
-        if (!productIdInput || !productIdInput.value) return;
-
-        const productId = productIdInput.value;
-        const requestedQty = parseInt(input.value) || 0;
-
-        // Find product in inventory data
-        const product = this.inventoryData.find(item => item.id.toString() === productId);
+        const product = this.inventoryData.find(item => item.id.toString() === productIdInput.value);
         if (!product) return;
 
-        if (requestedQty > product.stock) {
+        if (qty > product.stock) {
             input.classList.add('is-invalid');
-            this.showToast(`⚠️ Only ${product.stock} units available for ${product.name}`, 'warning');
         } else {
             input.classList.remove('is-invalid');
+        }
+
+        // Update line total
+        const priceInput = row.querySelector('input[name="item_price[]"]');
+        const lineTotalEl = row.querySelector('.line-total');
+        if (priceInput && lineTotalEl) {
+            const lineTotal = qty * parseFloat(priceInput.value || 0);
+            lineTotalEl.textContent = `Rs. ${lineTotal.toFixed(2)}`;
+        }
+    }
+
+    updateGrandTotal() {
+        let total = 0;
+        document.querySelectorAll('.item-row').forEach(row => {
+            const qty = parseInt(row.querySelector('input[name="item_qty[]"]').value) || 0;
+            const price = parseFloat(row.querySelector('input[name="item_price[]"]').value) || 0;
+            total += qty * price;
+        });
+        const grandTotalEl = document.getElementById('grandTotal');
+        if (grandTotalEl) {
+            grandTotalEl.textContent = total.toFixed(2);
         }
     }
 
     updateEmptyState() {
         const itemsContainer = document.getElementById('itemsContainer');
         const noItemsMessage = document.getElementById('noItemsMessage');
-
         if (!itemsContainer || !noItemsMessage) return;
 
-        const itemRows = itemsContainer.querySelectorAll('.item-row');
-
-        if (itemRows.length === 0) {
-            noItemsMessage.style.display = 'block';
-        } else {
-            noItemsMessage.style.display = 'none';
-        }
+        const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
+        noItemsMessage.style.display = hasItems ? 'none' : 'block';
     }
 
     showToast(message, type = 'success') {
@@ -340,7 +315,7 @@ class InvoiceFormManager {
     }
 }
 
-// Initialize when page loads
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     new InvoiceFormManager();
 });
