@@ -16,49 +16,124 @@
     <form method="POST" action="{{ url_for('invoice_process') }}" enctype="multipart/form-data">
         <input type="hidden" name="action" value="preview">
 
-        <!-- Business & Client Info (Side-by-side on desktop) -->
+        <!-- Business & Client Info Side-by-Side -->
         <div class="row g-5 mb-5">
             <div class="col-lg-6">
-                <div class="card h-100">
-                    <div class="card-header">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Your Business Information</h5>
                         {% if prefill_data %}
-                        <button type="button" class="btn btn-sm btn-outline-primary float-end" onclick="autoFillCompanyInfo()">Use Saved Info</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="autoFillCompanyInfo()">Use Saved Info</button>
                         {% endif %}
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <!-- Your existing business fields -->
-                            <div class="col-12">
-                                <label>Company Name *</label>
-                                <input type="text" name="company_name" class="form-control" value="{{ prefill_data.company_name if prefill_data else '' }}" required>
+                            <div class="col-md-6">
+                                <label class="form-label">Company Name *</label>
+                                <input type="text" name="company_name" class="form-control" value="{{ prefill_data.company_name if prefill_data else 'Your Company Name' }}" required>
                             </div>
-                            <!-- Add the rest of your business fields here exactly as before -->
+                            <div class="col-md-6">
+                                <label class="form-label">Tax ID (Optional)</label>
+                                <input type="text" name="company_tax_id" class="form-control" placeholder="Tax ID / VAT Number" value="{{ prefill_data.company_tax_id if prefill_data else '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Company Address</label>
+                                <input type="text" name="company_address" class="form-control" value="{{ prefill_data.company_address if prefill_data else '123 Business Street, City, State 12345' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone</label>
+                                <input type="text" name="company_phone" class="form-control" value="{{ prefill_data.company_phone if prefill_data else '+1 (555) 123-4567' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                <input type="email" name="company_email" class="form-control" value="{{ prefill_data.company_email if prefill_data else 'hello@company.com' }}">
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="col-lg-6">
-                <div class="card h-100">
+                <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">Client Information</h5>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <!-- Your existing client fields -->
-                            <div class="col-12">
-                                <label>Client Name *</label>
-                                <input type="text" name="client_name" class="form-control" required>
+                            <div class="col-md-6">
+                                <label class="form-label">Client Name *</label>
+                                <input type="text" name="client_name" class="form-control" placeholder="Client or Company Name" required>
                             </div>
-                            <!-- Add the rest of your client fields here -->
+                            <div class="col-md-6">
+                                <label class="form-label">Client Email</label>
+                                <input type="email" name="client_email" class="form-control" placeholder="client@email.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Client Phone</label>
+                                <input type="text" name="client_phone" class="form-control" placeholder="+92 (300) 123-4567">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Invoice Date *</label>
+                                <input type="date" name="invoice_date" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Due Date</label>
+                                <input type="date" name="due_date" class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Client Address</label>
+                                <textarea name="client_address" class="form-control" rows="2" placeholder="Street, City, Province, Pakistan"></textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Line Items (Central & Delightful) -->
+        <!-- FBR Tax Information -->
+        <div class="card mb-5">
+            <div class="card-header">
+                <h5 class="mb-0">FBR Tax Information (Pakistan)</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6>Your Business Tax Details</h6>
+                        <div class="mb-3">
+                            <label class="form-label">Seller NTN *</label>
+                            <input type="text" name="seller_ntn" class="form-control" placeholder="1234567-8" pattern="[0-9]{7}-[0-9]{1}" value="{{ prefill_data.get('seller_ntn', '') }}" required>
+                            <small class="form-text text-muted">Save in Settings to auto-fill</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Seller STRN (Optional)</label>
+                            <input type="text" name="seller_strn" class="form-control" value="{{ prefill_data.get('seller_strn', '') }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Client Tax Details</h6>
+                        <div class="mb-3">
+                            <label class="form-label">Buyer NTN</label>
+                            <input type="text" name="buyer_ntn" class="form-control" placeholder="1234567-8" pattern="[0-9]{7}-[0-9]{1}">
+                            <small class="form-text text-muted">Required for B2B transactions</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Buyer STRN (Optional)</label>
+                            <input type="text" name="buyer_strn" class="form-control">
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Invoice Type</label>
+                        <select name="invoice_type" id="invoiceTypeSelector" class="form-select">
+                            <option value="S">Sale Invoice (Outgoing)</option>
+                            <option value="P">Purchase Invoice (Incoming)</option>
+                            <option value="E">Export Invoice (International)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Line Items -->
         <div class="card mb-5">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Line Items</h5>
@@ -67,47 +142,69 @@
                 </button>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <div id="itemsContainer">
-                        <!-- Dynamic items added here by form_items.js -->
-                    </div>
-                </div>
+                <div id="itemsContainer"></div>
                 <div id="noItemsMessage" class="text-center py-5 text-muted">
-                    No items added yet — click "Add Item" to start
+                    No items added yet — click "+ Add Item" to start
                 </div>
-
                 <div class="text-end mt-4">
-                    <h4 class="text-dark">Total: Rs. <span id="grandTotal">0.00</span></h4>
+                    <h4>Total: Rs. <span id="grandTotal">0.00</span></h4>
                 </div>
             </div>
         </div>
 
-        <!-- Tax, Financial & Other Details (Collapsible for calm feel) -->
-        <div class="row g-4">
+        <!-- Financial & Payment Details -->
+        <div class="row g-4 mb-5">
             <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">FBR Tax Information</h5>
+                        <h5 class="mb-0">Financial Details</h5>
                     </div>
                     <div class="card-body">
-                        <!-- Your existing tax fields -->
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Tax Rate (%)</label>
+                                <input type="number" name="tax_rate" class="form-control" value="0" min="0" max="50" step="0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Discount Rate (%)</label>
+                                <input type="number" name="discount_rate" class="form-control" value="0" min="0" max="100" step="0.1">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Financial & Payment Details</h5>
+                        <h5 class="mb-0">Payment Information</h5>
                     </div>
                     <div class="card-body">
-                        <!-- Your tax rate, discount, payment terms, notes, logo upload -->
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Payment Terms</label>
+                                <input type="text" name="payment_terms" class="form-control" value="Due upon receipt">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Payment Methods</label>
+                                <input type="text" name="payment_methods" class="form-control" value="Bank Transfer, JazzCash, EasyPaisa, Credit Card">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Notes (Optional)</label>
+                                <textarea name="notes" class="form-control" rows="3" placeholder="Thank you for your business!"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Company Logo (Optional)</label>
+                                <input type="file" name="logo" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">Upload your logo for professional branding</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Preview Button -->
-        <div class="text-center mt-5">
+        <!-- Submit Button -->
+        <div class="text-center">
             <button type="submit" id="previewBtn" class="btn btn-success btn-lg px-5 py-3 rounded-pill shadow">
                 Preview Invoice
             </button>
@@ -115,26 +212,94 @@
     </form>
 </div>
 
-<!-- Add Item Modal (Clean & Fast Search) -->
-<div class="modal fade" id="addItemModal" tabindex="-1">
+<!-- Add Item Modal -->
+<div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content rounded-4">
             <div class="modal-header border-0">
-                <h5 class="modal-title">Search & Add Item from Inventory</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="addItemModalLabel">Search & Add Item from Inventory</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <input type="text" class="form-control form-control-lg mb-4" id="modalSearch" placeholder="Type product name or code...">
-                <div id="inventoryResults">
-                    <!-- Populate with your inventory list/table via enhanced form_items.js -->
-                </div>
+                <input type="text" class="form-control form-control-lg mb-4" id="modalSearch" placeholder="Type product name...">
+                <div id="inventoryResults"></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Keep all your existing scripts -->
 <script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/form_items.js') }}"></script>
-<!-- Your other scripts (date auto-fill, type switcher, etc.) -->
+
+<script nonce="{{ nonce }}">
+// Auto-set today's date
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.querySelector('input[name="invoice_date"]');
+    if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Double-submit prevention
+    const form = document.querySelector('form');
+    const submitBtn = document.getElementById('previewBtn');
+    let isSubmitting = false;
+    form.addEventListener('submit', function(e) {
+        if (isSubmitting) e.preventDefault();
+        isSubmitting = true;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Generating Preview...';
+    });
+});
+
+// Auto-fill company info
+function autoFillCompanyInfo() {
+    {% if prefill_data %}
+    document.querySelector('input[name="company_name"]').value = "{{ prefill_data.company_name or '' }}";
+    document.querySelector('input[name="company_address"]').value = "{{ prefill_data.company_address or '' }}";
+    document.querySelector('input[name="company_phone"]').value = "{{ prefill_data.company_phone or '' }}";
+    document.querySelector('input[name="company_email"]').value = "{{ prefill_data.company_email or '' }}";
+    document.querySelector('input[name="company_tax_id"]').value = "{{ prefill_data.company_tax_id or '' }}";
+    if (typeof showToast !== 'undefined') showToast('Company info auto-filled!', 'success');
+    else alert('Company info auto-filled!');
+    {% else %}
+    if (typeof showToast !== 'undefined') showToast('No saved info found.', 'warning');
+    else alert('No saved info found.');
+    {% endif %}
+}
+
+// Invoice Type Switcher
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelector = document.getElementById('invoiceTypeSelector');
+    if (!typeSelector) return;
+
+    const clientHeader = document.querySelectorAll('.card-header h5')[1]; // Second card header (Client section)
+    const clientNameLabel = document.querySelector('input[name="client_name"]').previousElementSibling;
+    const clientAddressLabel = document.querySelector('textarea[name="client_address"]').previousElementSibling;
+    const buyerNTNLabel = document.querySelector('input[name="buyer_ntn"]').previousElementSibling;
+    const sellerNTNLabel = document.querySelector('input[name="seller_ntn"]').previousElementSibling;
+
+    typeSelector.addEventListener('change', function() {
+        const type = this.value;
+        if (type === 'S') {
+            clientHeader.textContent = 'Client Information';
+            clientNameLabel.textContent = 'Client Name *';
+            clientAddressLabel.textContent = 'Client Address';
+            buyerNTNLabel.textContent = 'Buyer NTN';
+            sellerNTNLabel.textContent = 'Seller NTN *';
+        } else if (type === 'P') {
+            clientHeader.textContent = 'Supplier Information';
+            clientNameLabel.textContent = 'Supplier Name *';
+            clientAddressLabel.textContent = 'Supplier Address';
+            buyerNTNLabel.textContent = 'Seller NTN (Supplier)';
+            sellerNTNLabel.textContent = 'Buyer NTN (Your Business) *';
+        } else if (type === 'E') {
+            clientHeader.textContent = 'International Buyer Information';
+            clientNameLabel.textContent = 'Buyer/Importer Name *';
+            clientAddressLabel.textContent = 'Destination Address';
+            buyerNTNLabel.textContent = 'Buyer Tax ID (Optional)';
+            sellerNTNLabel.textContent = 'Exporter NTN (Your Business) *';
+        }
+    });
+});
+</script>
 
 {% endblock %}
