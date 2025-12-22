@@ -130,6 +130,26 @@
                 </div>
             </div>
         </div>
+        <!-- Inventory Search & Add (Fallback for immediate visual add) -->
+        <div class="card mb-5">
+            <div class="card-header">
+                <h5 class="mb-0">Add from Inventory</h5>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="inventorySearch" placeholder="Quick search product name...">
+                    <button type="button" class="btn btn-outline-primary" id="showAllInventory">Show All</button>
+                </div>
+                <div id="inventoryResults" class="mt-3"></div>
+
+                <div class="input-group mt-3">
+                    <select class="form-select" id="inventoryDropdown">
+                        <option value="">Select product...</option>
+                    </select>
+                    <button type="button" class="btn btn-primary" id="addInventoryBtn">Add to Invoice</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Line Items -->
         <div class="card mb-5">
