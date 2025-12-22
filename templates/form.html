@@ -16,8 +16,8 @@
     <form method="POST" action="{{ url_for('invoice_process') }}" enctype="multipart/form-data">
         <input type="hidden" name="action" value="preview">
 
-        <!-- Business & Client Info Side-by-Side -->
-        <div class="row g-5 mb-5">
+        <!-- Business & Client Info (Side-by-side on desktop) -->
+        <div class="row g-5">
             <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -70,7 +70,7 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Client Phone</label>
-                                <input type="text" name="client_phone" class="form-control" placeholder="+92 (300) 123-4567">
+                                <input type="text" name="client_phone" class="form-control" placeholder="+1 (555) 123-4567">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Invoice Date *</label>
@@ -82,7 +82,7 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Client Address</label>
-                                <textarea name="client_address" class="form-control" rows="2" placeholder="Street, City, Province, Pakistan"></textarea>
+                                <textarea name="client_address" class="form-control" rows="2" placeholder="Street, City, State, ZIP Code"></textarea>
                             </div>
                         </div>
                     </div>
@@ -91,7 +91,7 @@
         </div>
 
         <!-- FBR Tax Information -->
-        <div class="card mb-5">
+        <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">FBR Tax Information (Pakistan)</h5>
             </div>
@@ -102,7 +102,6 @@
                         <div class="mb-3">
                             <label class="form-label">Seller NTN *</label>
                             <input type="text" name="seller_ntn" class="form-control" placeholder="1234567-8" pattern="[0-9]{7}-[0-9]{1}" value="{{ prefill_data.get('seller_ntn', '') }}" required>
-                            <small class="form-text text-muted">Save in Settings to auto-fill</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Seller STRN (Optional)</label>
@@ -114,7 +113,6 @@
                         <div class="mb-3">
                             <label class="form-label">Buyer NTN</label>
                             <input type="text" name="buyer_ntn" class="form-control" placeholder="1234567-8" pattern="[0-9]{7}-[0-9]{1}">
-                            <small class="form-text text-muted">Required for B2B transactions</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Buyer STRN (Optional)</label>
@@ -152,8 +150,8 @@
             </div>
         </div>
 
-        <!-- Financial & Payment Details -->
-        <div class="row g-4 mb-5">
+        <!-- Financial & Payment -->
+        <div class="row g-4 mb-4">
             <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header">
@@ -186,16 +184,15 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Payment Methods</label>
-                                <input type="text" name="payment_methods" class="form-control" value="Bank Transfer, JazzCash, EasyPaisa, Credit Card">
+                                <input type="text" name="payment_methods" class="form-control" value="Bank Transfer, Credit Card">
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Notes (Optional)</label>
-                                <textarea name="notes" class="form-control" rows="3" placeholder="Thank you for your business!"></textarea>
+                                <textarea name="notes" class="form-control" rows="3" placeholder="Thank you note, special instructions..."></textarea>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Company Logo (Optional)</label>
                                 <input type="file" name="logo" class="form-control" accept="image/*">
-                                <small class="form-text text-muted">Upload your logo for professional branding</small>
                             </div>
                         </div>
                     </div>
@@ -203,7 +200,6 @@
             </div>
         </div>
 
-        <!-- Submit Button -->
         <div class="text-center">
             <button type="submit" id="previewBtn" class="btn btn-success btn-lg px-5 py-3 rounded-pill shadow">
                 Preview Invoice
@@ -213,12 +209,12 @@
 </div>
 
 <!-- Add Item Modal -->
-<div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+<div class="modal fade" id="addItemModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content rounded-4">
             <div class="modal-header border-0">
-                <h5 class="modal-title" id="addItemModalLabel">Search & Add Item from Inventory</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title">Search & Add Item from Inventory</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="text" class="form-control form-control-lg mb-4" id="modalSearch" placeholder="Type product name...">
@@ -233,66 +229,83 @@
 <script nonce="{{ nonce }}">
 // Auto-set today's date
 document.addEventListener('DOMContentLoaded', function() {
-    const dateInput = document.querySelector('input[name="invoice_date"]');
+    var dateInput = document.querySelector('input[name="invoice_date"]');
     if (dateInput && !dateInput.value) {
         dateInput.value = new Date().toISOString().split('T')[0];
     }
 
     // Double-submit prevention
-    const form = document.querySelector('form');
-    const submitBtn = document.getElementById('previewBtn');
-    let isSubmitting = false;
+    var form = document.querySelector('form');
+    var submitBtn = document.getElementById('previewBtn');
     form.addEventListener('submit', function(e) {
-        if (isSubmitting) e.preventDefault();
-        isSubmitting = true;
+        if (submitBtn.disabled) e.preventDefault();
         submitBtn.disabled = true;
         submitBtn.innerHTML = '⏳ Generating Preview...';
     });
 });
 
-// Auto-fill company info
+// Your autoFillCompanyInfo and invoiceTypeSwitcher scripts (keep them exactly as original)
+<script nonce="{{ nonce }}">
+// Auto-fill company info from user profile
 function autoFillCompanyInfo() {
     {% if prefill_data %}
-    document.querySelector('input[name="company_name"]').value = "{{ prefill_data.company_name or '' }}";
-    document.querySelector('input[name="company_address"]').value = "{{ prefill_data.company_address or '' }}";
-    document.querySelector('input[name="company_phone"]').value = "{{ prefill_data.company_phone or '' }}";
-    document.querySelector('input[name="company_email"]').value = "{{ prefill_data.company_email or '' }}";
-    document.querySelector('input[name="company_tax_id"]').value = "{{ prefill_data.company_tax_id or '' }}";
-    if (typeof showToast !== 'undefined') showToast('Company info auto-filled!', 'success');
-    else alert('Company info auto-filled!');
+    const companyName = document.querySelector('input[name="company_name"]');
+    const companyAddress = document.querySelector('input[name="company_address"]');
+    const companyPhone = document.querySelector('input[name="company_phone"]');
+    const companyEmail = document.querySelector('input[name="company_email"]');
+    const companyTaxId = document.querySelector('input[name="company_tax_id"]');
+
+    if (companyName) companyName.value = "{{ prefill_data.company_name or '' }}";
+    if (companyAddress) companyAddress.value = "{{ prefill_data.company_address or '' }}";
+    if (companyPhone) companyPhone.value = "{{ prefill_data.company_phone or '' }}";
+    if (companyEmail) companyEmail.value = "{{ prefill_data.company_email or '' }}";
+    if (companyTaxId) companyTaxId.value = "{{ prefill_data.company_tax_id or '' }}";
+
+    if (typeof showToast !== 'undefined') {
+        showToast('Company info auto-filled from your profile!', 'success');
+    } else {
+        alert('Company info auto-filled from your profile!');
+    }
     {% else %}
-    if (typeof showToast !== 'undefined') showToast('No saved info found.', 'warning');
-    else alert('No saved info found.');
+    if (typeof showToast !== 'undefined') {
+        showToast('No saved company info found. Update your settings first.', 'warning');
+    } else {
+        alert('No saved company info found. Update your settings first.');
+    }
     {% endif %}
 }
+</script>
 
-// Invoice Type Switcher
+<script nonce="{{ nonce }}">
+// Dynamic Invoice Type Switcher
 document.addEventListener('DOMContentLoaded', function() {
     const typeSelector = document.getElementById('invoiceTypeSelector');
     if (!typeSelector) return;
 
-    const clientHeader = document.querySelectorAll('.card-header h5')[1]; // Second card header (Client section)
+    const clientSection = document.querySelector('.card-header h5'); // Adjust if needed
+    const helpText = document.getElementById('invoiceTypeHelp'); // If you have this element
     const clientNameLabel = document.querySelector('input[name="client_name"]').previousElementSibling;
     const clientAddressLabel = document.querySelector('textarea[name="client_address"]').previousElementSibling;
     const buyerNTNLabel = document.querySelector('input[name="buyer_ntn"]').previousElementSibling;
     const sellerNTNLabel = document.querySelector('input[name="seller_ntn"]').previousElementSibling;
 
     typeSelector.addEventListener('change', function() {
-        const type = this.value;
-        if (type === 'S') {
-            clientHeader.textContent = 'Client Information';
+        const invoiceType = this.value;
+
+        if (invoiceType === 'S') {
+            document.querySelector('.card-header h5').innerHTML = 'Client Information';
             clientNameLabel.textContent = 'Client Name *';
             clientAddressLabel.textContent = 'Client Address';
             buyerNTNLabel.textContent = 'Buyer NTN';
             sellerNTNLabel.textContent = 'Seller NTN *';
-        } else if (type === 'P') {
-            clientHeader.textContent = 'Supplier Information';
+        } else if (invoiceType === 'P') {
+            document.querySelector('.card-header h5').innerHTML = 'Supplier Information';
             clientNameLabel.textContent = 'Supplier Name *';
             clientAddressLabel.textContent = 'Supplier Address';
             buyerNTNLabel.textContent = 'Seller NTN (Supplier)';
             sellerNTNLabel.textContent = 'Buyer NTN (Your Business) *';
-        } else if (type === 'E') {
-            clientHeader.textContent = 'International Buyer Information';
+        } else if (invoiceType === 'E') {
+            document.querySelector('.card-header h5').innerHTML = 'International Buyer Information';
             clientNameLabel.textContent = 'Buyer/Importer Name *';
             clientAddressLabel.textContent = 'Destination Address';
             buyerNTNLabel.textContent = 'Buyer Tax ID (Optional)';
@@ -301,5 +314,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-
 {% endblock %}
