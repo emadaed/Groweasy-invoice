@@ -22,7 +22,7 @@
                         <td>{{ supplier.name }}</td>
                         <td>{{ supplier.email or 'N/A' }}</td>
                         <td>{{ supplier.phone or 'N/A' }}</td>
-                        <td>${{ "%.2f"|format(supplier.total_purchased) }}</td>
+                        <td>{{ currency_symbol }}{{ "%.2f"|format(supplier.total_purchased) }}</td>
                         <td>{{ supplier.order_count }}</td>
                     </tr>
                     {% endfor %}

@@ -22,7 +22,7 @@
                         <td>{{ order.po_number }}</td>
                         <td>{{ order.supplier_name }}</td>
                         <td>{{ order.order_date }}</td>
-                        <td>${{ "%.2f"|format(order.grand_total) }}</td>
+                        <td>{{ currency_symbol }}{{ "%.2f"|format(order.grand_total) }}</td>
                         <td><span class="badge bg-info">{{ order.status }}</span></td>
                     </tr>
                     {% endfor %}

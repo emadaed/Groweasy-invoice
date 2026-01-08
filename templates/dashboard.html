@@ -19,7 +19,7 @@
                         <div class="card-body">
                             <h3 class="text-primary">💰</h3>
                             <h5 class="card-title">Total Revenue</h5>
-                            <h3 class="text-success">${{ "%.2f"|format(summary.total_revenue) }}</h3>
+                            <h3 class="text-success">{{ currency_symbol }}{{ "%.2f"|format(summary.total_revenue) }}</h3>
                             <p class="text-muted small">{{ summary.total_invoices }} invoices</p>
                         </div>
                     </div>
@@ -29,7 +29,7 @@
                         <div class="card-body">
                             <h3 class="text-info">📊</h3>
                             <h5 class="card-title">Average Invoice</h5>
-                            <h3 class="text-info">${{ "%.2f"|format(summary.avg_invoice) }}</h3>
+                            <h3 class="text-info">{{ currency_symbol }}{{ "%.2f"|format(summary.avg_invoice) }}</h3>
                             <p class="text-muted small">Per invoice</p>
                         </div>
                     </div>

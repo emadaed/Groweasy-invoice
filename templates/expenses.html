@@ -23,7 +23,7 @@
                     <div class="card text-center">
                         <div class="card-body">
                             <h5>{{ category.category }}</h5>
-                            <h3 class="text-danger">${{ "%.2f"|format(category.total) }}</h3>
+                            <h3 class="text-danger">{{ currency_symbol }}{{ "%.2f"|format(category.total) }}</h3>
                             <small class="text-muted">{{ category.count }} expenses</small>
                         </div>
                     </div>
@@ -64,7 +64,7 @@
                                         <span class="badge bg-secondary">{{ expense.category }}</span>
                                     </td>
                                     <td class="text-end text-danger">
-                                        <strong>-${{ "%.2f"|format(expense.amount) }}</strong>
+                                        <strong>-{{ currency_symbol }}{{ "%.2f"|format(expense.amount) }}</strong>
                                     </td>
                                     <td>
                                         {% if expense.notes %}

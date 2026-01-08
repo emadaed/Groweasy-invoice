@@ -14,8 +14,8 @@
       const qty = Number(it.qty ?? 0);
       const price = Number(it.price ?? 0);
       if (name){
-        if (!qty || qty <= 0) errs.push(`Row ${idx+1}: Quantity required.`);
-        if (!price || price <= 0) errs.push(`Row ${idx+1}: Price required.`);
+        if (!qty || qty <= 0) errs.push(`Row {{ currency_symbol }}{idx+1}: Quantity required.`);
+        if (!price || price <= 0) errs.push(`Row {{ currency_symbol }}{idx+1}: Price required.`);
       }
     });
     if (errs.length){

@@ -15,8 +15,8 @@
                 <tr>
                     <td class="border-end-0">{{ item.name or item.code or '—' }}</td>
                     <td class="text-end border-start-0 border-end-0">{{ item.qty }}</td>
-                    <td class="text-end border-start-0 border-end-0">${{ '%.2f' % item.price }}</td>
-                    <td class="text-end border-start-0">${{ '%.2f' % item.total }}</td>
+                    <td class="text-end border-start-0 border-end-0">{{ currency_symbol }}{{ '%.2f' % item.price }}</td>
+                    <td class="text-end border-start-0">{{ currency_symbol }}{{ '%.2f' % item.total }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

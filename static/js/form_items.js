@@ -20,7 +20,7 @@ class InvoiceFormManager {
         fetch('/api/inventory_items')
             .then(response => response.json())
             .then(items => {
-                console.log(`📦 Loaded ${items.length} inventory items`);
+                console.log(`📦 Loaded {{ currency_symbol }}{items.length} inventory items`);
                 this.inventoryData = items;
                 this.updateInventoryDropdown(); // Keep for legacy if needed
             })
@@ -98,7 +98,7 @@ class InvoiceFormManager {
             if (this.usedProductIds.has(item.id.toString())) return;
             const option = document.createElement('option');
             option.value = item.id;
-            option.textContent = `${item.name} - Rs.${item.price} (Stock: ${item.stock})`;
+            option.textContent = `{{ currency_symbol }}{item.name} - {{ currency_symbol }}{item.price} (Stock: {{ currency_symbol }}{item.stock})`;
             option.dataset.name = item.name;
             option.dataset.price = item.price;
             option.dataset.stock = item.stock;
@@ -142,25 +142,25 @@ class InvoiceFormManager {
 
         const resultsHTML = `
             <div class="alert alert-info mb-3">
-                <strong>Found ${items.length} product(s):</strong>
+                <strong>Found {{ currency_symbol }}{items.length} product(s):</strong>
             </div>
             <div class="row g-3">
-                ${items.map(item => `
+                {{ currency_symbol }}{items.map(item => `
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body text-center">
-                                <h6 class="card-title mb-3">${this.escapeHtml(item.name)}</h6>
-                                <p class="mb-2"><strong>Rs.${item.price}</strong></p>
+                                <h6 class="card-title mb-3">{{ currency_symbol }}{this.escapeHtml(item.name)}</h6>
+                                <p class="mb-2"><strong>{{ currency_symbol }}{item.price}</strong></p>
                                 <p class="mb-3">
-                                    <span class="badge ${item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
-                                        Stock: ${item.stock}
+                                    <span class="badge {{ currency_symbol }}{item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
+                                        Stock: {{ currency_symbol }}{item.stock}
                                     </span>
                                 </p>
                                 <button type="button" class="btn btn-success w-100 add-inventory-search-item"
-                                        data-id="${item.id}"
-                                        data-name="${this.escapeHtml(item.name)}"
-                                        data-price="${item.price}"
-                                        data-stock="${item.stock}">
+                                        data-id="{{ currency_symbol }}{item.id}"
+                                        data-name="{{ currency_symbol }}{this.escapeHtml(item.name)}"
+                                        data-price="{{ currency_symbol }}{item.price}"
+                                        data-stock="{{ currency_symbol }}{item.stock}">
                                     ➕ Add to Invoice
                                 </button>
                             </div>
@@ -198,30 +198,30 @@ class InvoiceFormManager {
         newRow.innerHTML = `
             <div class="col-md-5">
                 <label class="form-label small fw-semibold">Item</label>
-                <input type="text" name="item_name[]" class="form-control" value="${this.escapeHtml(productName)}" readonly>
-                <small class="text-muted">Stock: ${productStock} units</small>
-                <input type="hidden" name="item_id[]" value="${productId}">
+                <input type="text" name="item_name[]" class="form-control" value="{{ currency_symbol }}{this.escapeHtml(productName)}" readonly>
+                <small class="text-muted">Stock: {{ currency_symbol }}{productStock} units</small>
+                <input type="hidden" name="item_id[]" value="{{ currency_symbol }}{productId}">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-semibold">Qty</label>
-                <input type="number" name="item_qty[]" class="form-control" value="1" min="1" max="${productStock}" required>
+                <input type="number" name="item_qty[]" class="form-control" value="1" min="1" max="{{ currency_symbol }}{productStock}" required>
             </div>
             <div class="col-md-3">
-                <label class="form-label small fw-semibold">Unit Price (Rs.)</label>
-                <input type="number" name="item_price[]" class="form-control" value="${productPrice}" step="0.01" readonly>
+                <label class="form-label small fw-semibold">Unit Price ({{ currency_symbol }})</label>
+                <input type="number" name="item_price[]" class="form-control" value="{{ currency_symbol }}{productPrice}" step="0.01" readonly>
             </div>
             <div class="col-md-1">
                 <label class="form-label small opacity-0">Remove</label>
                 <button type="button" class="btn btn-outline-danger removeItemBtn w-100">&times;</button>
             </div>
             <div class="col-md-1 text-end">
-                <div class="fw-bold text-success fs-6 line-total">Rs. ${productPrice}</div>
+                <div class="fw-bold text-success fs-6 line-total">{{ currency_symbol }}{productPrice}</div>
             </div>
         `;
 
         itemsContainer.appendChild(newRow);
 
-        this.showToast(`${productName} added!`);
+        this.showToast(`{{ currency_symbol }}{productName} added!`);
         this.updateEmptyState();
         this.updateInventoryDropdown();
         this.updateGrandTotal();
@@ -269,7 +269,7 @@ class InvoiceFormManager {
         const lineTotalEl = row.querySelector('.line-total');
         if (priceInput && lineTotalEl) {
             const lineTotal = qty * parseFloat(priceInput.value || 0);
-            lineTotalEl.textContent = `Rs. ${lineTotal.toFixed(2)}`;
+            lineTotalEl.textContent = `{{ currency_symbol }}{lineTotal.toFixed(2)}`;
         }
     }
 

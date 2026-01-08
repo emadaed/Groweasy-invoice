@@ -88,7 +88,7 @@
                                         <option value="AED" {% if user_profile.get('preferred_currency') == 'AED' %}selected{% endif %}>🇦🇪 UAE Dirham (د.إ)</option>
                                         <option value="SAR" {% if user_profile.get('preferred_currency') == 'SAR' %}selected{% endif %}>🇸🇦 Saudi Riyal (﷼)</option>
                                     </select>
-                                    <small class="text-muted">Display only - amounts stored in PKR</small>
+                                    <small class="text-muted">Selected Currency will be used for display purposes</small>
                                 </div>
                                 <button type="submit" class="btn btn-success">Update Profile</button>
                             </form>

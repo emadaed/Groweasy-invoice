@@ -79,7 +79,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
-                                        <strong>${{ "%.2f"|format(invoice.grand_total) }}</strong>
+                                        <strong>{{ currency_symbol }}{{ "%.2f"|format(invoice.grand_total) }}</strong>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-success">Paid</span>
