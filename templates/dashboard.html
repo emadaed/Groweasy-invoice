@@ -163,7 +163,7 @@
                                             <small class="text-muted">{{ client.invoice_count }} invoices</small>
                                         </div>
                                         <span class="badge bg-success rounded-pill">
-                                            ${{ "%.0f"|format(client.total_spent) }}
+                                            {{ currency_symbol }}{{ "%.0f"|format(client.total_spent) }}
                                         </span>
                                     </div>
                                     {% endfor %}
