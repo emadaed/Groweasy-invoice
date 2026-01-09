@@ -39,7 +39,7 @@
                             <h3 class="text-info">
                                 {{ customers|selectattr("total_spent", "gt", 1000)|list|length }}
                             </h3>
-                            <p class="mb-0">VIP Clients ($1k+)</p>
+                            <p class="mb-0">VIP Clients ({{ currency_symbol }}1k+)</p>
                         </div>
                     </div>
                 </div>
