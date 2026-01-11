@@ -23,7 +23,8 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Your Business Information</h5>
                         {% if prefill_data %}
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="autoFillCompanyInfo()">Use Saved Info</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="useSavedInfoBtn">
+                            Use Saved Info</button>
                         {% endif %}
                     </div>
                     <div class="card-body">
@@ -332,6 +333,16 @@ document.addEventListener('DOMContentLoaded', function() {
             sellerNTNLabel.textContent = 'Exporter NTN (Your Business) *';
         }
     });
+});
+</script>
+<script nonce="{{ nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('useSavedInfoBtn');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            autoFillCompanyInfo();
+        });
+    }
 });
 </script>
 {% endblock %}
