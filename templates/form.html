@@ -269,31 +269,53 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // autoFillCompanyInfo and invoiceTypeSwitcher scripts (keep them exactly as original)
 <script nonce="{{ nonce }}">
+// Combined: Auto date, double-submit prevention, Use Saved Info button
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto date
+    const dateInput = document.querySelector('input[name="invoice_date"]');
+    if (dateInput && !dateInput.value.trim()) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Double-submit prevention
+    const form = document.querySelector('form');
+    const submitBtn = document.getElementById('previewBtn');
+    if (form && submitBtn) {
+        form.addEventListener('submit', function(e) {
+            if (submitBtn.disabled) e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '⏳ Generating Preview...';
+        });
+    }
+
+    // Use Saved Info button - CSP safe
+    const useSavedBtn = document.getElementById('useSavedInfoBtn');
+    if (useSavedBtn) {
+        useSavedBtn.addEventListener('click', autoFillCompanyInfo);
+    }
+});
+</script>
+
+<script nonce="{{ nonce }}">
 // Auto-fill company info from user profile
 function autoFillCompanyInfo() {
     {% if prefill_data %}
-    const companyName = document.querySelector('input[name="company_name"]');
-    const companyAddress = document.querySelector('input[name="company_address"]');
-    const companyPhone = document.querySelector('input[name="company_phone"]');
-    const companyEmail = document.querySelector('input[name="company_email"]');
-    const companyTaxId = document.querySelector('input[name="company_tax_id"]');
-
-    if (companyName) companyName.value = "{{ prefill_data.company_name or '' }}";
-    if (companyAddress) companyAddress.value = "{{ prefill_data.company_address or '' }}";
-    if (companyPhone) companyPhone.value = "{{ prefill_data.company_phone or '' }}";
-    if (companyEmail) companyEmail.value = "{{ prefill_data.company_email or '' }}";
-    if (companyTaxId) companyTaxId.value = "{{ prefill_data.company_tax_id or '' }}";
+    document.querySelector('input[name="company_name"]').value = "{{ prefill_data.company_name or '' | escapejs }}";
+    document.querySelector('input[name="company_address"]').value = "{{ prefill_data.company_address or '' | escapejs }}";
+    document.querySelector('input[name="company_phone"]').value = "{{ prefill_data.company_phone or '' | escapejs }}";
+    document.querySelector('input[name="company_email"]').value = "{{ prefill_data.company_email or '' | escapejs }}";
+    document.querySelector('input[name="company_tax_id"]').value = "{{ prefill_data.company_tax_id or '' | escapejs }}";
 
     if (typeof showToast !== 'undefined') {
-        showToast('Company info auto-filled from your profile!', 'success');
+        showToast('Company info auto-filled!', 'success');
     } else {
-        alert('Company info auto-filled from your profile!');
+        alert('Company info auto-filled!');
     }
     {% else %}
     if (typeof showToast !== 'undefined') {
-        showToast('No saved company info found. Update your settings first.', 'warning');
+        showToast('No saved info found.', 'warning');
     } else {
-        alert('No saved company info found. Update your settings first.');
+        alert('No saved info found.');
     }
     {% endif %}
 }
@@ -305,46 +327,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const typeSelector = document.getElementById('invoiceTypeSelector');
     if (!typeSelector) return;
 
-    const clientSection = document.querySelector('.card-header h5'); // Adjust if needed
-    const helpText = document.getElementById('invoiceTypeHelp'); // If  have this element
+    // Target the Client Information header (second card header)
+    const clientHeader = document.querySelectorAll('.card .card-header h5')[1];
     const clientNameLabel = document.querySelector('input[name="client_name"]').previousElementSibling;
     const clientAddressLabel = document.querySelector('textarea[name="client_address"]').previousElementSibling;
     const buyerNTNLabel = document.querySelector('input[name="buyer_ntn"]').previousElementSibling;
     const sellerNTNLabel = document.querySelector('input[name="seller_ntn"]').previousElementSibling;
 
     typeSelector.addEventListener('change', function() {
-        const invoiceType = this.value;
-
-        if (invoiceType === 'S') {
-            document.querySelector('.card-header h5').innerHTML = 'Client Information';
+        const type = this.value;
+        if (type === 'S') {
+            clientHeader.textContent = 'Client Information';
             clientNameLabel.textContent = 'Client Name *';
             clientAddressLabel.textContent = 'Client Address';
             buyerNTNLabel.textContent = 'Buyer NTN';
             sellerNTNLabel.textContent = 'Seller NTN *';
-        } else if (invoiceType === 'P') {
-            document.querySelector('.card-header h5').innerHTML = 'Supplier Information';
+        } else if (type === 'P') {
+            clientHeader.textContent = 'Supplier Information';
             clientNameLabel.textContent = 'Supplier Name *';
             clientAddressLabel.textContent = 'Supplier Address';
             buyerNTNLabel.textContent = 'Seller NTN (Supplier)';
             sellerNTNLabel.textContent = 'Buyer NTN (Your Business) *';
-        } else if (invoiceType === 'E') {
-            document.querySelector('.card-header h5').innerHTML = 'International Buyer Information';
+        } else if (type === 'E') {
+            clientHeader.textContent = 'International Buyer Information';
             clientNameLabel.textContent = 'Buyer/Importer Name *';
             clientAddressLabel.textContent = 'Destination Address';
             buyerNTNLabel.textContent = 'Buyer Tax ID (Optional)';
             sellerNTNLabel.textContent = 'Exporter NTN (Your Business) *';
         }
     });
-});
-</script>
-<script nonce="{{ nonce }}">
-document.addEventListener('DOMContentLoaded', function() {
-    const btn = document.getElementById('useSavedInfoBtn');
-    if (btn) {
-        btn.addEventListener('click', function() {
-            autoFillCompanyInfo();
-        });
-    }
 });
 </script>
 {% endblock %}
