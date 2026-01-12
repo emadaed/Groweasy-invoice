@@ -250,26 +250,6 @@
 <script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/form_items.js') }}"></script>
 
 <script nonce="{{ nonce }}">
-// Auto-set today's date
-document.addEventListener('DOMContentLoaded', function() {
-    var dateInput = document.querySelector('input[name="invoice_date"]');
-    if (dateInput && !dateInput.value) {
-        dateInput.value = new Date().toISOString().split('T')[0];
-    }
-
-    // Double-submit prevention
-    var form = document.querySelector('form');
-    var submitBtn = document.getElementById('previewBtn');
-    form.addEventListener('submit', function(e) {
-        if (submitBtn.disabled) e.preventDefault();
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '⏳ Generating Preview...';
-    });
-});
-
-// autoFillCompanyInfo and invoiceTypeSwitcher scripts (keep them exactly as original)
-<script nonce="{{ nonce }}">
-// Combined: Auto date, double-submit prevention, Use Saved Info button
 document.addEventListener('DOMContentLoaded', function() {
     // Auto date
     const dateInput = document.querySelector('input[name="invoice_date"]');
@@ -277,7 +257,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dateInput.value = new Date().toISOString().split('T')[0];
     }
 
-    // Double-submit prevention
+    // Double-submit
     const form = document.querySelector('form');
     const submitBtn = document.getElementById('previewBtn');
     if (form && submitBtn) {
@@ -288,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Use Saved Info button - CSP safe
+    // Use Saved Info
     const useSavedBtn = document.getElementById('useSavedInfoBtn');
     if (useSavedBtn) {
         useSavedBtn.addEventListener('click', autoFillCompanyInfo);
@@ -297,7 +277,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script nonce="{{ nonce }}">
-// Auto-fill company info from user profile
 function autoFillCompanyInfo() {
     {% if prefill_data %}
     document.querySelector('input[name="company_name"]').value = "{{ prefill_data.company_name or '' | escapejs }}";
@@ -306,28 +285,18 @@ function autoFillCompanyInfo() {
     document.querySelector('input[name="company_email"]').value = "{{ prefill_data.company_email or '' | escapejs }}";
     document.querySelector('input[name="company_tax_id"]').value = "{{ prefill_data.company_tax_id or '' | escapejs }}";
 
-    if (typeof showToast !== 'undefined') {
-        showToast('Company info auto-filled!', 'success');
-    } else {
-        alert('Company info auto-filled!');
-    }
+    if (typeof showToast !== 'undefined') showToast('Company info auto-filled!', 'success');
     {% else %}
-    if (typeof showToast !== 'undefined') {
-        showToast('No saved info found.', 'warning');
-    } else {
-        alert('No saved info found.');
-    }
+    if (typeof showToast !== 'undefined') showToast('No saved info found.', 'warning');
     {% endif %}
 }
 </script>
 
 <script nonce="{{ nonce }}">
-// Dynamic Invoice Type Switcher
 document.addEventListener('DOMContentLoaded', function() {
     const typeSelector = document.getElementById('invoiceTypeSelector');
     if (!typeSelector) return;
 
-    // Target the Client Information header (second card header)
     const clientHeader = document.querySelectorAll('.card .card-header h5')[1];
     const clientNameLabel = document.querySelector('input[name="client_name"]').previousElementSibling;
     const clientAddressLabel = document.querySelector('textarea[name="client_address"]').previousElementSibling;
