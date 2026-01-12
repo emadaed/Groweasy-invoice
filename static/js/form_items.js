@@ -1,81 +1,66 @@
-// form_items.js - Updated for modern polished UI (works with new form.html + custom.css)
-// Supports: + Add Item button → modal search, dynamic rows, real-time total, clean display
+// form_items.js - Fixed: No Jinja in JS, uses window.userCurrencySymbol
 
 class InvoiceFormManager {
     constructor() {
         this.inventoryData = [];
         this.usedProductIds = new Set();
+        this.currencySymbol = window.userCurrencySymbol || 'Rs.';
         this.initialize();
     }
 
     initialize() {
-        console.log('🔄 Initializing invoice form (modern UI version)...');
+        console.log('Initializing invoice form...');
         this.loadInventoryData();
         this.setupCoreEventListeners();
         this.updateEmptyState();
-        this.updateGrandTotal(); // Initial total
+        this.updateGrandTotal();
     }
 
     loadInventoryData() {
         fetch('/api/inventory_items')
             .then(response => response.json())
             .then(items => {
-                console.log(`📦 Loaded {{ currency_symbol }}{items.length} inventory items`);
+                console.log(`Loaded ${items.length} inventory items`);
                 this.inventoryData = items;
-                this.updateInventoryDropdown(); // Keep for legacy if needed
+                this.updateInventoryDropdown();
             })
             .catch(error => {
-                console.error('❌ Failed to load inventory:', error);
+                console.error('Failed to load inventory:', error);
             });
     }
 
     setupCoreEventListeners() {
-        // Remove item buttons
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('removeItemBtn')) {
                 this.removeItem(e.target);
             }
-
-            // Legacy dropdown add (if still in DOM)
             if (e.target.id === 'addInventoryBtn') {
                 this.addInventoryItemFromDropdown();
             }
-
-            // Show all inventory
             if (e.target.id === 'showAllInventory') {
                 this.showAllInventory();
             }
-
-            // Search result add buttons in modal
             if (e.target.classList.contains('add-inventory-search-item')) {
                 const productId = e.target.dataset.id;
                 const productName = e.target.dataset.name;
                 const productPrice = e.target.dataset.price;
                 const productStock = e.target.dataset.stock;
                 this.addInventoryItem(productId, productName, productPrice, productStock);
-                // Close modal after adding
                 const modal = bootstrap.Modal.getInstance(document.getElementById('addItemModal'));
                 if (modal) modal.hide();
             }
         });
 
-        // Live search in modal
         document.addEventListener('input', (e) => {
-            if (e.target.id === 'modalSearch') {
+            if (e.target.id === 'modalSearch' || e.target.id === 'inventorySearch') {
                 this.searchInventory(e.target.value);
             }
-            if (e.target.id === 'inventorySearch') {
-                this.searchInventory(e.target.value);
-            }
-
-            // Real-time quantity validation & total update
             if (e.target.name === 'item_qty[]' || e.target.name === 'item_price[]') {
                 this.validateQuantityInRealTime(e.target);
                 this.updateGrandTotal();
             }
         });
 
-        // Modal shown — focus search and clear
         const modalEl = document.getElementById('addItemModal');
         if (modalEl) {
             modalEl.addEventListener('shown.bs.modal', () => {
@@ -83,7 +68,8 @@ class InvoiceFormManager {
                 if (searchInput) {
                     searchInput.value = '';
                     searchInput.focus();
-                    document.getElementById('inventoryResults').style.display = 'none';
+                    const results = document.getElementById('inventoryResults');
+                    if (results) results.style.display = 'none';
                 }
             });
         }
@@ -98,7 +84,7 @@ class InvoiceFormManager {
             if (this.usedProductIds.has(item.id.toString())) return;
             const option = document.createElement('option');
             option.value = item.id;
-            option.textContent = `{{ currency_symbol }}{item.name} - {{ currency_symbol }}{item.price} (Stock: {{ currency_symbol }}{item.stock})`;
+            option.textContent = `${item.name} - ${this.currencySymbol}${item.price} (Stock: ${item.stock})`;
             option.dataset.name = item.name;
             option.dataset.price = item.price;
             option.dataset.stock = item.stock;
@@ -124,9 +110,7 @@ class InvoiceFormManager {
     }
 
     showAllInventory() {
-        const availableItems = this.inventoryData.filter(item =>
-            !this.usedProductIds.has(item.id.toString())
-        );
+        const availableItems = this.inventoryData.filter(item => !this.usedProductIds.has(item.id.toString()));
         this.displaySearchResults(availableItems);
     }
 
@@ -142,26 +126,26 @@ class InvoiceFormManager {
 
         const resultsHTML = `
             <div class="alert alert-info mb-3">
-                <strong>Found {{ currency_symbol }}{items.length} product(s):</strong>
+                <strong>Found ${items.length} product(s):</strong>
             </div>
             <div class="row g-3">
-                {{ currency_symbol }}{items.map(item => `
+                ${items.map(item => `
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body text-center">
-                                <h6 class="card-title mb-3">{{ currency_symbol }}{this.escapeHtml(item.name)}</h6>
-                                <p class="mb-2"><strong>{{ currency_symbol }}{item.price}</strong></p>
+                                <h6 class="card-title mb-3">${this.escapeHtml(item.name)}</h6>
+                                <p class="mb-2"><strong>${this.currencySymbol}${item.price}</strong></p>
                                 <p class="mb-3">
-                                    <span class="badge {{ currency_symbol }}{item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
-                                        Stock: {{ currency_symbol }}{item.stock}
+                                    <span class="badge ${item.stock > 10 ? 'bg-success' : item.stock > 0 ? 'bg-warning' : 'bg-danger'}">
+                                        Stock: ${item.stock}
                                     </span>
                                 </p>
                                 <button type="button" class="btn btn-success w-100 add-inventory-search-item"
-                                        data-id="{{ currency_symbol }}{item.id}"
-                                        data-name="{{ currency_symbol }}{this.escapeHtml(item.name)}"
-                                        data-price="{{ currency_symbol }}{item.price}"
-                                        data-stock="{{ currency_symbol }}{item.stock}">
-                                    ➕ Add to Invoice
+                                        data-id="${item.id}"
+                                        data-name="${this.escapeHtml(item.name)}"
+                                        data-price="${item.price}"
+                                        data-stock="${item.stock}">
+                                    Add to Invoice
                                 </button>
                             </div>
                         </div>
@@ -184,7 +168,7 @@ class InvoiceFormManager {
 
     addInventoryItem(productId, productName, productPrice, productStock) {
         if (this.usedProductIds.has(productId)) {
-            this.showToast('⚠️ This item is already in the invoice', 'warning');
+            this.showToast('This item is already in the invoice', 'warning');
             return;
         }
 
@@ -198,35 +182,34 @@ class InvoiceFormManager {
         newRow.innerHTML = `
             <div class="col-md-5">
                 <label class="form-label small fw-semibold">Item</label>
-                <input type="text" name="item_name[]" class="form-control" value="{{ currency_symbol }}{this.escapeHtml(productName)}" readonly>
-                <small class="text-muted">Stock: {{ currency_symbol }}{productStock} units</small>
-                <input type="hidden" name="item_id[]" value="{{ currency_symbol }}{productId}">
+                <input type="text" name="item_name[]" class="form-control" value="${this.escapeHtml(productName)}" readonly>
+                <small class="text-muted">Stock: ${productStock} units</small>
+                <input type="hidden" name="item_id[]" value="${productId}">
             </div>
             <div class="col-md-2">
                 <label class="form-label small fw-semibold">Qty</label>
-                <input type="number" name="item_qty[]" class="form-control" value="1" min="1" max="{{ currency_symbol }}{productStock}" required>
+                <input type="number" name="item_qty[]" class="form-control" value="1" min="1" max="${productStock}" required>
             </div>
             <div class="col-md-3">
-                <label class="form-label small fw-semibold">Unit Price ({{ currency_symbol }})</label>
-                <input type="number" name="item_price[]" class="form-control" value="{{ currency_symbol }}{productPrice}" step="0.01" readonly>
+                <label class="form-label small fw-semibold">Unit Price</label>
+                <input type="number" name="item_price[]" class="form-control" value="${productPrice}" step="0.01" readonly>
             </div>
             <div class="col-md-1">
                 <label class="form-label small opacity-0">Remove</label>
                 <button type="button" class="btn btn-outline-danger removeItemBtn w-100">&times;</button>
             </div>
             <div class="col-md-1 text-end">
-                <div class="fw-bold text-success fs-6 line-total">{{ currency_symbol }}{productPrice}</div>
+                <div class="fw-bold text-success fs-6 line-total">${this.currencySymbol}${productPrice}</div>
             </div>
         `;
 
         itemsContainer.appendChild(newRow);
 
-        this.showToast(`{{ currency_symbol }}{productName} added!`);
+        this.showToast(`${productName} added!`);
         this.updateEmptyState();
         this.updateInventoryDropdown();
         this.updateGrandTotal();
 
-        // Clear search results
         const resultsDiv = document.getElementById('inventoryResults');
         if (resultsDiv) resultsDiv.style.display = 'none';
         const searchInput = document.getElementById('modalSearch') || document.getElementById('inventorySearch');
@@ -264,12 +247,11 @@ class InvoiceFormManager {
             input.classList.remove('is-invalid');
         }
 
-        // Update line total
         const priceInput = row.querySelector('input[name="item_price[]"]');
         const lineTotalEl = row.querySelector('.line-total');
         if (priceInput && lineTotalEl) {
             const lineTotal = qty * parseFloat(priceInput.value || 0);
-            lineTotalEl.textContent = `{{ currency_symbol }}{lineTotal.toFixed(2)}`;
+            lineTotalEl.textContent = `${this.currencySymbol}${lineTotal.toFixed(2)}`;
         }
     }
 
@@ -315,7 +297,6 @@ class InvoiceFormManager {
     }
 }
 
-// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     new InvoiceFormManager();
 });

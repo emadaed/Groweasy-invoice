@@ -244,7 +244,9 @@
         </div>
     </div>
 </div>
-
+<script nonce="{{ nonce }}">
+    window.userCurrencySymbol = "{{ currency_symbol | default('Rs.') }}";
+</script>
 <script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/form_items.js') }}"></script>
 
 <script nonce="{{ nonce }}">
@@ -265,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Your autoFillCompanyInfo and invoiceTypeSwitcher scripts (keep them exactly as original)
+// autoFillCompanyInfo and invoiceTypeSwitcher scripts (keep them exactly as original)
 <script nonce="{{ nonce }}">
 // Auto-fill company info from user profile
 function autoFillCompanyInfo() {
@@ -304,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!typeSelector) return;
 
     const clientSection = document.querySelector('.card-header h5'); // Adjust if needed
-    const helpText = document.getElementById('invoiceTypeHelp'); // If you have this element
+    const helpText = document.getElementById('invoiceTypeHelp'); // If  have this element
     const clientNameLabel = document.querySelector('input[name="client_name"]').previousElementSibling;
     const clientAddressLabel = document.querySelector('textarea[name="client_address"]').previousElementSibling;
     const buyerNTNLabel = document.querySelector('input[name="buyer_ntn"]').previousElementSibling;
