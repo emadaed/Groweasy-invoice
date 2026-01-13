@@ -747,7 +747,7 @@ def settings():
                 preferred_currency=preferred_currency
             )
             flash('Profile updated successfully!', 'success')
-            return redirect(url_for('settings')) + '?v=' + str(int(time.time())))
+            return redirect(url_for('settings')) + f"?v={int(time.time())}")
 
         # Handle password change
         elif 'change_password' in request.form:
