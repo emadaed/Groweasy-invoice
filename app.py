@@ -733,7 +733,7 @@ def settings():
             company_phone = request.form.get('company_phone')
             company_tax_id = request.form.get('company_tax_id')
             seller_ntn = request.form.get('seller_ntn')  # 🆕 FBR field
-            seller_strn = request.form.get('seller_strn')  # 🆕 FBR fie
+            seller_strn = request.form.get('seller_strn')  # 🆕 FBR field
             preferred_currency = request.form.get('preferred_currency')
 
             update_user_profile(
@@ -746,8 +746,11 @@ def settings():
                 seller_strn=seller_strn,  # 🆕 Pass to function
                 preferred_currency=preferred_currency
             )
+            # Clear cache so new currency loads immediately
+            get_user_profile_cached.cache_clear()
+
             flash('Profile updated successfully!', 'success')
-            return redirect(url_for('settings') + f"?v={int(time.time())}")
+            return redirect(url_for('settings')
 
 
         # Handle password change
@@ -1087,7 +1090,7 @@ def invoice_history():
     # Get pagination parameters
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '').strip()
-    limit = 10  # Invoices per page
+    limit = 20  # Invoices per page
     offset = (page - 1) * limit
 
     user_id = session['user_id']
