@@ -746,11 +746,9 @@ def settings():
                 seller_strn=seller_strn,  # 🆕 Pass to function
                 preferred_currency=preferred_currency
             )
-            # Clear cache so new currency loads immediately
-            get_user_profile_cached.cache_clear()
 
-            flash('Profile updated successfully!', 'success')
-            return redirect(url_for('settings'))
+            flash('Settings updated successfully!', 'success')
+            return redirect(url_for('settings') + f"?_={int(time.time())}")
 
 
         # Handle password change
