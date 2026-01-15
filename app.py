@@ -750,7 +750,7 @@ def settings():
             get_user_profile_cached.cache_clear()
 
             flash('Profile updated successfully!', 'success')
-            return redirect(url_for('settings')
+            return redirect(url_for('settings'))
 
 
         # Handle password change
