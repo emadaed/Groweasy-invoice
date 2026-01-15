@@ -748,8 +748,11 @@ def settings():
             )
 
             flash('Settings updated successfully!', 'success')
-            return redirect(url_for('settings') + f"?_={int(time.time())}")
-
+            return redirect(url_for('settings')})
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
 
         # Handle password change
         elif 'change_password' in request.form:
@@ -1386,6 +1389,18 @@ def system_status():
     except Exception as e:
         print(f"System status error: {e}")
         return jsonify({'error': 'Database error'}), 500
+
+
+@app.route('/invoice/download/<invoice_number>')
+def invoice_download(invoice_number):
+    data = get_saved_invoice_data(session['user_id'], invoice_number)
+    if not data:
+        flash('Invoice not found', 'error')
+        return redirect(url_for('invoice_history'))
+
+    pdf_path = generate_pdf(data)
+    return send_file(pdf_path, as_attachment=True, download_name=f"{invoice_number}.pdf")
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=False)
