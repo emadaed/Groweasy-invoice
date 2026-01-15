@@ -1006,7 +1006,7 @@ class InvoiceView(MethodView):
 
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
-                session['last_invoice_data'] = data
+                session['last_invoice_data'] = service.data
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
         except ValueError as e:
