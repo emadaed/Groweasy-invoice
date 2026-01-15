@@ -14,7 +14,7 @@ import secrets
 from sqlalchemy import text
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response
+from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response, make_response
 from flask_compress import Compress
 from dotenv import load_dotenv
 # Local application
@@ -945,11 +945,11 @@ def donate():
 # preview and download
 from flask.views import MethodView
 from core.services import InvoiceService
-from core.number_generator import NumberGenerator  #
+from core.number_generator import NumberGenerator
 from core.purchases import save_purchase_order    # ADD
 from flask import send_file, current_app
 import io
-import json  # ADD THIS IMPORT
+import json  # ADD
 from sqlalchemy import text  # ADD
 from core.db import DB_ENGINE  # ADD
 
@@ -1004,6 +1004,7 @@ class InvoiceView(MethodView):
 
                 qr_b64 = generate_simple_qr(service.data)
                 html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
+                session['last_invoice_data'] = data
                 return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
 
         except ValueError as e:
@@ -1391,9 +1392,10 @@ def system_status():
         return jsonify({'error': 'Database error'}), 500
 
 
-@app.route('/invoice/download/<invoice_number>')
+@app.route('/invoice/download/<string:invoice_number>')
 def invoice_download(invoice_number):
-    data = get_saved_invoice_data(session['user_id'], invoice_number)
+
+    data = session.get('last_invoice_data')
     if not data:
         flash('Invoice not found', 'error')
         return redirect(url_for('invoice_history'))

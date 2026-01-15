@@ -8,7 +8,7 @@
     </div>
     <div class="text-center mt-4">
         <!-- Simple GET request for download -->
-        <a href="{{ url_for(''invoice_download', invoice_number=data.invoice_number) }}"
+        <a href="{{ url_for('invoice_download', invoice_number=data.invoice_number) }}"
            class="btn btn-success btn-lg">
             Download {{ 'Purchase Order' if data.invoice_type == 'P' else 'Invoice' }}
         </a>
