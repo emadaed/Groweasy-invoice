@@ -990,6 +990,7 @@ class InvoiceView(MethodView):
                 if invoice_type == 'P':
                     po_number = NumberGenerator.generate_po_number(user_id)
                     service.data['invoice_number'] = po_number
+                    session['last_invoice_data'] = service.data
 
                     save_purchase_order(user_id, service.data)
                     update_stock_on_invoice(user_id, service.data['items'], invoice_type='P', invoice_number=po_number)
@@ -997,6 +998,7 @@ class InvoiceView(MethodView):
                 else:
                     inv_number = NumberGenerator.generate_invoice_number(user_id)
                     service.data['invoice_number'] = inv_number
+                    session['last_invoice_data'] = service.data
 
                     save_user_invoice(user_id, service.data)
                     update_stock_on_invoice(user_id, service.data['items'], invoice_type='S', invoice_number=inv_number)
@@ -1390,19 +1392,6 @@ def system_status():
     except Exception as e:
         print(f"System status error: {e}")
         return jsonify({'error': 'Database error'}), 500
-
-
-@app.route('/invoice/download/<string:invoice_number>')
-def invoice_download(invoice_number):
-
-    data = session.get('last_invoice_data')
-    if not data:
-        flash('Invoice not found', 'error')
-        return redirect(url_for('invoice_history'))
-
-    pdf_path = generate_pdf(data)
-    return send_file(pdf_path, as_attachment=True, download_name=f"{invoice_number}.pdf")
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=False)
