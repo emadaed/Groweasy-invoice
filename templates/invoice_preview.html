@@ -1,21 +1,116 @@
+<!-- invoice_preview.html - Replace the entire content block -->
+
 {% extends "base.html" %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                {{ 'Purchase Order' if data.invoice_type == 'P' else 'Invoice' }} Preview
+                <small class="text-muted">#{{ data.invoice_number }}</small>
+            </h4>
+            <span class="badge bg-info">Preview Only - Not Saved</span>
+        </div>
         <div class="card-body">
-            {{ html | safe }}
+            <!-- Preview content -->
+            <div id="invoice-preview">
+                {{ html | safe }}
+            </div>
+
+            <!-- Download warning banner -->
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Important:</strong> This is a preview. The {{ 'purchase order' if data.invoice_type == 'P' else 'invoice' }}
+                has already been saved and stock has been updated.
+            </div>
         </div>
     </div>
-    <div class="text-center mt-4">
-        <!-- Simple GET request for download -->
-        <a href="{{ url_for('invoice_process', action='download', invoice_number=data.invoice_number, invoice_type=data.invoice_type) }}"
-       class="btn btn-success btn-lg">
-            Download {{ 'Purchase Order' if data.invoice_type == 'P' else 'Invoice' }}
-        </a>
 
-        <a href="{{ url_for('create_invoice') }}" class="btn btn-secondary btn-lg ms-3">
-            Create New
-        </a>
+    <!-- Action buttons -->
+    <div class="card mt-4">
+        <div class="card-body text-center">
+            <h5 class="card-title">Ready to Download?</h5>
+            <p class="card-text">
+                Your {{ 'purchase order' if data.invoice_type == 'P' else 'invoice' }} has been created successfully.
+                Click below to download the PDF.
+            </p>
+
+            <div class="btn-group" role="group">
+                <!-- Primary download button -->
+                <a href="{{ url_for('download_document',
+                                  document_number=data.invoice_number,
+                                  type='purchase_order' if data.invoice_type == 'P' else 'invoice') }}"
+                   class="btn btn-success btn-lg">
+                    <i class="bi bi-download"></i>
+                    Download {{ 'Purchase Order' if data.invoice_type == 'P' else 'Invoice' }} PDF
+                </a>
+
+                <!-- Secondary actions -->
+                <button type="button" class="btn btn-outline-secondary btn-lg dropdown-toggle dropdown-toggle-split"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="visually-hidden">More options</span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('create_invoice') }}">
+                            <i class="bi bi-plus-circle"></i> Create Another
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('invoice_history') }}">
+                            <i class="bi bi-clock-history"></i> View History
+                        </a>
+                    </li>
+                    {% if data.invoice_type == 'P' %}
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('purchase_orders') }}">
+                            <i class="bi bi-cart-check"></i> Purchase Orders
+                        </a>
+                    </li>
+                    {% else %}
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="window.print()">
+                            <i class="bi bi-printer"></i> Print Preview
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item text-danger" href="{{ url_for('cancel_invoice') }}">
+                            <i class="bi bi-x-circle"></i> Cancel This Document
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Help text -->
+            <p class="text-muted mt-3 small">
+                <i class="bi bi-info-circle"></i>
+                Note: Refreshing this page will show the preview again but won't create duplicates.
+                Your document is safely stored in the database.
+            </p>
+        </div>
     </div>
 </div>
+
+<!-- small script to prevent accidental back navigation re-submission -->
+<script nonce="{{ nonce }}">
+    // Prevent form resubmission on back button
+    if (window.history.replaceState) {
+        window.history.replaceState(null, null, window.location.href);
+    }
+
+    // Add confirmation for cancel
+    document.addEventListener('DOMContentLoaded', function() {
+        const cancelLink = document.querySelector('.dropdown-item.text-danger');
+        if (cancelLink) {
+            cancelLink.addEventListener('click', function(e) {
+                if (!confirm('Are you sure you want to cancel this document? This cannot be undone.')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}

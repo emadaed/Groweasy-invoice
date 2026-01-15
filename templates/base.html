@@ -54,6 +54,7 @@
     </style>
 </head>
 <body class="bg-light">
+
     <!-- Navigation -->
     <nav class="user-nav">
         <div class="container">
@@ -66,16 +67,126 @@
                 </div>
                 <div class="mt-2 mt-md-0">
                     {% if session.get('user_id') %}
-                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm me-1 mb-1">Dashboard</a>
-                        <a href="{{ url_for('create_invoice') }}" class="btn btn-outline-light btn-sm me-1 mb-1">New Invoice</a>
-                        <a href="{{ url_for('invoice_history') }}" class="btn btn-outline-light btn-sm me-1 mb-1">Invoices</a>
-                        <a href="{{ url_for('inventory') }}" class="btn btn-outline-light btn-sm me-1 mb-1">Inventory</a>
-                        <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-1 mb-1">Settings</a>
-                        <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm mb-1">Logout</a>
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+
+                        <!-- Separate Invoice and PO Creation -->
+                        <div class="btn-group me-1 mb-1" role="group">
+                            <button type="button" class="btn btn-outline-light btn-sm dropdown-toggle"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-plus-circle"></i> Create
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('create_invoice') }}">
+                                        <i class="bi bi-file-earmark-text"></i> New Invoice
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('create_purchase_order') }}">
+                                        <i class="bi bi-cart-plus"></i> New Purchase Order
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Separate Invoice and PO Management -->
+                        <div class="btn-group me-1 mb-1" role="group">
+                            <button type="button" class="btn btn-outline-light btn-sm dropdown-toggle"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-files"></i> Documents
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('invoice_history') }}">
+                                        <i class="bi bi-receipt"></i> Invoices
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('purchase_orders') }}">
+                                        <i class="bi bi-cart-check"></i> Purchase Orders
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('customers') }}">
+                                        <i class="bi bi-people"></i> Customers
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('suppliers') }}">
+                                        <i class="bi bi-truck"></i> Suppliers
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <a href="{{ url_for('inventory') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-box-seam"></i> Inventory
+                        </a>
+
+                        <!-- Reports Dropdown -->
+                        <div class="btn-group me-1 mb-1" role="group">
+                            <button type="button" class="btn btn-outline-light btn-sm dropdown-toggle"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-graph-up"></i> Reports
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('inventory_reports') }}">
+                                        <i class="bi bi-bar-chart"></i> Inventory Analytics
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('expenses') }}">
+                                        <i class="bi bi-cash-stack"></i> Expense Tracking
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('system_status') }}">
+                                        <i class="bi bi-heart-pulse"></i> System Status
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Settings & Account -->
+                        <div class="btn-group me-1 mb-1" role="group">
+                            <button type="button" class="btn btn-outline-light btn-sm dropdown-toggle"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-gear"></i> Account
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('settings') }}">
+                                        <i class="bi bi-sliders"></i> Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('devices') }}">
+                                        <i class="bi bi-laptop"></i> Device Management
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('logout') }}">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
                     {% else %}
-                        <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-sm me-1">Login</a>
-                        <a href="{{ url_for('register') }}" class="btn btn-success btn-sm me-1">Register</a>
-                        <a href="{{ url_for('about') }}" class="btn btn-outline-light btn-sm">About</a>
+                        <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-sm me-1">
+                            <i class="bi bi-box-arrow-in-right"></i> Login
+                        </a>
+                        <a href="{{ url_for('register') }}" class="btn btn-success btn-sm me-1">
+                            <i class="bi bi-person-plus"></i> Register
+                        </a>
+                        <a href="{{ url_for('about') }}" class="btn btn-outline-light btn-sm">
+                            <i class="bi bi-info-circle"></i> About
+                        </a>
                     {% endif %}
                 </div>
             </div>

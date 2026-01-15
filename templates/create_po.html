@@ -1,0 +1,524 @@
+<!-- templates/create_po.html -->
+{% extends "base.html" %}
+
+{% block title %}Create Purchase Order{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold">Create Purchase Order</h2>
+        <p class="text-muted fs-5">Order from suppliers, track deliveries, manage inventory</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('create_po_process') }}" enctype="multipart/form-data">
+        <input type="hidden" name="document_type" value="purchase_order">
+
+        <!-- Supplier & Your Business Info -->
+        <div class="row g-5 mb-4">
+            <!-- Supplier Column -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Supplier Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Supplier Selection -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Select Existing Supplier</label>
+                            <select class="form-select mb-3" id="supplierSelect" onchange="fillSupplierDetails(this.value)">
+                                <option value="">-- Select Supplier --</option>
+                                {% for supplier in suppliers %}
+                                <option value="{{ supplier.id }}"
+                                        data-name="{{ supplier.name }}"
+                                        data-email="{{ supplier.email }}"
+                                        data-phone="{{ supplier.phone }}"
+                                        data-address="{{ supplier.address }}"
+                                        data-tax="{{ supplier.tax_id }}">
+                                    {{ supplier.name }} ({{ supplier.order_count }} orders)
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newSupplierForm">
+                                + Add New Supplier
+                            </button>
+                        </div>
+
+                        <!-- Supplier Form -->
+                        <div id="newSupplierForm" class="collapse">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Supplier Name *</label>
+                                    <input type="text" name="supplier_name" id="supplierName" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Contact Person</label>
+                                    <input type="text" name="contact_person" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Phone *</label>
+                                    <input type="text" name="supplier_phone" id="supplierPhone" class="form-control" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" name="supplier_email" id="supplierEmail" class="form-control">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Address</label>
+                                    <textarea name="supplier_address" id="supplierAddress" class="form-control" rows="2"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Tax ID / NTN</label>
+                                    <input type="text" name="supplier_tax_id" id="supplierTaxId" class="form-control" placeholder="1234567-8">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Payment Terms</label>
+                                    <select name="supplier_payment_terms" class="form-select">
+                                        <option value="Net 30">Net 30</option>
+                                        <option value="Net 15">Net 15</option>
+                                        <option value="Due on Receipt">Due on Receipt</option>
+                                        <option value="50% Advance">50% Advance</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Your Business & PO Details Column -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">PO Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">PO Number (Auto-generated)</label>
+                                <input type="text" class="form-control bg-light" value="Will be auto-generated" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">PO Date *</label>
+                                <input type="date" name="po_date" class="form-control" required value="{{ now().strftime('%Y-%m-%d') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Delivery Date</label>
+                                <input type="date" name="delivery_date" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Delivery Method</label>
+                                <select name="delivery_method" class="form-select">
+                                    <option value="Pickup">Pickup</option>
+                                    <option value="Supplier Delivery">Supplier Delivery</option>
+                                    <option value="Courier">Courier</option>
+                                    <option value="Freight">Freight</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Shipping Terms</label>
+                                <input type="text" name="shipping_terms" class="form-control" value="FOB Destination">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">PO Status</label>
+                                <select name="po_status" class="form-select">
+                                    <option value="draft">Draft</option>
+                                    <option value="pending" selected>Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="ordered">Ordered</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Purchase Order Notes</label>
+                                <textarea name="po_notes" class="form-control" rows="2" placeholder="Special instructions, delivery notes, etc."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tax Information -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Tax Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Your Business NTN *</label>
+                        <input type="text" name="buyer_ntn" class="form-control" value="{{ prefill_data.get('seller_ntn', '') }}" required pattern="[0-9]{7}-[0-9]{1}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Supplier NTN (if registered)</label>
+                        <input type="text" name="seller_ntn" class="form-control" pattern="[0-9]{7}-[0-9]{1}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Withholding Tax (%)</label>
+                        <input type="number" name="withholding_tax" class="form-control" value="0" min="0" max="100" step="0.1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Sales Tax (%)</label>
+                        <input type="number" name="sales_tax" class="form-control" value="17" min="0" max="100" step="0.1">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PO Items Section -->
+        <div class="card mb-5">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Purchase Order Items</h5>
+                <div>
+                    <button type="button" class="btn btn-light btn-sm me-2" onclick="addPOItem()">
+                        <i class="bi bi-plus-circle"></i> Add Item
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#inventoryModal">
+                        <i class="bi bi-box-seam"></i> Add from Inventory
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="poItemsContainer">
+                    <!-- Items will be added here dynamically -->
+                </div>
+                <div id="noPOItemsMessage" class="text-center py-5 text-muted">
+                    No items added yet — add your first purchase item
+                </div>
+
+                <!-- PO Totals -->
+                <div class="row mt-4">
+                    <div class="col-md-6 offset-md-6">
+                        <table class="table table-bordered">
+                            <tr>
+                                <td><strong>Subtotal</strong></td>
+                                <td class="text-end">{{ currency_symbol }} <span id="poSubtotal">0.00</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tax</strong></td>
+                                <td class="text-end">{{ currency_symbol }} <span id="poTax">0.00</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Shipping</strong></td>
+                                <td class="text-end">{{ currency_symbol }} <span id="poShipping">0.00</span></td>
+                            </tr>
+                            <tr class="table-primary">
+                                <td><strong>Grand Total</strong></td>
+                                <td class="text-end"><strong>{{ currency_symbol }} <span id="poGrandTotal">0.00</span></strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PO Additional Details -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Shipping & Delivery</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Shipping Address</label>
+                                <textarea name="shipping_address" class="form-control" rows="3" placeholder="If different from your business address"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Shipping Cost</label>
+                                <input type="number" name="shipping_cost" id="shippingCost" class="form-control" value="0" min="0" step="0.01" onchange="updatePOTotals()">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Insurance</label>
+                                <input type="number" name="insurance_cost" class="form-control" value="0" min="0" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Attachments & Approval</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Attachments (Quotes, Specs)</label>
+                                <input type="file" name="attachments" class="form-control" multiple>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Approved By</label>
+                                <input type="text" name="approved_by" class="form-control" placeholder="Manager Name">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Department</label>
+                                <input type="text" name="department" class="form-control" placeholder="e.g., Procurement, Operations">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Internal Notes</label>
+                                <textarea name="internal_notes" class="form-control" rows="2" placeholder="For internal use only"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Buttons -->
+        <div class="text-center">
+            <button type="submit" name="action" value="draft" class="btn btn-outline-secondary btn-lg px-4">
+                Save as Draft
+            </button>
+            <button type="submit" name="action" value="submit" class="btn btn-success btn-lg px-5 ms-3">
+                Create Purchase Order
+            </button>
+            <a href="{{ url_for('purchase_orders') }}" class="btn btn-outline-danger btn-lg px-4 ms-3">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Inventory Modal for PO Items -->
+<div class="modal fade" id="inventoryModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Items from Inventory</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Select</th>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Current Stock</th>
+                                <th>Supplier</th>
+                                <th>Last Cost</th>
+                                <th>Qty to Order</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- Will be populated via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="addSelectedInventoryItems()">Add Selected Items</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+// JavaScript for PO-specific functionality
+window.userCurrencySymbol = "{{ currency_symbol | default('Rs.') }}";
+window.poItemCounter = 0;
+window.poItems = [];
+
+function fillSupplierDetails(supplierId) {
+    const option = document.querySelector(`#supplierSelect option[value="${supplierId}"]`);
+    if (!option || !supplierId) return;
+
+    document.getElementById('supplierName').value = option.dataset.name || '';
+    document.getElementById('supplierEmail').value = option.dataset.email || '';
+    document.getElementById('supplierPhone').value = option.dataset.phone || '';
+    document.getElementById('supplierAddress').value = option.dataset.address || '';
+    document.getElementById('supplierTaxId').value = option.dataset.tax || '';
+}
+
+function addPOItem(item = null) {
+    const container = document.getElementById('poItemsContainer');
+    const noItemsMsg = document.getElementById('noPOItemsMessage');
+
+    poItemCounter++;
+
+    const itemId = item ? item.id : `new_${poItemCounter}`;
+    const itemName = item ? item.name : '';
+    const itemSKU = item ? item.sku : '';
+    const itemPrice = item ? item.cost_price : 0;
+    const itemSupplier = item ? item.supplier : '';
+
+    const html = `
+    <div class="po-item card mb-3" id="po_item_${itemId}">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" name="items[${itemId}][name]"
+                           placeholder="Item description" value="${itemName}" required>
+                </div>
+                <div class="col-md-2">
+                    <input type="text" class="form-control" name="items[${itemId}][sku]"
+                           placeholder="SKU" value="${itemSKU}">
+                </div>
+                <div class="col-md-1">
+                    <input type="number" class="form-control qty" name="items[${itemId}][qty]"
+                           value="1" min="1" required onchange="updatePOItemTotal('${itemId}')">
+                </div>
+                <div class="col-md-2">
+                    <input type="number" class="form-control price" name="items[${itemId}][price]"
+                           value="${itemPrice}" step="0.01" required onchange="updatePOItemTotal('${itemId}')">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" class="form-control total" name="items[${itemId}][total]"
+                           value="${itemPrice}" readonly>
+                </div>
+                <div class="col-md-1 text-center">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removePOItem('${itemId}')">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <input type="text" class="form-control" name="items[${itemId}][supplier]"
+                           placeholder="Supplier" value="${itemSupplier}">
+                </div>
+                <div class="col-md-6">
+                    <textarea class="form-control" name="items[${itemId}][notes]"
+                              placeholder="Notes" rows="1"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+    container.insertAdjacentHTML('beforeend', html);
+
+    if (noItemsMsg) noItemsMsg.style.display = 'none';
+
+    // Store item
+    poItems.push({
+        id: itemId,
+        name: itemName,
+        qty: 1,
+        price: itemPrice,
+        total: itemPrice
+    });
+
+    updatePOTotals();
+}
+
+function updatePOItemTotal(itemId) {
+    const itemDiv = document.getElementById(`po_item_${itemId}`);
+    const qty = parseFloat(itemDiv.querySelector('.qty').value) || 0;
+    const price = parseFloat(itemDiv.querySelector('.price').value) || 0;
+    const total = qty * price;
+
+    itemDiv.querySelector('.total').value = total.toFixed(2);
+
+    // Update in array
+    const itemIndex = poItems.findIndex(item => item.id === itemId);
+    if (itemIndex !== -1) {
+        poItems[itemIndex].qty = qty;
+        poItems[itemIndex].price = price;
+        poItems[itemIndex].total = total;
+    }
+
+    updatePOTotals();
+}
+
+function removePOItem(itemId) {
+    const itemDiv = document.getElementById(`po_item_${itemId}`);
+    if (itemDiv) itemDiv.remove();
+
+    poItems = poItems.filter(item => item.id !== itemId);
+
+    const container = document.getElementById('poItemsContainer');
+    const noItemsMsg = document.getElementById('noPOItemsMessage');
+
+    if (container.children.length === 0 && noItemsMsg) {
+        noItemsMsg.style.display = 'block';
+    }
+
+    updatePOTotals();
+}
+
+function updatePOTotals() {
+    let subtotal = 0;
+
+    poItems.forEach(item => {
+        subtotal += item.total || 0;
+    });
+
+    const taxRate = parseFloat(document.querySelector('input[name="sales_tax"]').value) || 0;
+    const taxAmount = subtotal * (taxRate / 100);
+
+    const shipping = parseFloat(document.getElementById('shippingCost').value) || 0;
+
+    const grandTotal = subtotal + taxAmount + shipping;
+
+    document.getElementById('poSubtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('poTax').textContent = taxAmount.toFixed(2);
+    document.getElementById('poShipping').textContent = shipping.toFixed(2);
+    document.getElementById('poGrandTotal').textContent = grandTotal.toFixed(2);
+}
+
+// Load inventory for modal
+function loadInventoryForPO() {
+    fetch('/api/inventory_items')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+
+            data.forEach(item => {
+                const row = `
+                <tr>
+                    <td><input type="checkbox" class="form-check-input inventory-check" data-item='${JSON.stringify(item).replace(/'/g, "&#39;")}'></td>
+                    <td>${item.name}</td>
+                    <td>${item.sku || 'N/A'}</td>
+                    <td>${item.stock}</td>
+                    <td>${item.supplier || 'N/A'}</td>
+                    <td>${window.userCurrencySymbol}${item.cost_price || '0.00'}</td>
+                    <td><input type="number" class="form-control form-control-sm" value="1" min="1"></td>
+                </tr>`;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        });
+}
+
+function addSelectedInventoryItems() {
+    const checkboxes = document.querySelectorAll('.inventory-check:checked');
+    checkboxes.forEach(checkbox => {
+        const itemData = JSON.parse(checkbox.dataset.item.replace(/&#39;/g, "'"));
+        addPOItem(itemData);
+    });
+
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('inventoryModal'));
+    if (modal) modal.hide();
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    // Add first empty item
+    addPOItem();
+
+    // Set today's date
+    const today = new Date().toISOString().split('T')[0];
+    const poDate = document.querySelector('input[name="po_date"]');
+    if (poDate && !poDate.value) poDate.value = today;
+
+    // Set delivery date to 7 days from now
+    const deliveryDate = document.querySelector('input[name="delivery_date"]');
+    if (deliveryDate && !deliveryDate.value) {
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        deliveryDate.value = nextWeek.toISOString().split('T')[0];
+    }
+
+    // Load inventory when modal opens
+    document.getElementById('inventoryModal').addEventListener('show.bs.modal', loadInventoryForPO);
+});
+</script>
+{% endblock %}

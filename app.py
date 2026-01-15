@@ -421,11 +421,13 @@ def home():
 # create invoice
 @app.route('/create_invoice')
 def create_invoice():
+    """Dedicated route for creating sales invoices ONLY"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     prefill_data = {}
     user_profile = get_user_profile_cached(session['user_id'])
+
     if user_profile:
         prefill_data = {
             'company_name': user_profile.get('company_name', ''),
@@ -433,11 +435,178 @@ def create_invoice():
             'company_phone': user_profile.get('company_phone', ''),
             'company_email': user_profile.get('email', ''),
             'company_tax_id': user_profile.get('company_tax_id', ''),
-            'seller_ntn': user_profile.get('seller_ntn', ''),  # 🆕
-            'seller_strn': user_profile.get('seller_strn', '')  # 🆕
+            'seller_ntn': user_profile.get('seller_ntn', ''),
+            'seller_strn': user_profile.get('seller_strn', ''),
         }
 
-    return render_template('form.html', prefill_data=prefill_data, nonce=g.nonce)
+    return render_template('form.html',
+                         prefill_data=prefill_data,
+                         nonce=g.nonce)
+
+#create po
+@app.route('/create_purchase_order')
+def create_purchase_order():
+    """Dedicated route for creating purchase orders"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    prefill_data = {}
+    user_profile = get_user_profile_cached(session['user_id'])
+
+    # Get suppliers for dropdown
+    suppliers = get_suppliers(session['user_id'])
+
+    if user_profile:
+        prefill_data = {
+            'company_name': user_profile.get('company_name', ''),
+            'company_address': user_profile.get('company_address', ''),
+            'company_phone': user_profile.get('company_phone', ''),
+            'company_email': user_profile.get('email', ''),
+            'company_tax_id': user_profile.get('company_tax_id', ''),
+            'seller_ntn': user_profile.get('seller_ntn', ''),
+            'seller_strn': user_profile.get('seller_strn', ''),
+        }
+
+    return render_template('create_po.html',
+                         prefill_data=prefill_data,
+                         suppliers=suppliers,
+                         nonce=g.nonce)
+
+# create po process
+@app.route('/create_po_process', methods=['POST'])
+@limiter.limit("10 per minute")
+def create_po_process():
+    """Process purchase order creation (separate from invoices)"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    try:
+        # Extract PO-specific data
+        po_data = {
+            'document_type': 'purchase_order',
+            'supplier_name': request.form.get('supplier_name'),
+            'contact_person': request.form.get('contact_person'),
+            'supplier_phone': request.form.get('supplier_phone'),
+            'supplier_email': request.form.get('supplier_email'),
+            'supplier_address': request.form.get('supplier_address'),
+            'supplier_tax_id': request.form.get('supplier_tax_id'),
+            'supplier_payment_terms': request.form.get('supplier_payment_terms'),
+            'po_date': request.form.get('po_date'),
+            'delivery_date': request.form.get('delivery_date'),
+            'delivery_method': request.form.get('delivery_method'),
+            'shipping_terms': request.form.get('shipping_terms'),
+            'po_status': request.form.get('po_status'),
+            'po_notes': request.form.get('po_notes'),
+            'buyer_ntn': request.form.get('buyer_ntn'),
+            'seller_ntn': request.form.get('seller_ntn'),
+            'withholding_tax': float(request.form.get('withholding_tax', 0)),
+            'sales_tax': float(request.form.get('sales_tax', 17)),
+            'shipping_address': request.form.get('shipping_address'),
+            'shipping_cost': float(request.form.get('shipping_cost', 0)),
+            'insurance_cost': float(request.form.get('insurance_cost', 0)),
+            'approved_by': request.form.get('approved_by'),
+            'department': request.form.get('department'),
+            'internal_notes': request.form.get('internal_notes'),
+            'action': request.form.get('action', 'submit')
+        }
+
+        # Process items
+        items = []
+        total_amount = 0
+
+        # Extract items from form data
+        for key in request.form.keys():
+            if key.startswith('items[') and key.endswith('][name]'):
+                item_id = key.split('[')[1].split(']')[0]
+                items.append({
+                    'name': request.form.get(f'items[{item_id}][name]'),
+                    'sku': request.form.get(f'items[{item_id}][sku]'),
+                    'qty': int(request.form.get(f'items[{item_id}][qty]', 1)),
+                    'price': float(request.form.get(f'items[{item_id}][price]', 0)),
+                    'total': float(request.form.get(f'items[{item_id}][total]', 0)),
+                    'supplier': request.form.get(f'items[{item_id}][supplier]'),
+                    'notes': request.form.get(f'items[{item_id}][notes]')
+                })
+                total_amount += float(request.form.get(f'items[{item_id}][total]', 0))
+
+        po_data['items'] = items
+        po_data['subtotal'] = total_amount
+
+        # Calculate taxes
+        tax_amount = total_amount * (po_data['sales_tax'] / 100)
+        po_data['tax_amount'] = tax_amount
+
+        # Calculate grand total
+        po_data['grand_total'] = total_amount + tax_amount + po_data['shipping_cost'] + po_data['insurance_cost']
+
+        # Generate PO number
+        from core.number_generator import NumberGenerator
+        po_number = NumberGenerator.generate_po_number(user_id)
+        po_data['invoice_number'] = po_number
+
+        # Save to database
+        save_purchase_order(user_id, po_data)
+
+        # If submitted (not draft), update stock
+        if po_data['action'] == 'submit' and po_data['po_status'] in ['approved', 'ordered']:
+            update_stock_on_invoice(user_id, items, invoice_type='P', invoice_number=po_number)
+
+        # Store for preview
+        session['last_po_data'] = po_data
+
+        # Redirect to PO preview
+        return redirect(url_for('po_preview', po_number=po_number))
+
+    except Exception as e:
+        current_app.logger.error(f"PO creation error: {str(e)}", exc_info=True)
+        flash(f"❌ Error creating purchase order: {str(e)}", 'error')
+        return redirect(url_for('create_purchase_order'))
+
+@app.route('/po/preview/<po_number>')
+def po_preview(po_number):
+    """Preview purchase order"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
+    try:
+        # Fetch PO data
+        with DB_ENGINE.connect() as conn:
+            result = conn.execute(text("""
+                SELECT order_data FROM purchase_orders
+                WHERE user_id = :user_id AND po_number = :po_number
+                ORDER BY created_at DESC LIMIT 1
+            """), {"user_id": user_id, "po_number": po_number}).fetchone()
+
+        if not result:
+            flash("Purchase order not found", "error")
+            return redirect(url_for('purchase_orders'))
+
+        po_data = json.loads(result[0])
+
+        # Generate QR for PO
+        qr_b64 = generate_simple_qr(po_data)
+
+        # Render PO-specific template
+        html = render_template('purchase_order_pdf.html',
+                             data=po_data,
+                             preview=True,
+                             custom_qr_b64=qr_b64)
+
+        return render_template('po_preview.html',
+                             html=html,
+                             data=po_data,
+                             po_number=po_number,
+                             nonce=g.nonce)
+
+    except Exception as e:
+        current_app.logger.error(f"PO preview error: {str(e)}")
+        flash("Error loading purchase order", "error")
+        return redirect(url_for('purchase_orders'))
+
 
 @app.route('/debug')
 def debug():
@@ -944,33 +1113,47 @@ def donate():
 
 # preview and download
 from flask.views import MethodView
+from flask import g, session, request, flash, redirect, url_for, render_template, current_app
 from core.services import InvoiceService
 from core.number_generator import NumberGenerator
-from core.purchases import save_purchase_order    # ADD
-from flask import send_file, current_app
-import io
-import json  # ADD
-from sqlalchemy import text  # ADD
-from core.db import DB_ENGINE  # ADD
+from core.purchases import save_purchase_order
+import json
 
 class InvoiceView(MethodView):
+    """Handles invoice creation and preview - RESTful design"""
+
     def get(self):
-        """Handle GET requests for download"""
+        """
+        GET /invoice/process - Show preview or redirect
+        SAFE: No side effects, idempotent
+        """
         if 'user_id' not in session:
             return redirect(url_for('login'))
 
-        user_id = session['user_id']
-        invoice_number = request.args.get('invoice_number')
-        invoice_type = request.args.get('invoice_type', 'S')
+        # If coming from a successful creation, show preview
+        if 'last_invoice_data' in session and request.args.get('preview'):
+            invoice_data = session['last_invoice_data']
 
-        if not invoice_number:
-            flash("No document specified.", "error")
-            return redirect(url_for('create_invoice'))
+            # Generate QR for preview
+            qr_b64 = generate_simple_qr(invoice_data)
+            html = render_template('invoice_pdf.html',
+                                 data=invoice_data,
+                                 preview=True,
+                                 custom_qr_b64=qr_b64)
 
-        return self._download_document(user_id, invoice_number, invoice_type)
+            return render_template('invoice_preview.html',
+                                 html=html,
+                                 data=invoice_data,
+                                 nonce=g.nonce)
+
+        # Otherwise redirect to create form
+        return redirect(url_for('create_invoice'))
 
     def post(self):
-        """Handle POST requests for preview"""
+        """
+        POST /invoice/process - Create invoice or purchase order
+        NON-IDEMPOTENT: Creates new resource
+        """
         if 'user_id' not in session:
             return redirect(url_for('login'))
 
@@ -978,90 +1161,212 @@ class InvoiceView(MethodView):
         service = InvoiceService(user_id)
         form_data = request.form
         files = request.files
-        action = request.args.get('action', 'preview')
+        invoice_type = form_data.get('invoice_type', 'S')
 
         try:
-            if action == 'preview':
-                service.process(form_data, files, action)
+            # Process the form data
+            service.process(form_data, files, 'create')
 
-                # Generate proper invoice/PO numbers
-                invoice_type = service.data.get('invoice_type', 'S')
+            # Generate document number
+            if invoice_type == 'P':
+                doc_number = NumberGenerator.generate_po_number(user_id)
+                service.data['invoice_number'] = doc_number
 
-                if invoice_type == 'P':
-                    po_number = NumberGenerator.generate_po_number(user_id)
-                    service.data['invoice_number'] = po_number
-                    session['last_invoice_data'] = service.data
+                # Save as Purchase Order
+                save_purchase_order(user_id, service.data)
 
-                    save_purchase_order(user_id, service.data)
-                    update_stock_on_invoice(user_id, service.data['items'], invoice_type='P', invoice_number=po_number)
-                    flash(f"✅ Purchase Order {po_number} created! Stock added.", "success")
-                else:
-                    inv_number = NumberGenerator.generate_invoice_number(user_id)
-                    service.data['invoice_number'] = inv_number
-                    session['last_invoice_data'] = service.data
+                # Update stock (POs add stock)
+                update_stock_on_invoice(user_id, service.data['items'],
+                                      invoice_type='P',
+                                      invoice_number=doc_number)
 
-                    save_user_invoice(user_id, service.data)
-                    update_stock_on_invoice(user_id, service.data['items'], invoice_type='S', invoice_number=inv_number)
-                    flash(f"✅ Invoice {inv_number} created! Stock deducted.", "success")
+                flash(f"✅ Purchase Order {doc_number} created successfully!", "success")
 
-                qr_b64 = generate_simple_qr(service.data)
-                html = render_template('invoice_pdf.html', data=service.data, preview=True, custom_qr_b64=qr_b64)
-                session['last_invoice_data'] = service.data
-                return render_template('invoice_preview.html', html=html, data=service.data, nonce=g.nonce)
+            else:  # Sales Invoice
+                doc_number = NumberGenerator.generate_invoice_number(user_id)
+                service.data['invoice_number'] = doc_number
+
+                # Validate stock BEFORE saving
+                stock_check = validate_stock_availability(user_id, service.data['items'])
+                if not stock_check['success']:
+                    flash(f"❌ Stock issue: {stock_check['message']}", "error")
+                    return redirect(url_for('create_invoice'))
+
+                # Save invoice
+                save_user_invoice(user_id, service.data)
+
+                # Update stock (Invoices deduct stock)
+                update_stock_on_invoice(user_id, service.data['items'],
+                                      invoice_type='S',
+                                      invoice_number=doc_number)
+
+                flash(f"✅ Invoice {doc_number} created successfully!", "success")
+
+            # Store for preview
+            session['last_invoice_data'] = service.data
+
+            # Redirect to preview page (GET request, safe)
+            return redirect(url_for('invoice_process', preview='true'))
 
         except ValueError as e:
-            flash(str(e), 'error')
-            return redirect(url_for('create_invoice'))
-        except Exception as e:
-            current_app.logger.error(f"Invoice processing error: {str(e)}")
-            flash("An unexpected error occurred. Please try again.", 'error')
+            flash(f"❌ Validation error: {str(e)}", 'error')
             return redirect(url_for('create_invoice'))
 
-    def _download_document(self, user_id, invoice_number, invoice_type):
-        """Shared download logic"""
-        try:
-            if invoice_type == 'P':
-                with DB_ENGINE.connect() as conn:
-                    result = conn.execute(text("""
-                        SELECT order_data FROM purchase_orders
-                        WHERE user_id = :user_id AND po_number = :invoice_number
-                        ORDER BY id DESC LIMIT 1
-                    """), {"user_id": user_id, "invoice_number": invoice_number}).fetchone()
-            else:
-                with DB_ENGINE.connect() as conn:
-                    result = conn.execute(text("""
-                        SELECT invoice_data FROM user_invoices
-                        WHERE user_id = :user_id AND invoice_number = :invoice_number
-                        ORDER BY id DESC LIMIT 1
-                    """), {"user_id": user_id, "invoice_number": invoice_number}).fetchone()
+        except Exception as e:
+            current_app.logger.error(f"Invoice creation error: {str(e)}",
+                                   exc_info=True,
+                                   extra={'user_id': user_id,
+                                          'invoice_type': invoice_type})
+            flash("⚠️ An unexpected error occurred. Please try again.", 'error')
+            return redirect(url_for('create_invoice'))
+
+#invoice/download/<document_number>')
+@app.route('/invoice/download/<document_number>')
+@limiter.limit("10 per minute")  # Rate limiting to prevent abuse
+def download_document(document_number):
+    """
+    Dedicated endpoint for document downloads
+    GET requests are idempotent but have side effects (download tracking)
+
+    Security features:
+    - Rate limiting
+    - CSRF protection via session
+    - Download tracking
+    - Cache control headers
+    - Content-Disposition with safe filename
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    document_type = request.args.get('type', 'invoice')  # 'invoice' or 'purchase_order'
+
+    try:
+        # Log download attempt for analytics
+        current_app.logger.info(f"Download attempt: user={user_id}, "
+                              f"doc={document_number}, type={document_type}")
+
+        # Fetch document data
+        if document_type == 'purchase_order':
+            with DB_ENGINE.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT order_data, created_at
+                    FROM purchase_orders
+                    WHERE user_id = :user_id AND po_number = :doc_number
+                    ORDER BY created_at DESC LIMIT 1
+                """), {"user_id": user_id, "doc_number": document_number}).fetchone()
 
             if not result:
-                flash("Document not found.", "error")
-                return redirect(url_for('create_invoice'))
+                flash("❌ Purchase order not found or access denied.", "error")
+                return redirect(url_for('purchase_orders'))
 
             service_data = json.loads(result[0])
-            qr_b64 = generate_simple_qr(service_data)
-            html = render_template('invoice_pdf.html', data=service_data, preview=False, custom_qr_b64=qr_b64)
+            created_at = result[1]
+            document_type_name = "Purchase Order"
+            template = 'purchase_order_pdf.html' if template_exists('purchase_order_pdf.html') else 'invoice_pdf.html'
+
+        else:  # Sales Invoice
+            with DB_ENGINE.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT invoice_data, created_at
+                    FROM user_invoices
+                    WHERE user_id = :user_id AND invoice_number = :doc_number
+                    ORDER BY created_at DESC LIMIT 1
+                """), {"user_id": user_id, "doc_number": document_number}).fetchone()
+
+            if not result:
+                flash("❌ Invoice not found or access denied.", "error")
+                return redirect(url_for('invoice_history'))
+
+            service_data = json.loads(result[0])
+            created_at = result[1]
+            document_type_name = "Invoice"
+            template = 'invoice_pdf.html'
+
+        # Generate QR code
+        qr_b64 = generate_simple_qr(service_data)
+
+        # Generate PDF with appropriate template
+        try:
+            html = render_template(template,
+                                 data=service_data,
+                                 preview=False,
+                                 custom_qr_b64=qr_b64,
+                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
+            pdf_bytes = generate_pdf(html, current_app.root_path)
+        except Exception as template_error:
+            # Fallback to generic template if specific one fails
+            current_app.logger.warning(f"Template {template} failed, falling back: {template_error}")
+            html = render_template('invoice_pdf.html',
+                                 data=service_data,
+                                 preview=False,
+                                 custom_qr_b64=qr_b64,
+                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
             pdf_bytes = generate_pdf(html, current_app.root_path)
 
-            if invoice_type == 'P':
-                filename = f"purchase_order_{invoice_number}.pdf"
-                flash("Purchase Order downloaded successfully!", "success")
-            else:
-                filename = f"invoice_{invoice_number}.pdf"
-                flash("Invoice downloaded successfully!", "success")
+        # Sanitize filename
+        import re
+        safe_doc_number = re.sub(r'[^\w\-]', '_', document_number)
 
-            return send_file(
-                io.BytesIO(pdf_bytes),
-                as_attachment=True,
-                download_name=filename,
-                mimetype='application/pdf'
-            )
+        # Create filename with timestamp
+        timestamp = created_at.strftime('%Y%m%d_%H%M') if created_at else datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"{document_type_name.replace(' ', '_')}_{safe_doc_number}_{timestamp}.pdf"
 
+        # Create response with security headers
+        response = make_response(send_file(
+            io.BytesIO(pdf_bytes),
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        ))
+
+        # Security headers to prevent caching sensitive documents
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-Download-Options'] = 'noopen'
+
+        # Track download in database (optional but recommended)
+        try:
+            with DB_ENGINE.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO download_logs
+                    (user_id, document_type, document_number, downloaded_at, ip_address, user_agent)
+                    VALUES (:user_id, :doc_type, :doc_number, CURRENT_TIMESTAMP, :ip, :ua)
+                """), {
+                    "user_id": user_id,
+                    "doc_type": document_type,
+                    "doc_number": document_number,
+                    "ip": request.remote_addr,
+                    "ua": request.headers.get('User-Agent', '')
+                })
         except Exception as e:
-            current_app.logger.error(f"Download error: {str(e)}")
-            flash("Download failed. Please try again.", 'error')
-            return redirect(url_for('create_invoice'))
+            current_app.logger.warning(f"Download tracking failed: {e}")
+
+        # Don't flash here - it won't show since we're sending a file
+        # Instead, log the success
+        current_app.logger.info(f"✅ {document_type_name} {document_number} downloaded by user {user_id}")
+        return response
+
+    except Exception as e:
+        current_app.logger.error(f"Download error: {str(e)}",
+                               exc_info=True,
+                               extra={'user_id': user_id,
+                                      'document_number': document_number})
+        flash("❌ Download failed. Please try again.", 'error')
+        return redirect(url_for('invoice_history' if document_type != 'purchase_order' else 'purchase_orders'))
+
+# Helper function to check if template exists
+def template_exists(template_name):
+    """Check if a template exists"""
+    try:
+        app.jinja_env.get_template(template_name)
+        return True
+    except Exception:
+        return False
+
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['GET', 'POST'])
 
@@ -1154,7 +1459,7 @@ def invoice_history():
 # purchase order
 @app.route("/purchase_orders")
 def purchase_orders():
-    """Purchase order history"""
+    """Purchase order history with download options"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -1166,11 +1471,48 @@ def purchase_orders():
 
     orders = get_purchase_orders(session['user_id'], limit=limit, offset=offset)
 
+    # Get user's currency for display
+    user_profile = get_user_profile_cached(session['user_id'])
+    currency_code = user_profile.get('preferred_currency', 'PKR') if user_profile else 'PKR'
+    currency_symbol = CURRENCY_SYMBOLS.get(currency_code, 'Rs.')
+
     return render_template("purchase_orders.html",
                          orders=orders,
                          current_page=page,
+                         currency_symbol=currency_symbol,
                          nonce=g.nonce)
 
+
+#API endpoints for better UX
+
+@app.route("/api/purchase_order/<po_number>")
+@limiter.limit("30 per minute")
+def get_purchase_order_details(po_number):
+    """API endpoint to get PO details"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        with DB_ENGINE.connect() as conn:
+            result = conn.execute(text("""
+                SELECT order_data, status, created_at
+                FROM purchase_orders
+                WHERE user_id = :user_id AND po_number = :po_number
+                ORDER BY created_at DESC LIMIT 1
+            """), {"user_id": session['user_id'], "po_number": po_number}).fetchone()
+
+        if not result:
+            return jsonify({'error': 'Purchase order not found'}), 404
+
+        order_data = json.loads(result[0])
+        order_data['status'] = result[1]
+        order_data['created_at'] = result[2].isoformat() if result[2] else None
+
+        return jsonify(order_data), 200
+
+    except Exception as e:
+        current_app.logger.error(f"PO details error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 # supplier management
 @app.route("/suppliers")

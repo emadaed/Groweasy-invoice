@@ -1,0 +1,183 @@
+<!-- templates/purchase_order_pdf.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Purchase Order {{ data.invoice_number }}</title>
+    <style>
+        /* PO-specific styling */
+        .po-header {
+            background-color: #f8f9fa;
+            border-left: 5px solid #0d6efd;
+        }
+        .po-title {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+        }
+        .supplier-info {
+            background-color: #e8f4fd;
+            border: 1px solid #b6d4fe;
+        }
+        .terms-box {
+            border: 1px dashed #6c757d;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row po-header p-4 mb-4">
+            <div class="col-6">
+                <h1 class="po-title">PURCHASE ORDER</h1>
+                <h3 class="text-muted">PO #{{ data.invoice_number }}</h3>
+            </div>
+            <div class="col-6 text-end">
+                <h4>{{ data.company_name }}</h4>
+                <p>{{ data.company_address }}<br>
+                {{ data.company_phone }} | {{ data.company_email }}</p>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6 supplier-info p-3">
+                <h5>TO:</h5>
+                <h4>{{ data.supplier_name }}</h4>
+                <p>{{ data.supplier_address }}<br>
+                Phone: {{ data.supplier_phone }}<br>
+                Email: {{ data.supplier_email }}</p>
+                {% if data.contact_person %}
+                <p><strong>Contact:</strong> {{ data.contact_person }}</p>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <table class="table table-bordered">
+                    <tr>
+                        <th>PO Date:</th>
+                        <td>{{ data.po_date }}</td>
+                    </tr>
+                    <tr>
+                        <th>Delivery Date:</th>
+                        <td>{{ data.delivery_date }}</td>
+                    </tr>
+                    <tr>
+                        <th>Delivery Method:</th>
+                        <td>{{ data.delivery_method }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td><strong>{{ data.po_status|upper }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- PO Items Table -->
+        <table class="table table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Description</th>
+                    <th>SKU</th>
+                    <th>Supplier</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data.items %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ item.name }}
+                        {% if item.notes %}
+                        <br><small class="text-muted">{{ item.notes }}</small>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.sku or 'N/A' }}</td>
+                    <td>{{ item.supplier or data.supplier_name }}</td>
+                    <td>{{ item.qty }}</td>
+                    <td>{{ currency_symbol }}{{ "%.2f"|format(item.price) }}</td>
+                    <td>{{ currency_symbol }}{{ "%.2f"|format(item.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <td colspan="6" class="text-end"><strong>Subtotal:</strong></td>
+                    <td>{{ currency_symbol }}{{ "%.2f"|format(data.subtotal) }}</td>
+                </tr>
+                {% if data.tax_amount > 0 %}
+                <tr>
+                    <td colspan="6" class="text-end"><strong>Tax ({{ data.sales_tax }}%):</strong></td>
+                    <td>{{ currency_symbol }}{{ "%.2f"|format(data.tax_amount) }}</td>
+                </tr>
+                {% endif %}
+                {% if data.shipping_cost > 0 %}
+                <tr>
+                    <td colspan="6" class="text-end"><strong>Shipping:</strong></td>
+                    <td>{{ currency_symbol }}{{ "%.2f"|format(data.shipping_cost) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="table-primary">
+                    <td colspan="6" class="text-end"><strong>GRAND TOTAL:</strong></td>
+                    <td><strong>{{ currency_symbol }}{{ "%.2f"|format(data.grand_total) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- PO Terms & Conditions -->
+        <div class="row mt-4">
+            <div class="col-md-6 terms-box p-3">
+                <h5>TERMS & CONDITIONS</h5>
+                <ul>
+                    <li>Payment Terms: {{ data.supplier_payment_terms }}</li>
+                    <li>Shipping Terms: {{ data.shipping_terms }}</li>
+                    <li>Delivery Method: {{ data.delivery_method }}</li>
+                    {% if data.po_notes %}
+                    <li>Special Instructions: {{ data.po_notes }}</li>
+                    {% endif %}
+                </ul>
+            </div>
+            <div class="col-md-6">
+                {% if data.internal_notes %}
+                <div class="alert alert-info">
+                    <h6>Internal Notes:</h6>
+                    <p>{{ data.internal_notes }}</p>
+                </div>
+                {% endif %}
+                {% if data.approved_by %}
+                <div class="alert alert-success">
+                    <h6>Approval:</h6>
+                    <p>Approved by: <strong>{{ data.approved_by }}</strong><br>
+                    Department: {{ data.department }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="row mt-5 pt-4 border-top">
+            <div class="col-md-6">
+                <p>_________________________<br>
+                <strong>Authorized Signature</strong><br>
+                {{ data.company_name }}</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <p>_________________________<br>
+                <strong>Supplier Acknowledgment</strong><br>
+                {{ data.supplier_name }}</p>
+            </div>
+        </div>
+
+        <!-- QR Code for PO tracking -->
+        {% if custom_qr_b64 %}
+        <div class="text-center mt-4">
+            <img src="data:image/png;base64,{{ custom_qr_b64 }}"
+                 alt="PO QR Code"
+                 style="width: 100px; height: 100px;">
+            <p class="text-muted small">Scan to verify PO #{{ data.invoice_number }}</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
