@@ -168,7 +168,7 @@ def inject_currency():
     return dict(currency=currency, currency_symbol=symbol)
 
 # STOCK VALIDATION
-def validate_stock_availability(user_id, invoice_items):
+def validate_stock_availability(user_id, invoice_items, invoice_type='S'):
     """Validate stock availability BEFORE invoice processing"""
     if invoice_type == 'P':  # Purchase order - NO validation needed
         return {'success': True, 'message': 'Purchase order - no stock check needed'}
@@ -205,13 +205,12 @@ def validate_stock_availability(user_id, invoice_items):
 def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_number=None):
     """Update stock with invoice reference number"""
     try:
-
         for item in invoice_items:
             if item.get('product_id'):
                 product_id = item['product_id']
                 quantity = int(item.get('qty', 1))
 
-                with DB_ENGINE.begin() as conn:
+                with DB_ENGINE.connect() as conn:  # Changed to connect for read-only
                     result = conn.execute(text("""
                         SELECT current_stock FROM inventory_items
                         WHERE id = :product_id AND user_id = :user_id
@@ -454,6 +453,7 @@ def create_purchase_order():
     user_profile = get_user_profile_cached(session['user_id'])
 
     # Get suppliers for dropdown
+    from core.purchases import get_suppliers
     suppliers = get_suppliers(session['user_id'])
 
     if user_profile:
@@ -1187,7 +1187,7 @@ class InvoiceView(MethodView):
                 service.data['invoice_number'] = doc_number
 
                 # Validate stock BEFORE saving
-                stock_check = validate_stock_availability(user_id, service.data['items'])
+                stock_check = validate_stock_availability(user_id, service.data['items'], invoice_type='S')
                 if not stock_check['success']:
                     flash(f"❌ Stock issue: {stock_check['message']}", "error")
                     return redirect(url_for('create_invoice'))
