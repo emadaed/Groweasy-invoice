@@ -43,7 +43,7 @@
             <div class="card bg-warning text-white">
                 <div class="card-body">
                     <h6 class="card-title">This Month</h6>
-                    <h4>{{ orders|selectattr('order_date', 'month_equalto', now().month)|list|length }}</h4>
+                    <h4 id="thisMonthCount">{{ orders|selectattr('order_date', 'month_equalto', now().month)|list|length }}</h4>
                 </div>
             </div>
         </div>
@@ -342,6 +342,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+// Fallback if template filter doesn't work
+if (document.getElementById('thisMonthCount').textContent.includes('now')) {
+    const currentMonth = new Date().getMonth() + 1;
+    let monthCount = 0;
+
+    // Simple client-side calculation
+    {% for order in orders %}
+        {% if order.order_date %}
+            const orderMonth = new Date('{{ order.order_date }}').getMonth() + 1;
+            if (orderMonth === currentMonth) monthCount++;
+        {% endif %}
+    {% endfor %}
+
+    document.getElementById('thisMonthCount').textContent = monthCount;
+}
 </script>
 
 {% endblock %}

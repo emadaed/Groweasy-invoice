@@ -103,7 +103,7 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">PO Date *</label>
-                                <input type="date" name="po_date" class="form-control" required value="{{ now().strftime('%Y-%m-%d') }}">
+                                <input type="date" name="po_date" class="form-control" required id="poDateInput">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Delivery Date</label>
@@ -520,5 +520,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load inventory when modal opens
     document.getElementById('inventoryModal').addEventListener('show.bs.modal', loadInventoryForPO);
 });
+// Set default dates
+const today = new Date().toISOString().split('T')[0];
+const poDateInput = document.getElementById('poDateInput');
+if (poDateInput && !poDateInput.value) {
+    poDateInput.value = today;
+}
 </script>
 {% endblock %}

@@ -1,11 +1,10 @@
-# app.py 20 Dec 2025 04:44 AM PKST
+# app.py 16 Jan 2026 05:44 AM PKST
 # Standard library
-import io
 import time
 import json
 import base64
 import os
-import sqlite3
+import io
 from pathlib import Path
 from datetime import datetime, timedelta
 import secrets
@@ -14,9 +13,11 @@ import secrets
 from sqlalchemy import text
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response, make_response
+from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response, make_response, current_app
 from flask_compress import Compress
+from flask_session import Session
 from dotenv import load_dotenv
+import redis
 # Local application
 from fbr_integration import FBRInvoice
 from core.inventory import InventoryManager
@@ -29,8 +30,10 @@ from core.middleware import security_headers
 from core.db import DB_ENGINE
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
+
 # Environment setup
 load_dotenv()
+
 # Initialize Sentry for error monitoring
 if os.getenv('SENTRY_DSN'):
     sentry_sdk.init(
@@ -88,16 +91,57 @@ app.static_folder = str(app_root / "static")
 print(f"✅ Templates folder: {app.template_folder}")
 print(f"✅ Static folder: {app.static_folder}")
 
-##from tasks import celery
-##celery.conf.update(app.config)
 from core.cache import init_cache, get_user_profile_cached
 init_cache(app)
+
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Redis session configuration
+def setup_redis_sessions(app):
+    """Configure Redis-based sessions to prevent large cookies"""
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+    try:
+        # Test Redis connection
+        redis_client = redis.from_url(REDIS_URL)
+        redis_client.ping()
+        print("✅ Redis connected for sessions")
+
+        # Configure Flask-Session with Redis
+        app.config.update(
+            SESSION_TYPE='redis',
+            SESSION_REDIS=redis_client,
+            SESSION_PERMANENT=True,
+            SESSION_USE_SIGNER=True,
+            SESSION_KEY_PREFIX='invoice_sess:',
+            PERMANENT_SESSION_LIFETIME=86400,  # 24 hours
+            SESSION_COOKIE_SECURE=True,
+            SESSION_COOKIE_HTTPONLY=True,
+            SESSION_COOKIE_SAMESITE='Lax'
+        )
+
+        # Initialize session extension
+        Session(app)
+        print("✅ Redis sessions configured")
+
+    except Exception as e:
+        print(f"⚠️ Redis session setup failed: {e}")
+        # Fallback to filesystem (still better than large cookies)
+        app.config.update(
+            SESSION_TYPE='filesystem',
+            SESSION_FILE_DIR='/tmp/flask_sessions',
+            SESSION_FILE_THRESHOLD=100
+        )
+        Session(app)
+        print("✅ Fallback to filesystem sessions")
+
+# Setup Redis sessions
+setup_redis_sessions(app)
 
 # Rate Limiting
 REDIS_URL = os.getenv('REDIS_URL', 'memory://')
@@ -121,7 +165,7 @@ app.config['COMPRESS_MIMETYPES'] = [
 ]
 security_headers(app)
 
-# === REDUCE LOG NOISE (fixes Railway rate-limit warning) ===
+# REDUCE LOG NOISE
 import logging
 # Set root logger to INFO (your own prints stay)
 logging.getLogger().setLevel(logging.WARNING)
@@ -152,6 +196,55 @@ CURRENCY_SYMBOLS = {
     'SAR': '﷼'
 }
 
+# Helper functions
+def generate_simple_qr(data):
+    """Generate a simple QR code for document data"""
+    try:
+        import qrcode
+        from io import BytesIO
+        import base64
+
+        # Create minimal data for QR
+        qr_data = {
+            'doc_number': data.get('invoice_number', ''),
+            'date': data.get('invoice_date', ''),
+            'total': data.get('grand_total', 0)
+        }
+
+        qr = qrcode.QRCode(version=1, box_size=5, border=2)
+        qr.add_data(json.dumps(qr_data))
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffered = BytesIO()
+        img.save(buffered, format="PNG")
+
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+    except Exception as e:
+        print(f"QR generation error: {e}")
+        return None
+
+def clear_pending_invoice(user_id):
+    """Clear pending invoice data"""
+    try:
+        # This function should be in your services module
+        # For now, implementing a simple version
+        from core.session_storage import SessionStorage
+        SessionStorage.clear_data(user_id, 'last_invoice')
+        print(f"Cleared pending invoice for user {user_id}")
+        return True
+    except Exception as e:
+        print(f"Error clearing pending invoice: {e}")
+        return False
+
+def template_exists(template_name):
+    """Check if a template exists"""
+    try:
+        app.jinja_env.get_template(template_name)
+        return True
+    except Exception:
+        return False
+
 #context processor
 @app.context_processor
 def inject_currency():
@@ -166,6 +259,35 @@ def inject_currency():
             symbol = CURRENCY_SYMBOLS.get(currency, 'Rs.')
 
     return dict(currency=currency, currency_symbol=symbol)
+
+@app.context_processor
+def utility_processor():
+    """Add utility functions to all templates"""
+    def now():
+        return datetime.now()
+
+    def today():
+        return datetime.now().date()
+
+    def month_equalto_filter(value, month):
+        """Custom filter for month comparison"""
+        try:
+            if hasattr(value, 'month'):
+                return value.month == month
+            elif isinstance(value, str):
+                # Try to parse date string
+                from datetime import datetime as dt
+                date_obj = dt.strptime(value, '%Y-%m-%d')
+                return date_obj.month == month
+            return False
+        except:
+            return False
+
+    return {
+        'now': now,
+        'today': today,
+        'month_equalto': month_equalto_filter
+    }
 
 # STOCK VALIDATION
 def validate_stock_availability(user_id, invoice_items, invoice_type='S'):
@@ -239,147 +361,6 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
 
     except Exception as e:
         print(f"Stock update error: {e}")
-
-# save pending invoice
-def save_pending_invoice(user_id, invoice_data):
-    with DB_ENGINE.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS pending_invoices (
-                user_id INTEGER PRIMARY KEY,
-                invoice_data TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
-        conn.execute(text("""
-            INSERT INTO pending_invoices (user_id, invoice_data)
-            VALUES (:user_id, :invoice_data)
-        """), {"user_id": user_id, "invoice_data": json.dumps(invoice_data)})
-
-def get_pending_invoice(user_id):
-    with DB_ENGINE.connect() as conn:  # Read-only, no begin()
-        result = conn.execute(text("""
-            SELECT invoice_data FROM pending_invoices WHERE user_id = :user_id
-        """), {"user_id": user_id}).fetchone()
-        return json.loads(result[0]) if result else None
-
-def clear_pending_invoice(user_id):
-    with DB_ENGINE.begin() as conn:
-        conn.execute(text("DELETE FROM pending_invoices WHERE user_id = :user_id"), {"user_id": user_id})
-
-#custom QR
-def generate_custom_qr(invoice_data):
-    """Generate custom branded QR code for payment using uploaded logo"""
-    try:
-        import qrcode
-        from PIL import Image, ImageDraw
-        import os
-
-        # QR content - customize this as needed
-        qr_content = f"""
-Invoice: {invoice_data['invoice_number']}
-Amount: ${invoice_data['grand_total']:.2f}
-Date: {invoice_data['invoice_date']}
-Company: {invoice_data['company_name']}
-Client: {invoice_data['client_name']}
-        """.strip()
-
-        # Create QR code with custom styling
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_content)
-        qr.make(fit=True)
-
-        # Create QR code image with custom colors
-        qr_img = qr.make_image(
-            fill_color="#2c5aa0",  # Brand blue color
-            back_color="#ffffff"   # White background
-        ).convert('RGB')
-
-        # Try to add logo - PRIORITY: Use uploaded logo first
-        logo_added = False
-        try:
-            # 1. FIRST TRY: Use uploaded logo from invoice_data
-            if invoice_data.get('logo_b64'):
-                # Remove data URL prefix if present
-                logo_b64 = invoice_data['logo_b64']
-                if 'base64,' in logo_b64:
-                    logo_b64 = logo_b64.split('base64,')[1]
-
-                logo_data = base64.b64decode(logo_b64)
-                logo = Image.open(io.BytesIO(logo_data))
-                logo_added = True
-
-            # 2. FALLBACK: Use static logo if no uploaded logo
-            elif os.path.exists(os.path.join('static', 'assets', 'logo.png')):
-                logo_path = os.path.join('static', 'assets', 'logo.png')
-                logo = Image.open(logo_path)
-                logo_added = True
-
-            if logo_added:
-                # Resize logo
-                logo_size = 40
-                logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
-
-                # Calculate position to center the logo
-                pos = ((qr_img.size[0] - logo_size) // 2, (qr_img.size[1] - logo_size) // 2)
-
-                # Create a circular mask for the logo
-                mask = Image.new('L', (logo_size, logo_size), 0)
-                draw = ImageDraw.Draw(mask)
-                draw.ellipse((0, 0, logo_size, logo_size), fill=255)
-
-                # Apply circular mask to logo
-                logo.putalpha(mask)
-
-                # Paste logo on QR code
-                qr_img.paste(logo, pos, logo)
-
-        except Exception as e:
-            print(f"Logo addition skipped: {e}")
-
-        # Convert to base64
-        buffer = io.BytesIO()
-        qr_img.save(buffer, format='PNG')
-        qr_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-
-        return qr_b64
-
-    except Exception as e:
-        print(f"Custom QR generation error: {e}")
-        # Fallback: generate simple QR code
-        return generate_simple_qr(invoice_data)
-
-def generate_simple_qr(invoice_data):
-    """Generate simple QR code as fallback"""
-    try:
-        import qrcode
-        import io
-
-        qr_content = f"Invoice: {invoice_data['invoice_number']}\nAmount: ${invoice_data['grand_total']:.2f}"
-
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_content)
-        qr.make(fit=True)
-
-        qr_img = qr.make_image(fill_color="#2c5aa0", back_color="#ffffff")
-
-        buffer = io.BytesIO()
-        qr_img.save(buffer, format='PNG')
-        return base64.b64encode(buffer.getvalue()).decode('utf-8')
-
-    except Exception as e:
-        print(f"Simple QR generation also failed: {e}")
-        return None
 
 # password reset
 @app.route("/forgot_password", methods=['GET', 'POST'])
@@ -554,7 +535,9 @@ def create_po_process():
             update_stock_on_invoice(user_id, items, invoice_type='P', invoice_number=po_number)
 
         # Store for preview
-        session['last_po_data'] = po_data
+        from core.session_storage import SessionStorage
+        session_ref = SessionStorage.store_large_data(session['user_id'], 'last_po', po_data)
+        session['last_po_ref'] = session_ref
 
         # Redirect to PO preview
         return redirect(url_for('po_preview', po_number=po_number))
@@ -607,7 +590,6 @@ def po_preview(po_number):
         flash("Error loading purchase order", "error")
         return redirect(url_for('purchase_orders'))
 
-
 @app.route('/debug')
 def debug():
     """Debug route to check what's working"""
@@ -635,7 +617,6 @@ def inventory():
 
     # Convert to dicts
     inventory_items = [dict(row._mapping) for row in items]
-
 
     from core.inventory import InventoryManager
     low_stock_alerts = InventoryManager.get_low_stock_alerts(session['user_id'])
@@ -773,7 +754,7 @@ def adjust_stock_audit():
         from core.inventory import InventoryManager
         from core.db import DB_ENGINE
         from sqlalchemy import text
-        from core.auth import get_user_profile  # FIXED: remove "_cached"
+        from core.auth import get_user_profile
 
         # Get user's currency
         user_profile = get_user_profile(user_id)
@@ -943,6 +924,7 @@ def settings():
             return redirect(url_for('settings'))
 
     return render_template("settings.html", user_profile=user_profile, nonce=g.nonce)
+
 #device management
 @app.route("/devices")
 def devices():
@@ -957,6 +939,7 @@ def devices():
                          sessions=active_sessions,
                          current_token=session.get('session_token'),
                          nonce=g.nonce)
+
 # revoke tokens
 @app.route("/revoke_device/<token>")
 def revoke_device(token):
@@ -1113,11 +1096,9 @@ def donate():
 
 # preview and download
 from flask.views import MethodView
-from flask import g, session, request, flash, redirect, url_for, render_template, current_app
 from core.services import InvoiceService
 from core.number_generator import NumberGenerator
 from core.purchases import save_purchase_order
-import json
 
 class InvoiceView(MethodView):
     """Handles invoice creation and preview - RESTful design"""
@@ -1131,8 +1112,13 @@ class InvoiceView(MethodView):
             return redirect(url_for('login'))
 
         # If coming from a successful creation, show preview
-        if 'last_invoice_data' in session and request.args.get('preview'):
-            invoice_data = session['last_invoice_data']
+        if 'last_invoice_ref' in session and request.args.get('preview'):
+            from core.session_storage import SessionStorage
+            invoice_data = SessionStorage.get_data(session['user_id'], session['last_invoice_ref'])
+
+            if not invoice_data:
+                flash("Invoice preview expired or not found", "error")
+                return redirect(url_for('create_invoice'))
 
             # Generate QR for preview
             qr_b64 = generate_simple_qr(invoice_data)
@@ -1203,7 +1189,9 @@ class InvoiceView(MethodView):
                 flash(f"✅ Invoice {doc_number} created successfully!", "success")
 
             # Store for preview
-            session['last_invoice_data'] = service.data
+            from core.session_storage import SessionStorage
+            session_ref = SessionStorage.store_large_data(session['user_id'], 'last_invoice', service.data)
+            session['last_invoice_ref'] = session_ref
 
             # Redirect to preview page (GET request, safe)
             return redirect(url_for('invoice_process', preview='true'))
@@ -1358,15 +1346,6 @@ def download_document(document_number):
         flash("❌ Download failed. Please try again.", 'error')
         return redirect(url_for('invoice_history' if document_type != 'purchase_order' else 'purchase_orders'))
 
-# Helper function to check if template exists
-def template_exists(template_name):
-    """Check if a template exists"""
-    try:
-        app.jinja_env.get_template(template_name)
-        return True
-    except Exception:
-        return False
-
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['GET', 'POST'])
 
@@ -1482,9 +1461,7 @@ def purchase_orders():
                          currency_symbol=currency_symbol,
                          nonce=g.nonce)
 
-
 #API endpoints for better UX
-
 @app.route("/api/purchase_order/<po_number>")
 @limiter.limit("30 per minute")
 def get_purchase_order_details(po_number):
@@ -1584,65 +1561,6 @@ def add_expense():
 
     return redirect(url_for('expenses'))
 
-#fix customer
-@app.route("/fix_customers")
-def fix_customers():
-    """One-time fix to populate customers from existing invoices"""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    with DB_ENGINE.begin() as conn:
-        invoices = conn.execute(text("""
-            SELECT invoice_number, client_name, grand_total
-            FROM user_invoices WHERE user_id = :user_id
-        """), {"user_id": session['user_id']}).fetchall()
-
-        results = []
-        for invoice in invoices:
-            invoice_number, client_name, grand_total = invoice
-            conn.execute(text("""
-                INSERT OR IGNORE INTO customers
-                (user_id, name, total_spent, invoice_count)
-                VALUES (:user_id, :name, :total, 1)
-            """), {"user_id": session['user_id'], "name": client_name, "total": grand_total})
-            results.append(f"Added: {client_name} (Invoice: {invoice_number})")
-
-    return "<br>".join(results)
-
-# debug invoice data
-def debug_invoice_data():
-    """Debug function to check what data is being passed to template"""
-    sample_data = {
-        'company_name': 'Test Company',
-        'company_address': '123 Test St',
-        'company_phone': '+1234567890',
-        'company_email': 'test@company.com',
-        'company_tax_id': 'TAX123',
-        'invoice_number': 'INV-001',
-        'invoice_date': '2024-01-01',
-        'due_date': '2024-01-31',
-        'client_name': 'Test Client',
-        'client_email': 'client@test.com',
-        'client_phone': '+0987654321',
-        'client_address': '456 Client Ave',
-        'seller_ntn': '1234567-8',
-        'buyer_ntn': '8765432-1',
-        'payment_terms': 'Net 30',
-        'payment_methods': 'Bank Transfer, Credit Card',
-        'items': [
-            {'name': 'Test Item 1', 'qty': 2, 'price': 100.00, 'total': 200.00},
-            {'name': 'Test Item 2', 'qty': 1, 'price': 50.00, 'total': 50.00}
-        ],
-        'subtotal': 250.00,
-        'discount_rate': 10.0,
-        'discount_amount': 25.00,
-        'tax_rate': 17.0,
-        'tax_amount': 42.50,
-        'grand_total': 267.50,
-        'notes': 'Test note'
-    }
-    return sample_data
-
 #Backup Route (Manual Trigger)
 @app.route('/admin/backup')
 def admin_backup():
@@ -1701,7 +1619,6 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
-
 
 #API status
 @app.route('/api/status')
