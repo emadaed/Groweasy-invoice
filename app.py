@@ -83,7 +83,7 @@ def random_success_message(category='default'):
 
 # App creation
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')
+app.secret_key = os.getenv('SECRET_KEY', 'your-development-secret-key-change-in-production')
 # Fix template/static path for Railway
 app_root = Path(__file__).parent
 app.template_folder = str(app_root / "templates")
@@ -103,35 +103,49 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Redis session configuration
 def setup_redis_sessions(app):
-    """Configure Redis-based sessions to prevent large cookies"""
-    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    """Configure Redis-based sessions with fallback"""
+    REDIS_URL = os.getenv('REDIS_URL', 'memory://')
+
+    # Check if we're in development or using memory storage
+    if 'memory://' in REDIS_URL or os.getenv('FLASK_ENV') == 'development':
+        print("⚠️ Development mode: Using filesystem sessions")
+        app.config.update(
+            SESSION_TYPE='filesystem',
+            SESSION_FILE_DIR='/tmp/flask_sessions',
+            SESSION_FILE_THRESHOLD=100,
+            SESSION_PERMANENT=True,
+            PERMANENT_SESSION_LIFETIME=86400,
+            SESSION_COOKIE_SECURE=False,  # Allow HTTP in dev
+            SESSION_COOKIE_HTTPONLY=True,
+            SESSION_COOKIE_SAMESITE='Lax'
+        )
+        Session(app)
+        return
 
     try:
-        # Test Redis connection
+        # Production: Try Redis
         redis_client = redis.from_url(REDIS_URL)
         redis_client.ping()
         print("✅ Redis connected for sessions")
 
-        # Configure Flask-Session with Redis
         app.config.update(
             SESSION_TYPE='redis',
             SESSION_REDIS=redis_client,
             SESSION_PERMANENT=True,
             SESSION_USE_SIGNER=True,
             SESSION_KEY_PREFIX='invoice_sess:',
-            PERMANENT_SESSION_LIFETIME=86400,  # 24 hours
+            PERMANENT_SESSION_LIFETIME=86400,
             SESSION_COOKIE_SECURE=True,
             SESSION_COOKIE_HTTPONLY=True,
             SESSION_COOKIE_SAMESITE='Lax'
         )
 
-        # Initialize session extension
         Session(app)
         print("✅ Redis sessions configured")
 
     except Exception as e:
         print(f"⚠️ Redis session setup failed: {e}")
-        # Fallback to filesystem (still better than large cookies)
+        # Fallback to filesystem
         app.config.update(
             SESSION_TYPE='filesystem',
             SESSION_FILE_DIR='/tmp/flask_sessions',
@@ -144,13 +158,28 @@ def setup_redis_sessions(app):
 setup_redis_sessions(app)
 
 # Rate Limiting
+import os
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+# Configure rate limiting based on environment
 REDIS_URL = os.getenv('REDIS_URL', 'memory://')
-app.config['REDIS_URL'] = REDIS_URL
+
+# In development, use memory storage to avoid Redis dependency
+if os.getenv('FLASK_ENV') == 'development' or 'memory://' in REDIS_URL:
+    storage_uri = 'memory://'
+    print("⚠️ Development mode: Using memory storage for rate limiting")
+else:
+    storage_uri = REDIS_URL
+    print(f"✅ Production: Using Redis for rate limiting: {REDIS_URL[:30]}...")
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri=REDIS_URL
+    storage_uri=storage_uri,
+    strategy="fixed-window",  # More reliable than moving-window
+    on_breach=lambda req_limit: print(f"Rate limit exceeded: {req_limit}")
 )
 
 # Middleware

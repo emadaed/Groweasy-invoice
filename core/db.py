@@ -14,28 +14,37 @@ DB_ENGINE = create_engine(
 
 print(f"✅ Database connected: {DATABASE_URL[:50]}...")
 
+import os
+
 def init_database():
-    """Initialize all database tables and run migrations"""
-    print("🔄 Initializing database...")
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///users.db')
 
-    try:
-        # Create core tables
-        create_all_tables()
-
-        # Apply constraints
-        apply_inventory_constraints()
-
-        # Fix column types if needed
-        fix_reference_id_column()
-
-        # Create additional required tables
-        create_missing_tables()
-
-        print("✅ Database initialized successfully")
-
-    except Exception as e:
-        print(f"⚠️ Database initialization error: {e}")
-        raise
+    if 'sqlite' in DATABASE_URL:
+        # SQLite syntax
+        session_storage_sql = """
+            CREATE TABLE IF NOT EXISTS session_storage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_key TEXT NOT NULL,
+                data_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                expires_at TIMESTAMP DEFAULT (DATETIME('now', '+24 hours')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+    else:
+        # PostgreSQL syntax
+        session_storage_sql = """
+            CREATE TABLE IF NOT EXISTS session_storage (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                session_key TEXT NOT NULL,
+                data_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '24 hours',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """
 
 def create_all_tables():
     """Create all required tables with correct schema"""
