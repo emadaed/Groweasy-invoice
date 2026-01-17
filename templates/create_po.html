@@ -527,4 +527,28 @@ if (poDateInput && !poDateInput.value) {
     poDateInput.value = today;
 }
 </script>
+<!-- JavaScript to help with form submission -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Fix form data serialization
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // Ensure all item fields have proper names
+            const itemRows = document.querySelectorAll('.item-row');
+            itemRows.forEach((row, index) => {
+                const inputs = row.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    const name = input.getAttribute('name');
+                    if (name && name.includes('[]')) {
+                        // Fix array format to indexed format
+                        const fieldName = name.replace('[]', `[${index}]`);
+                        input.setAttribute('name', fieldName);
+                    }
+                });
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

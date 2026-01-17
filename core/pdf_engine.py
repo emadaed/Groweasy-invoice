@@ -1,192 +1,153 @@
-# core/pdf_engine.py
-
+# core/pdf_engine.py - FIXED VERSION
 import os
+import sys
 from pathlib import Path
 
-# Check if WeasyPrint is available
+# Try to import WeasyPrint
+HAS_WEASYPRINT = False
 try:
     from weasyprint import HTML, CSS
-    from weasyprint.text.fonts import FontConfiguration
     HAS_WEASYPRINT = True
-except ImportError:
-    HAS_WEASYPRINT = False
-    print("⚠️ WeasyPrint not installed. PDF generation will be disabled.")
+    print("✅ WeasyPrint available")
+except ImportError as e:
+    print(f"⚠️ WeasyPrint not available: {e}")
 
-
-def generate_pdf(html_content, app_root_path=None):
+def generate_pdf(html_content, base_path):
     """
-    Generate PDF from HTML with proper CSS loading.
-
-    Args:
-        html_content: Rendered HTML string
-        app_root_path: Flask app.root_path for locating static files
-
-    Returns:
-        PDF bytes
+    Generate PDF from HTML content
+    Returns: bytes or None on failure
     """
-    if not HAS_WEASYPRINT:
-        raise RuntimeError("WeasyPrint is not installed")
-
     try:
-        # Determine static directory path
-        if app_root_path:
-            static_dir = os.path.join(app_root_path, 'static')
-        else:
-            # Fallback: Try to find static relative to this file
-            current_dir = Path(__file__).parent.absolute()
-            static_dir = current_dir.parent / 'static'
-            static_dir = str(static_dir)
+        if not HAS_WEASYPRINT:
+            print("❌ WeasyPrint not installed")
+            return None
 
-        # Verify static directory exists
-        if not os.path.exists(static_dir):
-            print(f"⚠️ Static directory not found at {static_dir}")
-            print("⚠️ Generating PDF without external CSS")
-            return HTML(string=html_content).write_pdf()
+        # Convert base_path to Path object
+        base_path = Path(base_path)
+        static_path = base_path / 'static'
 
-        # Define CSS file paths
-        css_dir = os.path.join(static_dir, 'css')
-        bootstrap_path = os.path.join(css_dir, 'bootstrap.min.css')
-        invoice_path = os.path.join(css_dir, 'invoice.min.css')
+        print(f"📂 Base path: {base_path}")
+        print(f"📂 Static path: {static_path}")
 
-        # Font configuration for WeasyPrint
-        font_config = FontConfiguration()
+        # Create HTML object
+        html = HTML(string=html_content, base_url=f'file://{base_path}/')
 
-        # Load CSS stylesheets
-        css_stylesheets = []
+        # Load CSS files with error handling
+        stylesheets = []
 
-        # Add inline CSS for PDF-specific styling
-        pdf_css = CSS(string='''
-            @page {
-                size: A4;
-                margin: 1cm;
-            }
-
-            body {
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 10pt;
-                line-height: 1.4;
-                color: #333;
-            }
-
-            /* Hide preview-only elements */
-            .btn, button, .alert, form, .preview-only {
-                display: none !important;
-            }
-
-            /* Ensure tables render properly */
-            table {
-                border-collapse: collapse;
-                width: 100%;
-            }
-
-            /* Print-friendly colors */
-            .bg-primary, .bg-success, .bg-info {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            /* Prevent page breaks inside elements */
-            .invoice-container, table, tr {
-                page-break-inside: avoid;
-            }
-
-            /* QR codes should maintain size */
-            img[alt*="QR"] {
-                width: 70px !important;
-                height: 70px !important;
-            }
-        ''', font_config=font_config)
-        css_stylesheets.append(pdf_css)
-
-        # Load Bootstrap CSS if available
-        if os.path.exists(bootstrap_path):
+        # 1. Bootstrap CSS
+        bootstrap_css = static_path / 'css' / 'bootstrap.min.css'
+        if bootstrap_css.exists():
             try:
-                css_stylesheets.append(CSS(filename=bootstrap_path, font_config=font_config))
-                print(f"✅ Loaded Bootstrap CSS from {bootstrap_path}")
+                css = CSS(filename=str(bootstrap_css))
+                stylesheets.append(css)
+                print(f"✅ Loaded Bootstrap CSS: {bootstrap_css}")
             except Exception as e:
-                print(f"⚠️ Error loading Bootstrap CSS: {e}")
+                print(f"⚠️ Failed to load Bootstrap CSS: {e}")
         else:
-            print(f"⚠️ Bootstrap CSS not found at {bootstrap_path}")
+            print(f"⚠️ Bootstrap CSS not found: {bootstrap_css}")
 
-        # Load Invoice CSS if available
-        if os.path.exists(invoice_path):
+        # 2. Invoice CSS
+        invoice_css = static_path / 'css' / 'invoice.min.css'
+        if invoice_css.exists():
             try:
-                css_stylesheets.append(CSS(filename=invoice_path, font_config=font_config))
-                print(f"✅ Loaded Invoice CSS from {invoice_path}")
+                css = CSS(filename=str(invoice_css))
+                stylesheets.append(css)
+                print(f"✅ Loaded Invoice CSS: {invoice_css}")
             except Exception as e:
-                print(f"⚠️ Error loading Invoice CSS: {e}")
+                print(f"⚠️ Failed to load Invoice CSS: {e}")
         else:
-            print(f"⚠️ Invoice CSS not found at {invoice_path}")
+            print(f"⚠️ Invoice CSS not found: {invoice_css}")
 
-        # Create base_url for resolving relative paths in HTML
-        # Use file:// protocol with the static directory
-        base_url = f'file://{os.path.abspath(static_dir)}/'
-        print(f"📂 Using base_url: {base_url}")
+        # 3. Custom CSS if exists
+        custom_css = static_path / 'css' / 'custom.css'
+        if custom_css.exists():
+            try:
+                css = CSS(filename=str(custom_css))
+                stylesheets.append(css)
+                print(f"✅ Loaded Custom CSS: {custom_css}")
+            except Exception as e:
+                print(f"⚠️ Failed to load Custom CSS: {e}")
 
-        # Generate PDF
-        print(f"📄 Generating PDF with {len(css_stylesheets)} stylesheets...")
+        print(f"📄 Generating PDF with {len(stylesheets)} stylesheets...")
 
-        html_doc = HTML(
-            string=html_content,
-            base_url=base_url
-        )
+        # Generate PDF with error handling for pydyf compatibility
+        try:
+            # Method 1: Try with stylesheets
+            pdf_bytes = html.write_pdf(stylesheets=stylesheets)
+            print(f"✅ PDF generated successfully: {len(pdf_bytes)} bytes")
+            return pdf_bytes
+        except TypeError as e:
+            if "PDF.__init__() takes 1 positional argument but" in str(e):
+                print("⚠️ pydyf compatibility issue detected, trying without stylesheets...")
+                # Method 2: Try without stylesheets
+                try:
+                    pdf_bytes = html.write_pdf()
+                    print(f"✅ PDF generated without stylesheets: {len(pdf_bytes)} bytes")
+                    return pdf_bytes
+                except Exception as e2:
+                    print(f"❌ PDF generation without stylesheets failed: {e2}")
 
-        pdf_bytes = html_doc.write_pdf(
-            stylesheets=css_stylesheets if css_stylesheets else None,
-            font_config=font_config
-        )
+                    # Method 3: Try with inline CSS
+                    print("⚠️ Attempting fallback with basic styling...")
+                    try:
+                        # Add basic CSS inline
+                        basic_css = """
+                        <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                        .total-row { font-weight: bold; }
+                        </style>
+                        """
+                        html_with_css = basic_css + html_content
+                        html_fallback = HTML(string=html_with_css)
+                        pdf_bytes = html_fallback.write_pdf()
+                        print(f"✅ PDF generated with inline CSS: {len(pdf_bytes)} bytes")
+                        return pdf_bytes
+                    except Exception as e3:
+                        print(f"❌ All PDF generation attempts failed: {e3}")
+                        return None
+            else:
+                print(f"❌ PDF generation error: {e}")
+                return None
+        except Exception as e:
+            print(f"❌ PDF generation error: {e}")
+            return None
 
-        print(f"✅ PDF generated successfully ({len(pdf_bytes):,} bytes)")
+    except Exception as e:
+        print(f"❌ PDF generation failed: {e}")
+        return None
+
+def generate_pdf_fallback(html_content):
+    """
+    Fallback PDF generation using fpdf2 if WeasyPrint fails
+    """
+    try:
+        from fpdf import FPDF
+        import tempfile
+
+        # Create PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+
+        # Add HTML content as text (very basic)
+        lines = html_content.replace('<br>', '\n').replace('</p>', '\n')
+        # Remove HTML tags (basic)
+        import re
+        lines = re.sub(r'<[^>]+>', '', lines)
+
+        for line in lines.split('\n'):
+            if line.strip():
+                pdf.cell(200, 10, txt=line[:100], ln=1)
+
+        # Save to bytes
+        pdf_bytes = pdf.output(dest='S').encode('latin1')
+        print(f"✅ Fallback PDF generated: {len(pdf_bytes)} bytes")
         return pdf_bytes
 
     except Exception as e:
-        print(f"❌ PDF generation error: {e}")
-
-        # Log to Sentry if available
-        try:
-            import sentry_sdk
-            sentry_sdk.capture_exception(e)
-        except ImportError:
-            pass
-
-        # Attempt fallback generation
-        print("⚠️ Attempting fallback PDF generation without external CSS...")
-        try:
-            # Add minimal inline CSS for fallback
-            fallback_css = CSS(string='''
-                @page { size: A4; margin: 1cm; }
-                body { font-family: Arial, sans-serif; font-size: 10pt; }
-                table { border-collapse: collapse; width: 100%; }
-                td, th { padding: 4px; border: 1px solid #ddd; }
-                .btn, button, form { display: none; }
-            ''')
-            print(f"DEBUG: Final PDF size: {len(pdf_bytes)} bytes")
-            if len(pdf_bytes) < 5000:
-                print("WARNING: PDF suspiciously small — possible blank!")
-
-            return HTML(string=html_content).write_pdf(stylesheets=[fallback_css])
-        except Exception as fallback_error:
-            print(f"❌ Fallback PDF generation also failed: {fallback_error}")
-            raise
-
-
-def generate_pdf_from_url(url, app_root_path=None):
-    """
-    Generate PDF from a URL (alternative method).
-
-    Args:
-        url: URL to render as PDF
-        app_root_path: Flask app.root_path for locating static files
-
-    Returns:
-        PDF bytes
-    """
-    if not HAS_WEASYPRINT:
-        raise RuntimeError("WeasyPrint is not installed")
-
-    try:
-        font_config = FontConfiguration()
-        return HTML(url=url).write_pdf(font_config=font_config)
-    except Exception as e:
-        print(f"❌ PDF generation from URL failed: {e}")
-        raise
+        print(f"❌ Fallback PDF also failed: {e}")
+        return None
