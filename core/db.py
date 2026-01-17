@@ -299,7 +299,10 @@ def fix_reference_id_column():
 
 # Initialize database on import
 try:
-    init_database()
+    create_all_tables()
+    create_missing_tables()
+    apply_inventory_constraints()
+    fix_reference_id_column()
 except Exception as e:
     print(f"⚠️ Initial database setup failed: {e}")
-    # Continue - tables might already exist
+
