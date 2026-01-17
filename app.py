@@ -103,30 +103,42 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Redis session configuration
 def setup_redis_sessions(app):
-    """Configure Redis-based sessions with fallback"""
-    REDIS_URL = os.getenv('REDIS_URL', 'memory://')
+    """Configure Redis-based sessions with proper fallback"""
+    REDIS_URL = os.getenv('REDIS_URL', '').strip()
 
-    # Check if we're in development or using memory storage
-    if 'memory://' in REDIS_URL or os.getenv('FLASK_ENV') == 'development':
-        print("⚠️ Development mode: Using filesystem sessions")
+    # Validate Redis URL
+    if not REDIS_URL or REDIS_URL == 'memory://':
+        print("⚠️ No Redis URL provided, using filesystem sessions")
         app.config.update(
             SESSION_TYPE='filesystem',
             SESSION_FILE_DIR='/tmp/flask_sessions',
             SESSION_FILE_THRESHOLD=100,
             SESSION_PERMANENT=True,
             PERMANENT_SESSION_LIFETIME=86400,
-            SESSION_COOKIE_SECURE=False,  # Allow HTTP in dev
+            SESSION_COOKIE_SECURE=True,
             SESSION_COOKIE_HTTPONLY=True,
             SESSION_COOKIE_SAMESITE='Lax'
         )
         Session(app)
         return
 
+    # Validate Redis URL format
+    if not REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
+        print(f"⚠️ Invalid Redis URL format: {REDIS_URL[:50]}...")
+        print("⚠️ Using filesystem sessions as fallback")
+        app.config.update(
+            SESSION_TYPE='filesystem',
+            SESSION_FILE_DIR='/tmp/flask_sessions',
+            SESSION_FILE_THRESHOLD=100
+        )
+        Session(app)
+        return
+
     try:
-        # Production: Try Redis
-        redis_client = redis.from_url(REDIS_URL)
+        # Test Redis connection
+        redis_client = redis.from_url(REDIS_URL, socket_connect_timeout=5)
         redis_client.ping()
-        print("✅ Redis connected for sessions")
+        print(f"✅ Redis connected: {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}")
 
         app.config.update(
             SESSION_TYPE='redis',
@@ -144,8 +156,7 @@ def setup_redis_sessions(app):
         print("✅ Redis sessions configured")
 
     except Exception as e:
-        print(f"⚠️ Redis session setup failed: {e}")
-        # Fallback to filesystem
+        print(f"⚠️ Redis connection failed: {e}")
         app.config.update(
             SESSION_TYPE='filesystem',
             SESSION_FILE_DIR='/tmp/flask_sessions',
@@ -153,7 +164,6 @@ def setup_redis_sessions(app):
         )
         Session(app)
         print("✅ Fallback to filesystem sessions")
-
 # Setup Redis sessions
 setup_redis_sessions(app)
 
@@ -306,8 +316,14 @@ def utility_processor():
             elif isinstance(value, str):
                 # Try to parse date string
                 from datetime import datetime as dt
-                date_obj = dt.strptime(value, '%Y-%m-%d')
-                return date_obj.month == month
+                # Handle different date formats
+                for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d %H:%M:%S']:
+                    try:
+                        date_obj = dt.strptime(value, fmt)
+                        return date_obj.month == month
+                    except:
+                        continue
+                return False
             return False
         except:
             return False
@@ -317,7 +333,6 @@ def utility_processor():
         'today': today,
         'month_equalto': month_equalto_filter
     }
-
 # STOCK VALIDATION
 def validate_stock_availability(user_id, invoice_items, invoice_type='S'):
     """Validate stock availability BEFORE invoice processing"""
