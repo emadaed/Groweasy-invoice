@@ -391,7 +391,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for item in data.get('get', '')('items', []) %}
+                {% for item in data.get('items', []) %}
                 <tr>
                     <td>{{ item.name or item.code or '—' }}</td>
                     <td align="center">{{ item.qty }}</td>
