@@ -486,6 +486,10 @@ def utility_processor():
         'today': today,
         'month_equalto': month_equalto_filter
     }
+
+from flask import g
+import secrets
+
 @app.before_request
 def before_request():
     """Set nonce for CSP"""
