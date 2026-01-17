@@ -1295,90 +1295,54 @@ class InvoiceView(MethodView):
 
     def post(self):
         """
-        POST /invoice/process - Create invoice or purchase order
-        NON-IDEMPOTENT: Creates new resource
+        POST /invoice/process - Create invoice or purchase order using service layer
         """
         if 'user_id' not in session:
             return redirect(url_for('login'))
 
         user_id = session['user_id']
+        invoice_type = request.form.get('invoice_type', 'S')
 
         try:
-            # Create service with fixed Redis config
-            invoice_type = request.form.get('invoice_type', 'S')
+            from core.invoice_service import InvoiceService
+            service = InvoiceService(user_id)
 
-            # TEMPORARY FIX: Skip service creation for now
-            # service = InvoiceService(user_id)
-            # form_data = request.form
-            # files = request.files
-            # service.process(form_data, files, 'create')
+            if invoice_type == 'P':
+                # Create purchase order
+                po_data, errors = service.create_purchase_order(request.form.to_dict())
 
-            # Instead, process directly
-            from core.number_generator import NumberGenerator
-            from core.auth import save_user_invoice
+                if errors:
+                    for error in errors:
+                        flash(f"❌ {error}", 'error')
+                    return redirect(url_for('create_purchase_order'))
 
-            # Generate invoice number
-            doc_number = NumberGenerator.generate_invoice_number(user_id)
+                if po_data:
+                    # Store for preview
+                    from core.session_storage import SessionStorage
+                    session_ref = SessionStorage.store_large_data(user_id, 'last_po', po_data)
+                    session['last_po_ref'] = session_ref
 
-            # Create simple invoice data
-            invoice_data = {
-                'invoice_number': doc_number,
-                'invoice_date': request.form.get('invoice_date', datetime.now().strftime('%Y-%m-%d')),
-                'client_name': request.form.get('client_name', ''),
-                'client_address': request.form.get('client_address', ''),
-                'client_phone': request.form.get('client_phone', ''),
-                'client_email': request.form.get('client_email', ''),
-                'items': [],
-                'subtotal': 0,
-                'tax_amount': 0,
-                'grand_total': 0,
-                'notes': request.form.get('notes', '')
-            }
+                    flash(f"✅ Purchase Order {po_data['po_number']} created successfully!", "success")
+                    return redirect(url_for('po_preview', po_number=po_data['po_number']))
+            else:
+                # Create sales invoice
+                invoice_data, errors = service.create_invoice(request.form.to_dict())
 
-            # Add items (simplified)
-            item_index = 0
-            while True:
-                name = request.form.get(f'items[{item_index}][name]')
-                if not name:
-                    break
+                if errors:
+                    for error in errors:
+                        flash(f"❌ {error}", 'error')
+                    return redirect(url_for('create_invoice'))
 
-                price = float(request.form.get(f'items[{item_index}][price]', 0))
-                qty = int(request.form.get(f'items[{item_index}][qty]', 1))
-                total = price * qty
+                if invoice_data:
+                    # Store for preview
+                    from core.session_storage import SessionStorage
+                    session_ref = SessionStorage.store_large_data(user_id, 'last_invoice', invoice_data)
+                    session['last_invoice_ref'] = session_ref
 
-                invoice_data['items'].append({
-                    'name': name,
-                    'price': price,
-                    'qty': qty,
-                    'total': total
-                })
+                    flash(f"✅ Invoice {invoice_data['invoice_number']} created successfully!", "success")
+                    return redirect(url_for('invoice_process', preview='true'))
 
-                invoice_data['subtotal'] += total
-                item_index += 1
-
-            # Calculate taxes
-            tax_rate = float(request.form.get('tax_rate', 17))
-            invoice_data['tax_amount'] = invoice_data['subtotal'] * (tax_rate / 100)
-            invoice_data['grand_total'] = invoice_data['subtotal'] + invoice_data['tax_amount']
-
-            # Save invoice
-            save_user_invoice(user_id, invoice_data)
-
-            # Update stock
-            update_stock_on_invoice(user_id, invoice_data['items'], invoice_type='S', invoice_number=doc_number)
-
-            flash(f"✅ Invoice {doc_number} created successfully!", "success")
-
-            # Store for preview
-            from core.session_storage import SessionStorage
-            session_ref = SessionStorage.store_large_data(session['user_id'], 'last_invoice', invoice_data)
-            session['last_invoice_ref'] = session_ref
-
-            # Redirect to preview page (GET request, safe)
-            return redirect(url_for('invoice_process', preview='true'))
-
-        except ValueError as e:
-            flash(f"❌ Validation error: {str(e)}", 'error')
+            flash("⚠️ Failed to create document", 'error')
             return redirect(url_for('create_invoice'))
 
         except Exception as e:
@@ -1387,6 +1351,8 @@ class InvoiceView(MethodView):
                                    extra={'user_id': user_id})
             flash("⚠️ An unexpected error occurred. Please try again.", 'error')
             return redirect(url_for('create_invoice'))
+
+
 
 #invoice/download/<document_number>')
 @app.route('/invoice/download/<document_number>')

@@ -43,7 +43,16 @@
             <div class="card bg-warning text-white">
                 <div class="card-body">
                     <h6 class="card-title">This Month</h6>
-                    <h4 id="thisMonthCount">{{ orders|selectattr('order_date', 'month_equalto', now().month)|list|length }}</h4>
+                    <h4 id="thisMonthCount">
+                        {% set month = now().month %}
+                        {% set count = 0 %}
+                        {% for order in orders %}
+                            {% if order.order_date and order.order_date.month == month %}
+                                {% set count = count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ count }}
+                    </h4>
                 </div>
             </div>
         </div>
