@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${data.items.map(item => `
+                                ${data.get('items', []).map(item => `
                                     <tr>
                                         <td>${item.name}</td>
                                         <td>${item.qty}</td>
