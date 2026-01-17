@@ -1,4 +1,4 @@
-# core/purchases.py - Purchase Order & Supplier Management (Postgres Ready)
+# core/purchases.py - Purchase Order & Supplier Management (Postgres Ready) - FIXED
 from core.db import DB_ENGINE
 from sqlalchemy import text
 import json
@@ -42,49 +42,58 @@ def init_purchase_tables():
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_purchase_orders ON purchase_orders(user_id, order_date)"))
 
 def save_purchase_order(user_id, order_data):
-    """Save purchase order and auto-update supplier"""
+    """Save purchase order and auto-update supplier - FIXED"""
     with DB_ENGINE.begin() as conn:
-        # FIX: ALWAYS generate fresh PO number
+        # Generate fresh PO number
         from core.number_generator import NumberGenerator
         po_number = NumberGenerator.generate_po_number(user_id)
 
         print(f"🔍 Generated fresh PO number: {po_number}")
 
-        # Update order_data with correct PO number
-        order_data['invoice_number'] = po_number
-
-        supplier_name = order_data.get('client_name', 'Unknown Supplier')
-        order_date = order_data.get('invoice_date', '')
-        delivery_date = order_data.get('due_date', '')
+        # FIX: Use correct PO field names
+        supplier_name = order_data.get('supplier_name', 'Unknown Supplier')  # FIXED
+        order_date = order_data.get('po_date', datetime.now().strftime('%Y-%m-%d'))  # FIXED
+        delivery_date = order_data.get('delivery_date', '')  # FIXED
         grand_total = float(order_data.get('grand_total', 0))
+
+        # Update order_data with correct PO number (remove invoice_number)
+        order_data['po_number'] = po_number
+        if 'invoice_number' in order_data:
+            del order_data['invoice_number']  # Remove invoice field
+
         order_json = json.dumps(order_data)
 
-        # FIX: Convert empty dates to None for PostgreSQL
+        # Convert empty dates to None for PostgreSQL
         if not order_date:
-            order_date = None
+            order_date = datetime.now().strftime('%Y-%m-%d')  # Default to today
         if not delivery_date:
             delivery_date = None
+
+        print(f"📅 PO Date: {order_date}, Delivery: {delivery_date}")
 
         conn.execute(text('''
             INSERT INTO purchase_orders
             (user_id, po_number, supplier_name, order_date, delivery_date, grand_total, order_data)
             VALUES (:user_id, :po_number, :supplier_name, :order_date, :delivery_date, :grand_total, :order_json)
         '''), {
-            "user_id": user_id, "po_number": po_number, "supplier_name": supplier_name,
-            "order_date": order_date, "delivery_date": delivery_date, "grand_total": grand_total,
+            "user_id": user_id,
+            "po_number": po_number,
+            "supplier_name": supplier_name,
+            "order_date": order_date,
+            "delivery_date": delivery_date,
+            "grand_total": grand_total,
             "order_json": order_json
         })
 
         print(f"✅ Purchase Order {po_number} saved for {supplier_name}")
 
-
-        # Auto-save supplier
+        # Auto-save supplier - FIXED: Use correct supplier fields
         supplier_data = {
             'name': supplier_name,
-            'email': order_data.get('client_email', ''),
-            'phone': order_data.get('client_phone', ''),
-            'address': order_data.get('client_address', ''),
-            'tax_id': order_data.get('buyer_ntn', '')
+            'email': order_data.get('supplier_email', ''),  # FIXED
+            'phone': order_data.get('supplier_phone', ''),  # FIXED
+            'address': order_data.get('supplier_address', ''),  # FIXED
+            'tax_id': order_data.get('supplier_tax_id', '')  # FIXED
         }
 
         result = conn.execute(text("SELECT id FROM suppliers WHERE user_id = :user_id AND name = :name"),
@@ -99,9 +108,12 @@ def save_purchase_order(user_id, order_data):
                 updated_at=CURRENT_TIMESTAMP
                 WHERE id=:id
             '''), {
-                "email": supplier_data['email'], "phone": supplier_data['phone'],
-                "address": supplier_data['address'], "tax_id": supplier_data['tax_id'],
-                "grand_total": grand_total, "id": result[0]
+                "email": supplier_data['email'],
+                "phone": supplier_data['phone'],
+                "address": supplier_data['address'],
+                "tax_id": supplier_data['tax_id'],
+                "grand_total": grand_total,
+                "id": result[0]
             })
         else:
             conn.execute(text('''
@@ -109,12 +121,16 @@ def save_purchase_order(user_id, order_data):
                 (user_id, name, email, phone, address, tax_id, total_purchased, order_count)
                 VALUES (:user_id, :name, :email, :phone, :address, :tax_id, :grand_total, 1)
             '''), {
-                "user_id": user_id, "name": supplier_data['name'], "email": supplier_data['email'],
-                "phone": supplier_data['phone'], "address": supplier_data['address'],
-                "tax_id": supplier_data['tax_id'], "grand_total": grand_total
+                "user_id": user_id,
+                "name": supplier_data['name'],
+                "email": supplier_data['email'],
+                "phone": supplier_data['phone'],
+                "address": supplier_data['address'],
+                "tax_id": supplier_data['tax_id'],
+                "grand_total": grand_total
             })
 
-        print(f"✅ Purchase Order {po_number} saved for supplier {supplier_name}")
+        print(f"✅ Supplier {supplier_name} updated/created")
 
     return True
 

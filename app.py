@@ -590,39 +590,39 @@ def create_purchase_order():
 @app.route('/create_po_process', methods=['POST'])
 @limiter.limit("10 per minute")
 def create_po_process():
-    """Process purchase order creation (separate from invoices)"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     user_id = session['user_id']
 
     try:
-        # Extract PO-specific data
+        # Extract PO-specific data - ADD DATE VALIDATION
         po_data = {
             'document_type': 'purchase_order',
-            'supplier_name': request.form.get('supplier_name'),
-            'contact_person': request.form.get('contact_person'),
-            'supplier_phone': request.form.get('supplier_phone'),
-            'supplier_email': request.form.get('supplier_email'),
-            'supplier_address': request.form.get('supplier_address'),
-            'supplier_tax_id': request.form.get('supplier_tax_id'),
-            'supplier_payment_terms': request.form.get('supplier_payment_terms'),
-            'po_date': request.form.get('po_date'),
-            'delivery_date': request.form.get('delivery_date'),
-            'delivery_method': request.form.get('delivery_method'),
-            'shipping_terms': request.form.get('shipping_terms'),
+            'supplier_name': request.form.get('supplier_name') or 'Unknown Supplier',
+            'contact_person': request.form.get('contact_person', ''),
+            'supplier_phone': request.form.get('supplier_phone', ''),
+            'supplier_email': request.form.get('supplier_email', ''),
+            'supplier_address': request.form.get('supplier_address', ''),
+            'supplier_tax_id': request.form.get('supplier_tax_id', ''),
+            'supplier_payment_terms': request.form.get('supplier_payment_terms', 'Net 30'),
+            # FIX: Ensure dates are never None
+            'po_date': request.form.get('po_date') or datetime.now().strftime('%Y-%m-%d'),
+            'delivery_date': request.form.get('delivery_date') or '',
+            'delivery_method': request.form.get('delivery_method', 'Pickup'),
+            'shipping_terms': request.form.get('shipping_terms', 'FOB Destination'),
             'po_status': request.form.get('po_status', 'draft'),
-            'po_notes': request.form.get('po_notes'),
-            'buyer_ntn': request.form.get('buyer_ntn'),
-            'seller_ntn': request.form.get('seller_ntn'),
+            'po_notes': request.form.get('po_notes', ''),
+            'buyer_ntn': request.form.get('buyer_ntn', ''),
+            'seller_ntn': request.form.get('seller_ntn', ''),
             'withholding_tax': float(request.form.get('withholding_tax', 0)),
             'sales_tax': float(request.form.get('sales_tax', 17)),
-            'shipping_address': request.form.get('shipping_address'),
+            'shipping_address': request.form.get('shipping_address', ''),
             'shipping_cost': float(request.form.get('shipping_cost', 0)),
             'insurance_cost': float(request.form.get('insurance_cost', 0)),
-            'approved_by': request.form.get('approved_by'),
-            'department': request.form.get('department'),
-            'internal_notes': request.form.get('internal_notes'),
+            'approved_by': request.form.get('approved_by', ''),
+            'department': request.form.get('department', ''),
+            'internal_notes': request.form.get('internal_notes', ''),
             'action': request.form.get('action', 'submit')
         }
 
@@ -691,7 +691,7 @@ def create_po_process():
 
 @app.route('/po/preview/<po_number>')
 def po_preview(po_number):
-    """Preview purchase order"""
+    """Preview purchase order - FIXED"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -712,14 +712,32 @@ def po_preview(po_number):
 
         po_data = json.loads(result[0])
 
+        # Ensure po_data has required fields for template
+        if 'po_number' not in po_data:
+            po_data['po_number'] = po_number
+        if 'invoice_number' not in po_data:
+            po_data['invoice_number'] = po_number  # Template expects this
+
+        print(f"📄 PO Data keys: {list(po_data.keys())}")
+
         # Generate QR for PO
         qr_b64 = generate_simple_qr(po_data)
 
         # Render PO-specific template
-        html = render_template('purchase_order_pdf.html',
-                             data=po_data,
-                             preview=True,
-                             custom_qr_b64=qr_b64)
+        try:
+            html = render_template('purchase_order_pdf.html',
+                                 data=po_data,
+                                 preview=True,
+                                 custom_qr_b64=qr_b64,
+                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
+        except Exception as template_error:
+            print(f"⚠️ PO template error, falling back: {template_error}")
+            # Fallback to invoice template
+            html = render_template('invoice_pdf.html',
+                                 data=po_data,
+                                 preview=True,
+                                 custom_qr_b64=qr_b64,
+                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
 
         return render_template('po_preview.html',
                              html=html,
