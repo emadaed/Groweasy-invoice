@@ -4,15 +4,15 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div class="client-info">
                     <h5 class="section-title text-dark mb-2">Bill To:</h5>
-                    <p class="client-name mb-1"><strong>{{ data.client_name }}</strong></p>
-                    {% if data.client_email %}
-                    <p class="client-email mb-1 text-muted">{{ data.client_email }}</p>
+                    <p class="client-name mb-1"><strong>{{ data.get('client_name', '') }}</strong></p>
+                    {% if data.get('client_email', '') %}
+                    <p class="client-email mb-1 text-muted">{{ data.get('client_email', '') }}</p>
                     {% endif %}
-                    {% if data.client_phone %}
-                    <p class="client-phone mb-1 text-muted">{{ data.client_phone }}</p>
+                    {% if data.get('client_phone', '') %}
+                    <p class="client-phone mb-1 text-muted">{{ data.get('client_phone', '') }}</p>
                     {% endif %}
-                    {% if data.client_address %}
-                    <p class="client-address mb-0 text-muted small">{{ data.client_address }}</p>
+                    {% if data.get('client_address', '') %}
+                    <p class="client-address mb-0 text-muted small">{{ data.get('client_address', '') }}</p>
                     {% endif %}
                 </div>
             </div>

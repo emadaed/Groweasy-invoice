@@ -69,7 +69,7 @@
 function emailPO() {
     if (confirm('This will open your email client with the PO attached. Continue?')) {
         // In production, this would be an API call
-        window.location.href = `mailto:${encodeURIComponent(data.supplier_email || '')}?subject=Purchase Order ${po_number}&body=Please find attached our purchase order.`;
+        window.location.href = `mailto:${encodeURIComponent(data.get('supplier_email', '') || '')}?subject=Purchase Order ${po_number}&body=Please find attached our purchase order.`;
     }
 }
 </script>

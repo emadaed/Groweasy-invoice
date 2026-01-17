@@ -150,7 +150,7 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Your Business NTN *</label>
-                        <input type="text" name="buyer_ntn" class="form-control" value="{{ prefill_data.get('seller_ntn', '') }}" required pattern="[0-9]{7}-[0-9]{1}">
+                        <input type="text" name="buyer_ntn" class="form-control" value="{{ prefill_data.get('get', '')('seller_ntn', '') }}" required pattern="[0-9]{7}-[0-9]{1}">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Supplier NTN (if registered)</label>
@@ -471,7 +471,7 @@ function loadInventoryForPO() {
             const tbody = document.getElementById('inventoryTableBody');
             tbody.innerHTML = '';
 
-            data.forEach(item => {
+            data.get('forEach', '')(item => {
                 const row = `
                 <tr>
                     <td><input type="checkbox" class="form-check-input inventory-check" data-item='${JSON.stringify(item).replace(/'/g, "&#39;")}'></td>

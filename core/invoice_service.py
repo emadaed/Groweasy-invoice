@@ -130,118 +130,75 @@ class InvoiceService:
             return None, self.errors
 
     def _extract_items(self, form_data, prefix=''):
-        """Extract items from form data - FIXED VERSION"""
+        """Extract items from form data - PERMANENT FIX"""
         items = []
 
-        # Check if form_data is dict or werkzeug ImmutableMultiDict
+        # Convert to dict if MultiDict
         if hasattr(form_data, 'to_dict'):
             form_data = form_data.to_dict()
 
-        # Debug: print form data keys
-        print(f"DEBUG: Form keys: {list(form_data.keys())[:20]}...")
+        print(f"🔍 DEBUG: Form keys: {list(form_data.keys())}")
 
-        # Method 1: Try structured form data (items[0][name])
-        index = 0
-        while True:
-            # Try multiple key formats
-            name_keys = [
-                f'items[{index}][name]',
-                f'{prefix}items[{index}][name]',
-                f'item_{index}_name'
-            ]
+        # Method 1: Handle array format (item_name[], item_qty[], item_price[])
+        if 'item_name[]' in form_data:
+            item_names = form_data['item_name[]']
+            item_qtys = form_data.get('item_qty[]', [])
+            item_prices = form_data.get('item_price[]', [])
 
-            name = None
-            for key in name_keys:
-                name = form_data.get(key)
-                if name:
+            # Ensure lists
+            if not isinstance(item_names, list):
+                item_names = [item_names]
+            if not isinstance(item_qtys, list):
+                item_qtys = [item_qtys]
+            if not isinstance(item_prices, list):
+                item_prices = [item_prices]
+
+            for i in range(len(item_names)):
+                if item_names[i] and str(item_names[i]).strip():
+                    try:
+                        name = str(item_names[i]).strip()
+                        qty = int(item_qtys[i]) if i < len(item_qtys) else 1
+                        price = float(item_prices[i]) if i < len(item_prices) else 0
+
+                        items.append({
+                            'name': name,
+                            'qty': qty,
+                            'price': price,
+                            'total': price * qty
+                        })
+                        print(f"✅ Extracted: {name} - {qty} x {price}")
+                    except (ValueError, IndexError) as e:
+                        print(f"⚠️ Skipping item {i}: {e}")
+
+        # Method 2: Handle indexed format (items[0][name])
+        if not items:
+            i = 0
+            while True:
+                name_key = f'items[{i}][name]'
+                name = form_data.get(name_key)
+
+                if not name:
                     break
 
-            if not name or name.strip() == '':
-                # Check if we have any items at all
-                if index == 0:
-                    # Try alternative format: item_names[] array
-                    item_names = form_data.get('item_names[]')
-                    if isinstance(item_names, list):
-                        # Handle array format
-                        item_prices = form_data.get('item_prices[]', [])
-                        item_qtys = form_data.get('item_qtys[]', [])
-
-                        for i, item_name in enumerate(item_names):
-                            if item_name and item_name.strip():
-                                try:
-                                    price = float(item_prices[i] if i < len(item_prices) else 0)
-                                    qty = int(item_qtys[i] if i < len(item_qtys) else 1)
-                                    items.append({
-                                        'name': item_name,
-                                        'price': price,
-                                        'qty': qty,
-                                        'total': price * qty
-                                    })
-                                except (ValueError, IndexError):
-                                    pass
-                        return items
-                break
-
-            # Get other fields
-            price_key = f'items[{index}][price]'
-            qty_key = f'items[{index}][qty]'
-
-            price = 0
-            qty = 1
-
-            # Try multiple formats for price
-            for key in [f'items[{index}][price]', f'{prefix}items[{index}][price]', f'item_{index}_price']:
-                price_str = form_data.get(key)
-                if price_str:
-                    try:
-                        price = float(price_str)
-                        break
-                    except:
-                        pass
-
-            # Try multiple formats for quantity
-            for key in [f'items[{index}][qty]', f'{prefix}items[{index}][qty]', f'item_{index}_qty']:
-                qty_str = form_data.get(key)
-                if qty_str:
-                    try:
-                        qty = int(qty_str)
-                        break
-                    except:
-                        pass
-
-            items.append({
-                'name': name.strip(),
-                'price': price,
-                'qty': qty,
-                'total': price * qty,
-                'description': form_data.get(f'items[{index}][description]', ''),
-                'sku': form_data.get(f'items[{index}][sku]', ''),
-                'product_id': form_data.get(f'items[{index}][product_id]')
-            })
-
-            index += 1
-
-        # If no items found, check for single item format
-        if not items:
-            single_name = form_data.get('item_name')
-            if single_name and single_name.strip():
                 try:
-                    price = float(form_data.get('item_price', 0))
-                    qty = int(form_data.get('item_qty', 1))
+                    qty = int(form_data.get(f'items[{i}][qty]', 1))
+                    price = float(form_data.get(f'items[{i}][price]', 0))
+
                     items.append({
-                        'name': single_name.strip(),
-                        'price': price,
+                        'name': str(name).strip(),
                         'qty': qty,
+                        'price': price,
                         'total': price * qty
                     })
-                except ValueError:
-                    pass
+                    print(f"✅ Extracted indexed: {name}")
+                except ValueError as e:
+                    print(f"⚠️ Skipping indexed item {i}: {e}")
 
-        print(f"DEBUG: Extracted {len(items)} items")
-        for i, item in enumerate(items):
-            print(f"  Item {i}: {item['name']} - {item['qty']} x {item['price']} = {item['total']}")
+                i += 1
 
+        print(f"📊 Total items extracted: {len(items)}")
         return items
+
 
     def _update_stock(self, items, movement_type, reference_number):
         """Update stock levels"""
