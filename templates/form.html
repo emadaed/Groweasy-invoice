@@ -104,13 +104,13 @@
                             <label class="form-label">Seller NTN *</label>
                             <input type="text" name="seller_ntn" class="form-control"
                                    placeholder="1234567-8" pattern="[0-9]{7}-[0-9]{1}"
-                                   value="{{ prefill_data.get('get', '')('seller_ntn', '') }}" required>
+                                   value="{{ prefill_data.get('seller_ntn', '') }}" required>
                             <small class="text-muted">Your business NTN for tax compliance</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Seller STRN (Optional)</label>
                             <input type="text" name="seller_strn" class="form-control"
-                                   value="{{ prefill_data.get('get', '')('seller_strn', '') }}">
+                                   value="{{ prefill_data.get('seller_strn', '') }}">
                             <small class="text-muted">Sales Tax Registration Number</small>
                         </div>
                     </div>
@@ -128,7 +128,7 @@
                             <small class="text-muted">Client's STRN if registered</small>
                         </div>
                     </div>
-                    <!-- REMOVE Invoice Type selector - This is INVOICE ONLY page -->
+                    <!-- REMOVED Invoice Type selector - This is INVOICE ONLY page -->
                     <input type="hidden" name="invoice_type" value="S">
                 </div>
             </div>

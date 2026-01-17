@@ -73,7 +73,7 @@ import secrets
 from sqlalchemy import text
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask import Flask, render_template, request, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, g, Response, make_response, current_app
+from flask import Flask, render_template, request, g, send_file, session, redirect, url_for, send_from_directory, flash, jsonify, Response, make_response, current_app
 from flask_compress import Compress
 from flask_session import Session
 from dotenv import load_dotenv
@@ -486,6 +486,10 @@ def utility_processor():
         'today': today,
         'month_equalto': month_equalto_filter
     }
+@app.before_request
+def before_request():
+    """Set nonce for CSP"""
+    g.nonce = secrets.token_hex(16)
 
 # password reset
 @app.route("/forgot_password", methods=['GET', 'POST'])
