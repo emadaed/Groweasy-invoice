@@ -434,23 +434,23 @@
                     <table class="totals-table" cellpadding="3" cellspacing="0" border="0">
                         <tr>
                             <td><strong>Subtotal:</strong></td>
-                            <td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('subtotal', '')) }}</td>
+                            <td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('subtotal', 0)) }}</td>
                         </tr>
-                        {% if data.get('discount_rate', '') > 0 %}
+                        {% if data.get('discount_rate', 0)|float > 0 %}
                         <tr>
-                            <td><strong>Discount ({{ "%.1f"|format(data.get('discount_rate', '')) }}%):</strong></td>
-                            <td align="right">-{{ currency_symbol }}{{ "%.2f"|format(data.get('discount_amount', '')) }}</td>
+                            <td><strong>Discount ({{ "%.1f"|format(data.get('discount_rate', 0)) }}%):</strong></td>
+                            <td align="right">-{{ currency_symbol }}{{ "%.2f"|format(data.get('discount_amount', 0)) }}</td>
                         </tr>
                         {% endif %}
-                        {% if data.get('tax_rate', '') > 0 %}
+                        {% if data.get('tax_rate', 0)|float > 0 %}
                         <tr>
-                            <td><strong>Tax ({{ "%.1f"|format(data.get('tax_rate', '')) }}%):</strong></td>
-                            <td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('tax_amount', '')) }}</td>
+                            <td><strong>Tax ({{ "%.1f"|format(data.get('tax_rate', 0)) }}%):</strong></td>
+                            <td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('tax_amount', 0)) }}</td>
                         </tr>
                         {% endif %}
                         <tr class="grand-total-row">
                             <td>TOTAL DUE:</td>
-                            <td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('grand_total', '')) }}</td>
+                            <td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('grand_total', 0)) }}</td>
                         </tr>
                     </table>
 
