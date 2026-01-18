@@ -1,116 +1,87 @@
-<!-- invoice_preview.html - Replace the entire content block -->
-
-{% extends "base.html" %}
-
-{% block content %}
-<div class="container mt-4">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">
-                {{ 'Purchase Order' if data.get('invoice_type', '') == 'P' else 'Invoice' }} Preview
-                <small class="text-muted">#{{ data.get('invoice_number', '') }}</small>
-            </h4>
-            <span class="badge bg-info">Preview Only - Not Saved</span>
-        </div>
-        <div class="card-body">
-            <!-- Preview content -->
-            <div id="invoice-preview">
-                {{ html | safe }}
-            </div>
-
-            <!-- Download warning banner -->
-            <div class="alert alert-warning mt-3">
-                <i class="bi bi-exclamation-triangle"></i>
-                <strong>Important:</strong> This is a preview. The {{ 'purchase order' if data.get('invoice_type', '') == 'P' else 'invoice' }}
-                has already been saved and stock has been updated.
-            </div>
-        </div>
-    </div>
-
-    <!-- Action buttons -->
-    <div class="card mt-4">
-        <div class="card-body text-center">
-            <h5 class="card-title">Ready to Download?</h5>
-            <p class="card-text">
-                Your {{ 'purchase order' if data.get('invoice_type', '') == 'P' else 'invoice' }} has been created successfully.
-                Click below to download the PDF.
-            </p>
-
-            <div class="btn-group" role="group">
-                <!-- Primary download button -->
-                <a href="{{ url_for('download_document',
-                                  document_number=data.get('invoice_number', ''),
-                                  type='purchase_order' if data.get('invoice_type', '') == 'P' else 'invoice') }}"
-                   class="btn btn-success btn-lg">
-                    <i class="bi bi-download"></i>
-                    Download {{ 'Purchase Order' if data.get('invoice_type', '') == 'P' else 'Invoice' }} PDF
-                </a>
-
-                <!-- Secondary actions -->
-                <button type="button" class="btn btn-outline-secondary btn-lg dropdown-toggle dropdown-toggle-split"
-                        data-bs-toggle="dropdown" aria-expanded="false">
-                    <span class="visually-hidden">More options</span>
-                </button>
-                <ul class="dropdown-menu">
-                    <li>
-                        <a class="dropdown-item" href="{{ url_for('create_invoice') }}">
-                            <i class="bi bi-plus-circle"></i> Create Another
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item" href="{{ url_for('invoice_history') }}">
-                            <i class="bi bi-clock-history"></i> View History
-                        </a>
-                    </li>
-                    {% if data.get('invoice_type', '') == 'P' %}
-                    <li>
-                        <a class="dropdown-item" href="{{ url_for('purchase_orders') }}">
-                            <i class="bi bi-cart-check"></i> Purchase Orders
-                        </a>
-                    </li>
-                    {% else %}
-                    <li>
-                        <a class="dropdown-item" href="#" onclick="window.print()">
-                            <i class="bi bi-printer"></i> Print Preview
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                        <a class="dropdown-item text-danger" href="{{ url_for('cancel_invoice') }}">
-                            <i class="bi bi-x-circle"></i> Cancel This Document
-                        </a>
-                    </li>
-                </ul>
-            </div>
-
-            <!-- Help text -->
-            <p class="text-muted mt-3 small">
-                <i class="bi bi-info-circle"></i>
-                Note: Refreshing this page will show the preview again but won't create duplicates.
-                Your document is safely stored in the database.
-            </p>
-        </div>
-    </div>
-</div>
-
-<!-- small script to prevent accidental back navigation re-submission -->
-<script nonce="{{ nonce }}">
-    // Prevent form resubmission on back button
-    if (window.history.replaceState) {
-        window.history.replaceState(null, null, window.location.href);
-    }
-
-    // Add confirmation for cancel
-    document.addEventListener('DOMContentLoaded', function() {
-        const cancelLink = document.querySelector('.dropdown-item.text-danger');
-        if (cancelLink) {
-            cancelLink.addEventListener('click', function(e) {
-                if (!confirm('Are you sure you want to cancel this document? This cannot be undone.')) {
-                    e.preventDefault();
-                }
-            });
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Preview</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .preview-container { border: 2px solid #ddd; padding: 20px; }
+        .actions { margin-top: 20px; }
+        .print-btn {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
         }
-    });
-</script>
-{% endblock %}
+        .download-btn {
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Ensure all sections are visible */
+        .invoice-preview * {
+            visibility: visible !important;
+            display: block !important;
+        }
+
+        /* Force show hidden elements */
+        [style*="display:none"],
+        [style*="display: none"],
+        [hidden] {
+            display: block !important;
+            visibility: visible !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <h2>Document Preview</h2>
+
+        <!-- Embed the actual invoice/PO HTML -->
+        <div class="invoice-preview" id="preview-content">
+            {{ html|safe }}
+        </div>
+
+        <!-- Hidden div with raw data for debugging -->
+        <div style="display: none;" id="debug-data">
+            {{ data|tojson }}
+        </div>
+
+        <div class="actions">
+            <button class="print-btn" onclick="window.print()">🖨️ Print</button>
+            <button class="download-btn" onclick="downloadPDF()">📥 Download PDF</button>
+        </div>
+    </div>
+
+    <script>
+        function downloadPDF() {
+            const docType = window.location.pathname.includes('po') ? 'purchase_order' : 'invoice';
+            const docNumber = '{{ data.invoice_number or data.po_number }}';
+
+            window.location.href = `/invoice/download/${docNumber}?type=${docType}`;
+        }
+
+        // Fix any hidden elements in preview
+        document.addEventListener('DOMContentLoaded', function() {
+            // Force show all elements
+            const allElements = document.querySelectorAll('#preview-content *');
+            allElements.forEach(el => {
+                el.style.visibility = 'visible';
+                el.style.display = 'block';
+                el.style.opacity = '1';
+
+                // Remove any hiding classes
+                el.classList.remove('d-none', 'hidden', 'collapse');
+            });
+
+            // Log preview data for debugging
+            console.log('Preview data:', JSON.parse(document.getElementById('debug-data').textContent));
+        });
+    </script>
+</body>
+</html>
