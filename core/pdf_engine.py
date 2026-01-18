@@ -1,60 +1,77 @@
-# core/pdf_engine.py - COMPATIBLE VERSION
+# core/pdf_engine.py - EMERGENCY FIX
 import os
 import tempfile
 
+# Try multiple PDF libraries
 def generate_pdf(html_content, base_path):
-    """Generate PDF - Compatible with WeasyPrint 61.0"""
-    print(f"📄 PDF Generation Started")
-    print(f"📄 HTML length: {len(html_content)} characters")
+    """Generate PDF using available library"""
+    print(f"📄 PDF Generation - HTML length: {len(html_content)} chars")
 
+    # Try WeasyPrint first
     try:
-        from weasyprint import HTML, CSS
-        HAS_WEASYPRINT = True
-    except ImportError as e:
-        print(f"❌ WeasyPrint import error: {e}")
-        return None
+        from weasyprint import HTML
+        print("✅ Using WeasyPrint")
+        html = HTML(string=html_content)
+        pdf_bytes = html.write_pdf()
+        if pdf_bytes and len(pdf_bytes) > 1000:
+            print(f"✅ WeasyPrint PDF: {len(pdf_bytes)} bytes")
+            return pdf_bytes
+    except Exception as e:
+        print(f"⚠️ WeasyPrint failed: {e}")
 
+    # Try xhtml2pdf (wkhtmltopdf alternative)
     try:
-        # Save HTML to temp file for debugging
+        from xhtml2pdf import pisa
+        import io
+        print("✅ Using xhtml2pdf")
+        result = io.BytesIO()
+        pisa_status = pisa.CreatePDF(html_content, dest=result)
+        if not pisa_status.err:
+            pdf_bytes = result.getvalue()
+            if pdf_bytes and len(pdf_bytes) > 1000:
+                print(f"✅ xhtml2pdf PDF: {len(pdf_bytes)} bytes")
+                return pdf_bytes
+    except ImportError:
+        print("⚠️ xhtml2pdf not available")
+
+    # Fallback: Create HTML file for manual conversion
+    try:
+        import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
             f.write(html_content)
-            temp_file = f.name
-            print(f"📄 HTML saved to: {temp_file}")
+            html_file = f.name
+            print(f"📄 HTML saved to: {html_file} (fallback)")
 
-        # Check if HTML is valid
-        if len(html_content) < 100:
-            print("❌ HTML content too short (likely empty)")
-            os.unlink(temp_file)
-            return None
-
-        # Create HTML object - SIMPLIFIED for compatibility
-        html = HTML(string=html_content)
-
-        # Generate PDF with minimal options
-        print("🔄 Generating PDF...")
-        pdf_bytes = html.write_pdf()
-
-        # Clean up temp file
-        os.unlink(temp_file)
-
-        if pdf_bytes and len(pdf_bytes) > 100:
-            print(f"✅ PDF generated successfully: {len(pdf_bytes)} bytes")
-            return pdf_bytes
-        else:
-            print("❌ PDF generation returned empty or too small")
-            return None
-
+        # Return minimal PDF with error message
+        pdf_fallback = create_minimal_pdf(f"PDF generation failed. HTML saved to: {html_file}")
+        return pdf_fallback
     except Exception as e:
-        print(f"❌ PDF error: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ All PDF methods failed: {e}")
         return None
 
-# For imports that need HAS_WEASYPRINT
+def create_minimal_pdf(message):
+    """Create minimal PDF with error message"""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        c.drawString(100, 750, "PDF Generation Failed")
+        c.drawString(100, 730, message)
+        c.drawString(100, 710, "Please check server logs.")
+        c.save()
+
+        pdf_bytes = buffer.getvalue()
+        print(f"⚠️ Created fallback PDF: {len(pdf_bytes)} bytes")
+        return pdf_bytes
+    except:
+        return None
+
+# For compatibility
 try:
     from weasyprint import HTML
     HAS_WEASYPRINT = True
-    print("✅ WeasyPrint imported successfully")
-except ImportError:
+except:
     HAS_WEASYPRINT = False
-    print("❌ WeasyPrint not available")

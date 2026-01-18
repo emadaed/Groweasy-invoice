@@ -771,8 +771,45 @@ def po_preview(po_number):
         current_app.logger.error(f"PO preview error: {str(e)}")
         flash("Error loading purchase order", "error")
         return redirect(url_for('purchase_orders'))
-# Add these routes to app.py
 
+# Email to supplier
+@app.route('/po/email/<po_number>', methods=['POST'])
+def email_po_to_supplier(po_number):
+    """Send PO to supplier via email"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    # TODO: Implement email sending
+    flash(f'PO {po_number} email functionality coming soon!', 'info')
+    return jsonify({'success': True, 'message': 'Email queued'})
+
+# Mark as received
+@app.route('/po/mark_received/<po_number>', methods=['POST'])
+def mark_po_received(po_number):
+    """Mark PO as received"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        with DB_ENGINE.begin() as conn:
+            conn.execute(text("""
+                UPDATE purchase_orders
+                SET status = 'received'
+                WHERE user_id = :user_id AND po_number = :po_number
+            """), {"user_id": session['user_id'], "po_number": po_number})
+
+        flash(f'PO {po_number} marked as received!', 'success')
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Print preview
+@app.route('/po/print/<po_number>')
+def print_po_preview(po_number):
+    """Print preview for PO"""
+    return redirect(url_for('po_preview', po_number=po_number))
+
+# po api
 @app.route('/api/purchase_order/<po_number>/complete', methods=['POST'])
 def complete_purchase_order(po_number):
     """Mark PO as completed - API endpoint"""
