@@ -696,7 +696,13 @@ def create_po_process():
 
         # If submitted (not draft), update stock
         if po_data['action'] == 'submit' and po_data['po_status'] in ['approved', 'ordered']:
-            update_stock_on_invoice(user_id, items, invoice_type='P', invoice_number=po_number)
+            from core.inventory import InventoryManager
+            success, message = InventoryManager.update_stock_for_document(
+                user_id, 'purchase_order', po_number, items
+            )
+            if not success:
+                flash(f"⚠️ PO created but stock update failed: {message}", 'warning')
+            #update_stock_on_invoice(user_id, items, invoice_type='P', invoice_number=po_number)
 
         # Store for preview
         from core.session_storage import SessionStorage
@@ -1500,8 +1506,7 @@ class InvoiceView(MethodView):
 @limiter.limit("10 per minute")
 def download_document(document_number):
     """
-    Dedicated endpoint for document downloads
-    Uses raw JSON data for PDF generation (not HTML parsing)
+    Dedicated endpoint for document downloads - FIXED VERSION
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -1524,45 +1529,28 @@ def download_document(document_number):
                 flash("❌ Purchase order not found or access denied.", "error")
                 return redirect(url_for('purchase_orders'))
 
-            # Get ALL data from the database
-            order_data = json.loads(result[0])
+            service_data = json.loads(result[0])
             created_at = result[1]
             status = result[2] or 'PENDING'
             po_number = result[3] or document_number
 
-            # Prepare data for PDF
-            pdf_data = {
-                'document_type': 'purchase_order',
-                'title': 'PURCHASE ORDER',
-                'document_number': po_number,
-                'company_name': order_data.get('company_name', ''),
-                'company_address': order_data.get('company_address', ''),
-                'company_phone': order_data.get('company_phone', ''),
-                'company_email': order_data.get('company_email', ''),
-                'company_tax_id': order_data.get('company_tax_id', ''),
-                'supplier_name': order_data.get('supplier_name', ''),
-                'supplier_address': order_data.get('supplier_address', ''),
-                'supplier_phone': order_data.get('supplier_phone', ''),
-                'supplier_email': order_data.get('supplier_email', ''),
-                'supplier_tax_id': order_data.get('supplier_tax_id', ''),
-                'po_date': order_data.get('po_date', created_at.strftime('%Y-%m-%d') if created_at else datetime.now().strftime('%Y-%m-%d')),
-                'delivery_date': order_data.get('delivery_date', ''),
-                'delivery_method': order_data.get('delivery_method', 'Pickup'),
-                'status': status,
-                'items': order_data.get('items', []),
-                'subtotal': order_data.get('subtotal', 0),
-                'tax_amount': order_data.get('tax_amount', 0),
-                'sales_tax': order_data.get('sales_tax', 17),
-                'grand_total': order_data.get('grand_total', 0),
-                'shipping_cost': order_data.get('shipping_cost', 0),
-                'insurance_cost': order_data.get('insurance_cost', 0),
-                'payment_terms': order_data.get('supplier_payment_terms', 'Net 30'),
-                'shipping_terms': order_data.get('shipping_terms', 'FOB Destination'),
-                'notes': order_data.get('po_notes', ''),
-                'currency_symbol': g.get('currency_symbol', 'Rs.')
-            }
+            # Add metadata
+            service_data['po_number'] = po_number
+            service_data['status'] = status
+            service_data['created_at'] = created_at
+
+            # Get user profile for company info
+            user_profile = get_user_profile_cached(user_id) or {}
+            service_data['company_name'] = user_profile.get('company_name', 'Your Company')
+            service_data['company_address'] = user_profile.get('company_address', '')
+            service_data['company_phone'] = user_profile.get('company_phone', '')
+            service_data['company_email'] = user_profile.get('email', '')
 
             document_type_name = "Purchase Order"
+
+            # Generate PDF
+            from core.pdf_generator import generate_purchase_order_pdf
+            pdf_bytes = generate_purchase_order_pdf(service_data)
 
         else:  # Sales Invoice
             with DB_ENGINE.connect() as conn:
@@ -1577,60 +1565,32 @@ def download_document(document_number):
                 flash("❌ Invoice not found or access denied.", "error")
                 return redirect(url_for('invoice_history'))
 
-            # Get ALL data from the database
-            invoice_data = json.loads(result[0])
+            service_data = json.loads(result[0])
             created_at = result[1]
             invoice_number = result[2] or document_number
-            status = result[3] or 'PENDING'
+            status = result[3] or 'PAID'
+
+            # Add metadata
+            service_data['invoice_number'] = invoice_number
+            service_data['status'] = status
+            service_data['created_at'] = created_at
 
             # Get user profile for company info
             user_profile = get_user_profile_cached(user_id) or {}
-
-            # Prepare data for PDF
-            pdf_data = {
-                'document_type': 'invoice',
-                'title': 'TAX INVOICE',
-                'document_number': invoice_number,
-                'company_name': user_profile.get('company_name', 'Your Company'),
-                'company_address': user_profile.get('company_address', ''),
-                'company_phone': user_profile.get('company_phone', ''),
-                'company_email': user_profile.get('email', ''),
-                'company_tax_id': user_profile.get('company_tax_id', ''),
-                'seller_ntn': user_profile.get('seller_ntn', ''),
-                'seller_strn': user_profile.get('seller_strn', ''),
-                'client_name': invoice_data.get('client_name', ''),
-                'client_address': invoice_data.get('client_address', ''),
-                'client_phone': invoice_data.get('client_phone', ''),
-                'client_email': invoice_data.get('client_email', ''),
-                'client_tax_id': invoice_data.get('client_tax_id', ''),
-                'invoice_date': invoice_data.get('invoice_date', created_at.strftime('%Y-%m-%d') if created_at else datetime.now().strftime('%Y-%m-%d')),
-                'due_date': invoice_data.get('due_date', ''),
-                'payment_method': invoice_data.get('payment_method', 'Cash'),
-                'status': status,
-                'items': invoice_data.get('items', []),
-                'subtotal': invoice_data.get('subtotal', 0),
-                'tax_amount': invoice_data.get('tax_amount', 0),
-                'discount': invoice_data.get('discount', 0),
-                'grand_total': invoice_data.get('grand_total', 0),
-                'shipping': invoice_data.get('shipping', 0),
-                'notes': invoice_data.get('notes', ''),
-                'terms': invoice_data.get('terms', ''),
-                'currency_symbol': g.get('currency_symbol', 'Rs.')
-            }
+            service_data['company_name'] = user_profile.get('company_name', 'Your Company')
+            service_data['company_address'] = user_profile.get('company_address', '')
+            service_data['company_phone'] = user_profile.get('company_phone', '')
+            service_data['company_email'] = user_profile.get('email', '')
 
             document_type_name = "Invoice"
 
-        # Generate PDF DIRECTLY from data (NO HTML template)
-        if document_type == 'purchase_order':
-            pdf_bytes = create_purchase_order_pdf_direct(pdf_data)
-        else:
-            pdf_bytes = create_invoice_pdf_direct(pdf_data)
+            # Generate PDF
+            from core.pdf_generator import generate_invoice_pdf
+            pdf_bytes = generate_invoice_pdf(service_data)
 
-        # Sanitize filename
+        # Create filename
         import re
         safe_doc_number = re.sub(r'[^\w\-]', '_', document_number)
-
-        # Create filename with timestamp
         timestamp = created_at.strftime('%Y%m%d_%H%M') if created_at else datetime.now().strftime('%Y%m%d_%H%M')
         filename = f"{document_type_name.replace(' ', '_')}_{safe_doc_number}_{timestamp}.pdf"
 
@@ -1648,18 +1608,13 @@ def download_document(document_number):
         response.headers['Expires'] = '0'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['X-Download-Options'] = 'noopen'
 
         return response
 
     except Exception as e:
-        current_app.logger.error(f"Download error: {str(e)}",
-                               exc_info=True,
-                               extra={'user_id': user_id,
-                                      'document_number': document_number})
+        current_app.logger.error(f"Download error: {str(e)}", exc_info=True)
         flash("❌ Download failed. Please try again.", 'error')
         return redirect(url_for('invoice_history' if document_type != 'purchase_order' else 'purchase_orders'))
-
 
 # NEW: Direct PDF Creation Functions
 def create_purchase_order_pdf_direct(data):
