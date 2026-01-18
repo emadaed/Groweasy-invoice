@@ -1550,15 +1550,20 @@ def download_document(document_number):
         # Generate QR code
         qr_b64 = generate_simple_qr(service_data)
 
-        # Generate PDF
+        # Generate PDF - UPDATED CALL
         try:
             html = render_template(template,
                                  data=service_data,
                                  preview=False,
                                  custom_qr_b64=qr_b64,
                                  currency_symbol=g.get('currency_symbol', 'Rs.'))
-            #pdf_bytes = generate_pdf(html, current_app.root_path)
-            pdf_bytes = generate_pdf(html, title=f"{document_type_name} {document_number}")
+
+            # Pass document_type parameter to generate_pdf
+            if document_type == 'purchase_order':
+                pdf_bytes = generate_pdf(html, title=f"Purchase Order {document_number}", doc_type="purchase_order")
+            else:
+                pdf_bytes = generate_pdf(html, title=f"Invoice {document_number}", doc_type="invoice")
+
         except Exception as template_error:
             # Fallback to generic template
             current_app.logger.warning(f"Template {template} failed, falling back: {template_error}")
@@ -1567,8 +1572,12 @@ def download_document(document_number):
                                  preview=False,
                                  custom_qr_b64=qr_b64,
                                  currency_symbol=g.get('currency_symbol', 'Rs.'))
-            #pdf_bytes = generate_pdf(html, current_app.root_path)
-            pdf_bytes = generate_pdf(html, title=f"{document_type_name} {document_number}")
+
+            # Pass document_type parameter to generate_pdf for fallback too
+            if document_type == 'purchase_order':
+                pdf_bytes = generate_pdf(html, title=f"Purchase Order {document_number}", doc_type="purchase_order")
+            else:
+                pdf_bytes = generate_pdf(html, title=f"Invoice {document_number}", doc_type="invoice")
 
         # Sanitize filename
         import re
@@ -1603,7 +1612,6 @@ def download_document(document_number):
                                       'document_number': document_number})
         flash("❌ Download failed. Please try again.", 'error')
         return redirect(url_for('invoice_history' if document_type != 'purchase_order' else 'purchase_orders'))
-
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['GET', 'POST'])
 
