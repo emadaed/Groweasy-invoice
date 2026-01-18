@@ -1557,7 +1557,8 @@ def download_document(document_number):
                                  preview=False,
                                  custom_qr_b64=qr_b64,
                                  currency_symbol=g.get('currency_symbol', 'Rs.'))
-            pdf_bytes = generate_pdf(html, current_app.root_path)
+            #pdf_bytes = generate_pdf(html, current_app.root_path)
+            pdf_bytes = generate_pdf(html, title=f"{document_type_name} {document_number}")
         except Exception as template_error:
             # Fallback to generic template
             current_app.logger.warning(f"Template {template} failed, falling back: {template_error}")
@@ -1566,7 +1567,8 @@ def download_document(document_number):
                                  preview=False,
                                  custom_qr_b64=qr_b64,
                                  currency_symbol=g.get('currency_symbol', 'Rs.'))
-            pdf_bytes = generate_pdf(html, current_app.root_path)
+            #pdf_bytes = generate_pdf(html, current_app.root_path)
+            pdf_bytes = generate_pdf(html, title=f"{document_type_name} {document_number}")
 
         # Sanitize filename
         import re

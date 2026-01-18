@@ -1,20 +1,45 @@
+# Core Flask
 Flask==3.0.3
 Werkzeug==3.0.3
 Jinja2==3.1.4
+
+# Database
 SQLAlchemy==2.0.29
 Flask-SQLAlchemy==3.1.1
+psycopg2-binary==2.9.9
+
+# Sessions & Cache
 Flask-Session==0.8.0
 redis==5.0.1
+Flask-Caching==2.1.0
+
+# Security & Rate Limiting
+Flask-Limiter==3.5.1
+
+# Performance
+Flask-Compress==1.23
+celery==5.3.6
+
+# PDF Generation (RELIABLE - NO Cairo dependencies)
+reportlab==4.0.7
+PyPDF2==3.0.1
+html2text==2024.2.26
+
+# QR Codes & Images
 qrcode[pil]==7.4.2
 Pillow==10.2.0
-weasyprint==61.0
-xhtml2pdf
-reportlab
-python-dotenv==1.0.1
-psycopg2-binary==2.9.9
-gunicorn==21.2.0
+
+# Monitoring
 sentry-sdk[flask]==1.40.0
-Flask-Limiter==3.5.1
-Flask-Compress==1.23
-Flask-Caching==2.1.0
-celery==5.3.6
+
+# Utilities
+python-dotenv==1.0.1
+gunicorn==21.2.0
+
+# Async (for gevent worker)
+gevent==24.2.1
+greenlet==3.0.3
+
+# Data formatting
+python-dateutil==2.9.0.post0
+pytz==2024.1
