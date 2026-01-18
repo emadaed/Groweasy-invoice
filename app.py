@@ -1497,11 +1497,11 @@ class InvoiceView(MethodView):
 
 #invoice/download/<document_number>')
 @app.route('/invoice/download/<document_number>')
-@limiter.limit("10 per minute")  # Rate limiting to prevent abuse
+@limiter.limit("10 per minute")
 def download_document(document_number):
     """
     Dedicated endpoint for document downloads
-    GET requests are idempotent but have side effects (download tracking)
+    Uses raw JSON data for PDF generation (not HTML parsing)
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -1514,7 +1514,7 @@ def download_document(document_number):
         if document_type == 'purchase_order':
             with DB_ENGINE.connect() as conn:
                 result = conn.execute(text("""
-                    SELECT order_data, created_at
+                    SELECT order_data, created_at, status, po_number
                     FROM purchase_orders
                     WHERE user_id = :user_id AND po_number = :doc_number
                     ORDER BY created_at DESC LIMIT 1
@@ -1524,15 +1524,50 @@ def download_document(document_number):
                 flash("❌ Purchase order not found or access denied.", "error")
                 return redirect(url_for('purchase_orders'))
 
-            service_data = json.loads(result[0])
+            # Get ALL data from the database
+            order_data = json.loads(result[0])
             created_at = result[1]
+            status = result[2] or 'PENDING'
+            po_number = result[3] or document_number
+
+            # Prepare data for PDF
+            pdf_data = {
+                'document_type': 'purchase_order',
+                'title': 'PURCHASE ORDER',
+                'document_number': po_number,
+                'company_name': order_data.get('company_name', ''),
+                'company_address': order_data.get('company_address', ''),
+                'company_phone': order_data.get('company_phone', ''),
+                'company_email': order_data.get('company_email', ''),
+                'company_tax_id': order_data.get('company_tax_id', ''),
+                'supplier_name': order_data.get('supplier_name', ''),
+                'supplier_address': order_data.get('supplier_address', ''),
+                'supplier_phone': order_data.get('supplier_phone', ''),
+                'supplier_email': order_data.get('supplier_email', ''),
+                'supplier_tax_id': order_data.get('supplier_tax_id', ''),
+                'po_date': order_data.get('po_date', created_at.strftime('%Y-%m-%d') if created_at else datetime.now().strftime('%Y-%m-%d')),
+                'delivery_date': order_data.get('delivery_date', ''),
+                'delivery_method': order_data.get('delivery_method', 'Pickup'),
+                'status': status,
+                'items': order_data.get('items', []),
+                'subtotal': order_data.get('subtotal', 0),
+                'tax_amount': order_data.get('tax_amount', 0),
+                'sales_tax': order_data.get('sales_tax', 17),
+                'grand_total': order_data.get('grand_total', 0),
+                'shipping_cost': order_data.get('shipping_cost', 0),
+                'insurance_cost': order_data.get('insurance_cost', 0),
+                'payment_terms': order_data.get('supplier_payment_terms', 'Net 30'),
+                'shipping_terms': order_data.get('shipping_terms', 'FOB Destination'),
+                'notes': order_data.get('po_notes', ''),
+                'currency_symbol': g.get('currency_symbol', 'Rs.')
+            }
+
             document_type_name = "Purchase Order"
-            template = 'purchase_order_pdf.html' if template_exists('purchase_order_pdf.html') else 'invoice_pdf.html'
 
         else:  # Sales Invoice
             with DB_ENGINE.connect() as conn:
                 result = conn.execute(text("""
-                    SELECT invoice_data, created_at
+                    SELECT invoice_data, created_at, invoice_number, status
                     FROM user_invoices
                     WHERE user_id = :user_id AND invoice_number = :doc_number
                     ORDER BY created_at DESC LIMIT 1
@@ -1542,42 +1577,54 @@ def download_document(document_number):
                 flash("❌ Invoice not found or access denied.", "error")
                 return redirect(url_for('invoice_history'))
 
-            service_data = json.loads(result[0])
+            # Get ALL data from the database
+            invoice_data = json.loads(result[0])
             created_at = result[1]
+            invoice_number = result[2] or document_number
+            status = result[3] or 'PENDING'
+
+            # Get user profile for company info
+            user_profile = get_user_profile_cached(user_id) or {}
+
+            # Prepare data for PDF
+            pdf_data = {
+                'document_type': 'invoice',
+                'title': 'TAX INVOICE',
+                'document_number': invoice_number,
+                'company_name': user_profile.get('company_name', 'Your Company'),
+                'company_address': user_profile.get('company_address', ''),
+                'company_phone': user_profile.get('company_phone', ''),
+                'company_email': user_profile.get('email', ''),
+                'company_tax_id': user_profile.get('company_tax_id', ''),
+                'seller_ntn': user_profile.get('seller_ntn', ''),
+                'seller_strn': user_profile.get('seller_strn', ''),
+                'client_name': invoice_data.get('client_name', ''),
+                'client_address': invoice_data.get('client_address', ''),
+                'client_phone': invoice_data.get('client_phone', ''),
+                'client_email': invoice_data.get('client_email', ''),
+                'client_tax_id': invoice_data.get('client_tax_id', ''),
+                'invoice_date': invoice_data.get('invoice_date', created_at.strftime('%Y-%m-%d') if created_at else datetime.now().strftime('%Y-%m-%d')),
+                'due_date': invoice_data.get('due_date', ''),
+                'payment_method': invoice_data.get('payment_method', 'Cash'),
+                'status': status,
+                'items': invoice_data.get('items', []),
+                'subtotal': invoice_data.get('subtotal', 0),
+                'tax_amount': invoice_data.get('tax_amount', 0),
+                'discount': invoice_data.get('discount', 0),
+                'grand_total': invoice_data.get('grand_total', 0),
+                'shipping': invoice_data.get('shipping', 0),
+                'notes': invoice_data.get('notes', ''),
+                'terms': invoice_data.get('terms', ''),
+                'currency_symbol': g.get('currency_symbol', 'Rs.')
+            }
+
             document_type_name = "Invoice"
-            template = 'invoice_pdf.html'
 
-        # Generate QR code
-        qr_b64 = generate_simple_qr(service_data)
-
-        # Generate PDF - UPDATED CALL
-        try:
-            html = render_template(template,
-                                 data=service_data,
-                                 preview=False,
-                                 custom_qr_b64=qr_b64,
-                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
-
-            # Pass document_type parameter to generate_pdf
-            if document_type == 'purchase_order':
-                pdf_bytes = generate_pdf(html, title=f"Purchase Order {document_number}", doc_type="purchase_order")
-            else:
-                pdf_bytes = generate_pdf(html, title=f"Invoice {document_number}", doc_type="invoice")
-
-        except Exception as template_error:
-            # Fallback to generic template
-            current_app.logger.warning(f"Template {template} failed, falling back: {template_error}")
-            html = render_template('invoice_pdf.html',
-                                 data=service_data,
-                                 preview=False,
-                                 custom_qr_b64=qr_b64,
-                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
-
-            # Pass document_type parameter to generate_pdf for fallback too
-            if document_type == 'purchase_order':
-                pdf_bytes = generate_pdf(html, title=f"Purchase Order {document_number}", doc_type="purchase_order")
-            else:
-                pdf_bytes = generate_pdf(html, title=f"Invoice {document_number}", doc_type="invoice")
+        # Generate PDF DIRECTLY from data (NO HTML template)
+        if document_type == 'purchase_order':
+            pdf_bytes = create_purchase_order_pdf_direct(pdf_data)
+        else:
+            pdf_bytes = create_invoice_pdf_direct(pdf_data)
 
         # Sanitize filename
         import re
@@ -1612,6 +1659,387 @@ def download_document(document_number):
                                       'document_number': document_number})
         flash("❌ Download failed. Please try again.", 'error')
         return redirect(url_for('invoice_history' if document_type != 'purchase_order' else 'purchase_orders'))
+
+
+# NEW: Direct PDF Creation Functions
+def create_purchase_order_pdf_direct(data):
+    """Create purchase order PDF directly from data"""
+    buffer = io.BytesIO()
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch, cm
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1*cm,
+        leftMargin=1*cm,
+        topMargin=1.5*cm,
+        bottomMargin=1.5*cm
+    )
+
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Custom styles
+    title_style = ParagraphStyle(
+        'POTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#0d6efd'),
+        alignment=1,  # Center
+        spaceAfter=12
+    )
+
+    header_style = ParagraphStyle(
+        'POHeader',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#0d6efd'),
+        spaceAfter=6
+    )
+
+    normal_style = ParagraphStyle(
+        'PONormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=6
+    )
+
+    bold_style = ParagraphStyle(
+        'POBold',
+        parent=styles['Normal'],
+        fontSize=10,
+        fontName='Helvetica-Bold'
+    )
+
+    # Title
+    story.append(Paragraph(data['title'], title_style))
+    story.append(Paragraph(f"PO #: {data['document_number']}", header_style))
+    story.append(Spacer(1, 0.2*inch))
+
+    # Company Info
+    story.append(Paragraph(f"<b>FROM:</b> {data['company_name']}", bold_style))
+    if data['company_address']:
+        story.append(Paragraph(data['company_address'], normal_style))
+    if data['company_phone']:
+        story.append(Paragraph(f"Phone: {data['company_phone']}", normal_style))
+    if data['company_email']:
+        story.append(Paragraph(f"Email: {data['company_email']}", normal_style))
+
+    story.append(Spacer(1, 0.2*inch))
+
+    # Supplier Info Box
+    supplier_info = [
+        [Paragraph("<b>TO:</b>", bold_style), ""],
+        [Paragraph(f"{data['supplier_name']}", normal_style),
+         Paragraph(f"<b>PO Date:</b> {data['po_date']}", normal_style)],
+        [Paragraph(f"{data['supplier_address']}", normal_style),
+         Paragraph(f"<b>Delivery Date:</b> {data['delivery_date']}", normal_style)],
+        [Paragraph(f"Phone: {data['supplier_phone']}", normal_style),
+         Paragraph(f"<b>Status:</b> {data['status']}", normal_style)],
+        [Paragraph(f"Email: {data['supplier_email']}", normal_style), ""]
+    ]
+
+    supplier_table = Table(supplier_info, colWidths=[3.5*inch, 3.5*inch])
+    supplier_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#e8f4fd')),
+        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#f8f9fa')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('PADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+
+    story.append(supplier_table)
+    story.append(Spacer(1, 0.3*inch))
+
+    # Items Table
+    if data['items']:
+        table_data = [['#', 'Description', 'SKU', 'Supplier', 'Qty', 'Unit Price', 'Total']]
+
+        for idx, item in enumerate(data['items'], 1):
+            table_data.append([
+                str(idx),
+                item.get('name', ''),
+                item.get('sku', ''),
+                item.get('supplier', ''),
+                str(item.get('qty', 1)),
+                f"{data['currency_symbol']}{item.get('price', 0):.2f}",
+                f"{data['currency_symbol']}{item.get('total', 0):.2f}"
+            ])
+
+        # Add totals
+        table_data.append(['', '', '', '', '',
+                         Paragraph('<b>Subtotal:</b>', bold_style),
+                         Paragraph(f"<b>{data['currency_symbol']}{data['subtotal']:.2f}</b>", bold_style)])
+
+        if data['tax_amount'] > 0:
+            table_data.append(['', '', '', '', '',
+                             Paragraph(f'<b>Tax ({data["sales_tax"]}%):</b>', bold_style),
+                             Paragraph(f"<b>{data['currency_symbol']}{data['tax_amount']:.2f}</b>", bold_style)])
+
+        if data.get('shipping_cost', 0) > 0:
+            table_data.append(['', '', '', '', '',
+                             Paragraph('<b>Shipping:</b>', bold_style),
+                             Paragraph(f"<b>{data['currency_symbol']}{data['shipping_cost']:.2f}</b>", bold_style)])
+
+        table_data.append(['', '', '', '', '',
+                         Paragraph('<b>GRAND TOTAL:</b>', bold_style),
+                         Paragraph(f"<b>{data['currency_symbol']}{data['grand_total']:.2f}</b>", bold_style)])
+
+        items_table = Table(table_data, colWidths=[0.4*inch, 2*inch, 1*inch, 1.2*inch, 0.5*inch, 1*inch, 1*inch])
+        items_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d6efd')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('GRID', (0, 0), (-1, len(data['items']) + 1), 1, colors.grey),
+            ('ALIGN', (4, 1), (6, len(data['items']) + 1), 'RIGHT'),
+            ('BACKGROUND', (0, -4), (-1, -1), colors.HexColor('#f8f9fa')),
+            ('LINEABOVE', (0, -4), (-1, -4), 2, colors.black),
+        ]))
+
+        story.append(items_table)
+        story.append(Spacer(1, 0.3*inch))
+
+    # Terms & Conditions Box
+    story.append(Paragraph("TERMS & CONDITIONS", header_style))
+
+    terms_data = [
+        [Paragraph(f"<b>Payment Terms:</b> {data['payment_terms']}", normal_style)],
+        [Paragraph(f"<b>Shipping Terms:</b> {data['shipping_terms']}", normal_style)],
+        [Paragraph(f"<b>Delivery Method:</b> {data['delivery_method']}", normal_style)]
+    ]
+
+    if data.get('notes'):
+        terms_data.append([Paragraph(f"<b>Notes:</b> {data['notes']}", normal_style)])
+
+    terms_table = Table(terms_data, colWidths=[7*inch])
+    terms_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#6c757d')),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f9fa')),
+        ('PADDING', (0, 0), (-1, -1), 8),
+    ]))
+
+    story.append(terms_table)
+    story.append(Spacer(1, 0.5*inch))
+
+    # Signatures
+    sig_data = [
+        [
+            Paragraph("_________________________<br/><b>Authorized Signature</b>", normal_style),
+            Paragraph("_________________________<br/><b>Supplier Acknowledgment</b>", normal_style)
+        ]
+    ]
+
+    sig_table = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
+    story.append(sig_table)
+
+    # Footer
+    story.append(Spacer(1, 0.5*inch))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | PO #: {data['document_number']}",
+                          ParagraphStyle('Footer', parent=styles['Italic'], fontSize=8, alignment=1)))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def create_invoice_pdf_direct(data):
+    """Create invoice PDF directly from data"""
+    buffer = io.BytesIO()
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch, cm
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1*cm,
+        leftMargin=1*cm,
+        topMargin=1.5*cm,
+        bottomMargin=1.5*cm
+    )
+
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Custom styles for Invoice
+    title_style = ParagraphStyle(
+        'InvoiceTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#28a745'),  # Green for invoices
+        alignment=1,
+        spaceAfter=12
+    )
+
+    header_style = ParagraphStyle(
+        'InvoiceHeader',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#28a745'),
+        spaceAfter=6
+    )
+
+    normal_style = ParagraphStyle(
+        'InvoiceNormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=6
+    )
+
+    bold_style = ParagraphStyle(
+        'InvoiceBold',
+        parent=styles['Normal'],
+        fontSize=10,
+        fontName='Helvetica-Bold'
+    )
+
+    # Title with Tax Invoice
+    story.append(Paragraph("TAX INVOICE", title_style))
+    story.append(Paragraph(f"Invoice #: {data['document_number']}", header_style))
+    story.append(Spacer(1, 0.2*inch))
+
+    # Seller/Buyer info in two columns
+    seller_info = [
+        [Paragraph("<b>SELLER:</b>", bold_style), Paragraph("<b>BUYER:</b>", bold_style)],
+        [Paragraph(data['company_name'], normal_style),
+         Paragraph(data['client_name'], normal_style)],
+        [Paragraph(data['company_address'], normal_style),
+         Paragraph(data['client_address'], normal_style)],
+        [Paragraph(f"Phone: {data['company_phone']}", normal_style),
+         Paragraph(f"Phone: {data['client_phone']}", normal_style)],
+        [Paragraph(f"Email: {data['company_email']}", normal_style),
+         Paragraph(f"Email: {data['client_email']}", normal_style)]
+    ]
+
+    # Add tax IDs if available
+    if data.get('seller_ntn') or data.get('company_tax_id'):
+        seller_info.append([
+            Paragraph(f"Tax ID: {data.get('seller_ntn') or data.get('company_tax_id')}", normal_style),
+            Paragraph(f"Tax ID: {data.get('client_tax_id', '')}", normal_style)
+        ])
+
+    seller_table = Table(seller_info, colWidths=[3.5*inch, 3.5*inch])
+    seller_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#e8f4fd')),
+        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#f8f9fa')),
+        ('PADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    story.append(seller_table)
+    story.append(Spacer(1, 0.2*inch))
+
+    # Invoice details
+    details_data = [
+        [Paragraph(f"<b>Invoice Date:</b> {data['invoice_date']}", normal_style),
+         Paragraph(f"<b>Due Date:</b> {data['due_date']}", normal_style),
+         Paragraph(f"<b>Status:</b> {data['status']}", normal_style)]
+    ]
+
+    details_table = Table(details_data, colWidths=[2.3*inch, 2.3*inch, 2.3*inch])
+    details_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('PADDING', (0, 0), (-1, -1), 8),
+    ]))
+
+    story.append(details_table)
+    story.append(Spacer(1, 0.3*inch))
+
+    # Items Table for Invoice
+    if data['items']:
+        table_data = [['#', 'Description', 'Qty', 'Unit Price', 'Total']]
+
+        for idx, item in enumerate(data['items'], 1):
+            table_data.append([
+                str(idx),
+                item.get('name', ''),
+                str(item.get('qty', 1)),
+                f"{data['currency_symbol']}{item.get('price', 0):.2f}",
+                f"{data['currency_symbol']}{item.get('total', 0):.2f}"
+            ])
+
+        # Add totals
+        table_data.append(['', '', '',
+                         Paragraph('<b>Subtotal:</b>', bold_style),
+                         Paragraph(f"<b>{data['currency_symbol']}{data['subtotal']:.2f}</b>", bold_style)])
+
+        if data.get('tax_amount', 0) > 0:
+            table_data.append(['', '', '',
+                             Paragraph('<b>Tax:</b>', bold_style),
+                             Paragraph(f"<b>{data['currency_symbol']}{data['tax_amount']:.2f}</b>", bold_style)])
+
+        if data.get('discount', 0) > 0:
+            table_data.append(['', '', '',
+                             Paragraph(f'<b>Discount:</b>', bold_style),
+                             Paragraph(f"<b>-{data['currency_symbol']}{data['discount']:.2f}</b>", bold_style)])
+
+        if data.get('shipping', 0) > 0:
+            table_data.append(['', '', '',
+                             Paragraph('<b>Shipping:</b>', bold_style),
+                             Paragraph(f"<b>{data['currency_symbol']}{data['shipping']:.2f}</b>", bold_style)])
+
+        table_data.append(['', '', '',
+                         Paragraph('<b>GRAND TOTAL:</b>', bold_style),
+                         Paragraph(f"<b>{data['currency_symbol']}{data['grand_total']:.2f}</b>", bold_style)])
+
+        items_table = Table(table_data, colWidths=[0.4*inch, 3*inch, 0.6*inch, 1.2*inch, 1.2*inch])
+        items_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#28a745')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('GRID', (0, 0), (-1, len(data['items']) + 1), 1, colors.grey),
+            ('ALIGN', (2, 1), (4, len(data['items']) + 1), 'RIGHT'),
+            ('BACKGROUND', (0, -4), (-1, -1), colors.HexColor('#f8f9fa')),
+            ('LINEABOVE', (0, -4), (-1, -4), 2, colors.black),
+        ]))
+
+        story.append(items_table)
+        story.append(Spacer(1, 0.3*inch))
+
+    # Payment details and notes
+    if data.get('notes') or data.get('terms'):
+        notes_data = []
+        if data.get('notes'):
+            notes_data.append([Paragraph(f"<b>Notes:</b> {data['notes']}", normal_style)])
+        if data.get('terms'):
+            notes_data.append([Paragraph(f"<b>Terms:</b> {data['terms']}", normal_style)])
+
+        notes_table = Table(notes_data, colWidths=[7*inch])
+        notes_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#6c757d')),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f9fa')),
+            ('PADDING', (0, 0), (-1, -1), 8),
+        ]))
+
+        story.append(notes_table)
+        story.append(Spacer(1, 0.3*inch))
+
+    # Thank you message and footer
+    story.append(Paragraph("Thank you for your business!",
+                          ParagraphStyle('Thanks', parent=styles['Italic'], fontSize=11, alignment=1)))
+    story.append(Spacer(1, 0.3*inch))
+
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Invoice #: {data['document_number']}",
+                          ParagraphStyle('Footer', parent=styles['Italic'], fontSize=8, alignment=1)))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 # Register route
 app.add_url_rule('/invoice/process', view_func=InvoiceView.as_view('invoice_process'), methods=['GET', 'POST'])
 
