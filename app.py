@@ -586,6 +586,28 @@ def create_purchase_order():
                          suppliers=suppliers,
                          nonce=g.nonce)
 
+
+@app.route('/po/mark_completed/<po_number>', methods=['POST'])
+def mark_po_completed(po_number):
+    """Mark PO as completed"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        with DB_ENGINE.begin() as conn:
+            conn.execute(text("""
+                UPDATE purchase_orders
+                SET status = 'completed'
+                WHERE user_id = :user_id AND po_number = :po_number
+            """), {"user_id": session['user_id'], "po_number": po_number})
+
+        flash(f"✅ PO {po_number} marked as completed", "success")
+        return redirect(url_for('purchase_orders'))
+    except Exception as e:
+        flash(f"❌ Error updating PO: {e}", "error")
+        return redirect(url_for('purchase_orders'))
+
+
 # create po process
 @app.route('/create_po_process', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -749,6 +771,62 @@ def po_preview(po_number):
         current_app.logger.error(f"PO preview error: {str(e)}")
         flash("Error loading purchase order", "error")
         return redirect(url_for('purchase_orders'))
+# Add these routes to app.py
+
+@app.route('/api/purchase_order/<po_number>/complete', methods=['POST'])
+def complete_purchase_order(po_number):
+    """Mark PO as completed - API endpoint"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        with DB_ENGINE.begin() as conn:
+            conn.execute(text("""
+                UPDATE purchase_orders
+                SET status = 'completed'
+                WHERE user_id = :user_id AND po_number = :po_number
+            """), {"user_id": session['user_id'], "po_number": po_number})
+
+        return jsonify({'success': True, 'message': f'PO {po_number} marked as completed'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# PO cancel endpoint
+@app.route('/api/purchase_order/<po_number>/cancel', methods=['POST'])
+def cancel_purchase_order(po_number):
+    """Cancel purchase order"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        data = request.get_json()
+        reason = data.get('reason', 'No reason provided')
+
+        with DB_ENGINE.begin() as conn:
+            # Update order data with cancellation
+            result = conn.execute(text("""
+                SELECT order_data FROM purchase_orders
+                WHERE user_id = :user_id AND po_number = :po_number
+            """), {"user_id": session['user_id'], "po_number": po_number}).fetchone()
+
+            if result:
+                order_data = json.loads(result[0])
+                order_data['cancellation_reason'] = reason
+                order_data['cancelled_at'] = datetime.now().isoformat()
+
+                conn.execute(text("""
+                    UPDATE purchase_orders
+                    SET status = 'cancelled', order_data = :order_data
+                    WHERE user_id = :user_id AND po_number = :po_number
+                """), {
+                    "user_id": session['user_id'],
+                    "po_number": po_number,
+                    "order_data": json.dumps(order_data)
+                })
+
+        return jsonify({'success': True, 'message': f'PO {po_number} cancelled'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/debug')
 def debug():

@@ -1,23 +1,17 @@
-# core/pdf_engine.py - FIXED VERSION WITH DEBUG
+# core/pdf_engine.py - COMPATIBLE VERSION
 import os
 import tempfile
 
-# Check if WeasyPrint is available
-try:
-    from weasyprint import HTML
-    HAS_WEASYPRINT = True
-    print("✅ WeasyPrint imported successfully")
-except ImportError as e:
-    HAS_WEASYPRINT = False
-    print(f"❌ WeasyPrint import error: {e}")
-
 def generate_pdf(html_content, base_path):
-    """Generate PDF - Debug version to find empty PDF issue"""
+    """Generate PDF - Compatible with WeasyPrint 61.0"""
     print(f"📄 PDF Generation Started")
     print(f"📄 HTML length: {len(html_content)} characters")
 
-    if not HAS_WEASYPRINT:
-        print("❌ WeasyPrint not available")
+    try:
+        from weasyprint import HTML, CSS
+        HAS_WEASYPRINT = True
+    except ImportError as e:
+        print(f"❌ WeasyPrint import error: {e}")
         return None
 
     try:
@@ -33,28 +27,21 @@ def generate_pdf(html_content, base_path):
             os.unlink(temp_file)
             return None
 
-        # Create HTML object
+        # Create HTML object - SIMPLIFIED for compatibility
         html = HTML(string=html_content)
 
-        # Generate PDF
+        # Generate PDF with minimal options
         print("🔄 Generating PDF...")
         pdf_bytes = html.write_pdf()
 
         # Clean up temp file
         os.unlink(temp_file)
 
-        if pdf_bytes:
+        if pdf_bytes and len(pdf_bytes) > 100:
             print(f"✅ PDF generated successfully: {len(pdf_bytes)} bytes")
-
-            # Save PDF to temp file for inspection
-            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as f:
-                f.write(pdf_bytes)
-                print(f"📄 PDF saved to: {f.name} for inspection")
-                # Temp file will be cleaned up by OS
-
             return pdf_bytes
         else:
-            print("❌ PDF generation returned empty bytes")
+            print("❌ PDF generation returned empty or too small")
             return None
 
     except Exception as e:
@@ -62,3 +49,12 @@ def generate_pdf(html_content, base_path):
         import traceback
         traceback.print_exc()
         return None
+
+# For imports that need HAS_WEASYPRINT
+try:
+    from weasyprint import HTML
+    HAS_WEASYPRINT = True
+    print("✅ WeasyPrint imported successfully")
+except ImportError:
+    HAS_WEASYPRINT = False
+    print("❌ WeasyPrint not available")
