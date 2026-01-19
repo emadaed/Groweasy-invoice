@@ -1,4 +1,4 @@
-# GrowEasy Invoice – Phase 5-B (Production-Ready + WeasyPrint Fixed)
+# GrowEasy Invoice – Phase 5-B (Production-Ready + WeasyPrint Fixed for Bookworm)
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
@@ -6,18 +6,18 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install ALL required system dependencies
+# Install system dependencies - CORRECTED PACKAGE NAMES FOR DEBIAN BOOKWORM
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
-    # === WeasyPrint Critical Dependencies ===
+    # === WeasyPrint Critical Dependencies (Fixed names) ===
     libpango-1.0-0 \
     libharfbuzz0b \
     libpangocairo-1.0-0 \
     libcairo2 \
     libcairo-gobject2 \
-    libgobject2.0-0 \
-    libglib2.0-0 \
+    libgobject-2.0-0 \          # ← hyphen instead of dot
+    libglib2.0-0 \              # ← hyphen
     libgraphite2-3 \
     libicu72 \
     # === Pillow Dependencies ===
@@ -28,26 +28,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libfreetype6-dev \
     liblcms2-dev \
-    # === PostgreSQL client ===
+    # === PostgreSQL ===
     libpq-dev \
-    # === XML/HTML processing (for premailer, etc.) ===
+    # === XML/HTML ===
     libxml2-dev \
     libxslt1-dev \
     # Clean up
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy requirements first for caching
+# Copy requirements for caching
 COPY requirements.txt .
 
-# Upgrade pip and install Python packages
+# Install Python packages
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy app code
 COPY . .
 
-# Create non-root user for security
+# Create non-root user
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
 
@@ -55,7 +55,7 @@ USER appuser
 
 EXPOSE 8080
 
-# Use $PORT for Railway compatibility
+# Railway uses $PORT
 CMD gunicorn --bind 0.0.0.0:$PORT \
     --workers 2 \
     --worker-class gevent \
