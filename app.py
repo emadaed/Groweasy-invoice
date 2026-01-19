@@ -1,64 +1,6 @@
-# app.py - COMPLETE FIXED VERSION
-import sys
-import warnings
 
 # ============================================================================
-# PYTHON 3.13 COMPATIBILITY PATCH FOR SQLALCHEMY
-# ============================================================================
-if sys.version_info >= (3, 13):
-    # This must run BEFORE any SQLAlchemy imports
-    import sqlalchemy.util.langhelpers
-
-    # Monkey-patch TypingOnly to work with Python 3.13
-    original_init_subclass = sqlalchemy.util.langhelpers.TypingOnly.__init_subclass__
-
-    def patched_init_subclass(cls, **kwargs):
-        try:
-            return original_init_subclass(cls, **kwargs)
-        except AssertionError as e:
-            error_msg = str(e)
-            # Check if it's the Python 3.13 compatibility error
-            if "directly inherits TypingOnly but has additional attributes" in error_msg:
-                # Extract attributes from error message
-                import re
-                import ast
-
-                # Find the attribute set in the error message
-                match = re.search(r"\{([^}]+)\}", error_msg)
-                if match:
-                    attrs_str = match.group(1)
-                    # Clean up and parse attributes
-                    attrs = [attr.strip().strip("'") for attr in attrs_str.split(",")]
-
-                    # Accept these special Python 3.13 attributes
-                    accepted_attrs = {'__static_attributes__', '__firstlineno__',
-                                     '__annotations__', '__orig_bases__'}
-
-                    if set(attrs).issubset(accepted_attrs):
-                        # Silently accept these attributes
-                        warnings.warn(f"SQLAlchemy 3.13 patch: Accepting attributes {attrs} for {cls.__name__}")
-                        return
-
-                # For any other case, still accept to prevent crash
-                warnings.warn(f"SQLAlchemy 3.13 patch: Bypassing assertion for {cls.__name__}")
-                return
-            # Re-raise if it's a different error
-            raise
-
-    # Apply the patch
-    sqlalchemy.util.langhelpers.TypingOnly.__init_subclass__ = classmethod(patched_init_subclass)
-
-    # Also patch other TypingOnly classes if they exist
-    try:
-        import sqlalchemy.sql.base
-        sqlalchemy.sql.base.TypingOnly.__init_subclass__ = classmethod(patched_init_subclass)
-    except:
-        pass
-
-    warnings.warn("Applied SQLAlchemy Python 3.13 compatibility patch")
-
-# ============================================================================
-# NORMAL IMPORTS (NOW SAFE WITH PATCH)
+# app.py - COMPLETE FIXED VERSION 19--01-2026 07:25 AM
 # ============================================================================
 import time
 import json

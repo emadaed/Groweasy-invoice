@@ -1,23 +1,26 @@
 import qrcode
-from PIL import Image
+from io import BytesIO
+import base64
 
-def make_qr_with_logo(data_text, logo_path, output_path):
-    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H)
-    qr.add_data(data_text)
+def generate_qr_base64(data, logo_path=None, fill_color="black", back_color="white"):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
 
-    try:
+    img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGB")
+
+    if logo_path and Path(logo_path).exists():
         logo = Image.open(logo_path)
-        box_size = int(img.size[0] * 0.25)
-        logo = logo.resize((box_size, box_size))
+        logo_size = int(img.size[0] * 0.2)
+        logo = logo.resize((logo_size, logo_size))
         pos = ((img.size[0] - logo.size[0]) // 2, (img.size[1] - logo.size[1]) // 2)
-        img.paste(logo, pos)
-    except Exception:
-        pass
+        img.paste(logo, pos, logo if logo.mode == 'RGBA' else None)
 
-    img.save(output_path)
-
-def generate_simple_qr(data):
-    """Generate black/white QR without logo"""
-    return make_qr_with_logo(data, logo_b64=None)  # Reuse logic, no logo
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
