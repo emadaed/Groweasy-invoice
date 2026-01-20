@@ -392,6 +392,12 @@ def inject_currency():
     return dict(currency=currency, currency_symbol=symbol)
 
 @app.context_processor
+def inject_nonce():
+    if not hasattr(g, 'nonce'):
+        g.nonce = base64.b64encode(secrets.token_bytes(16)).decode('utf-8')
+    return dict(nonce=g.nonce)
+
+@app.context_processor
 def utility_processor():
     """Add utility functions to all templates"""
     def now():
@@ -829,6 +835,8 @@ def inventory():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    user_id = session['user_id']
+
     with DB_ENGINE.connect() as conn:
         items = conn.execute(text("""
             SELECT id, name, sku, category, current_stock, min_stock_level,
@@ -836,15 +844,16 @@ def inventory():
             FROM inventory_items
             WHERE user_id = :user_id AND is_active = TRUE
             ORDER BY name
-        """), {"user_id": session['user_id']}).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
-    # Convert to dicts
     inventory_items = [dict(row._mapping) for row in items]
 
-    from core.inventory import InventoryManager
-    low_stock_alerts = InventoryManager.get_low_stock_alerts(session['user_id'])
+    low_stock_alerts = InventoryManager.get_low_stock_alerts(user_id)
 
-    return render_template("inventory.html", inventory_items=inventory_items, low_stock_alerts=low_stock_alerts, nonce=g.nonce)
+    return render_template("inventory.html",
+                         inventory_items=inventory_items,
+                         low_stock_alerts=low_stock_alerts,
+                         nonce=g.nonce)
 
 # inventory reports - SIMPLIFIED TO AVOID ERRORS
 @app.route("/inventory_reports")

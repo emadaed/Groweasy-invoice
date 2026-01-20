@@ -168,6 +168,33 @@ class InventoryManager:
             return False, f"Validation error: {str(e)}"
 
     @staticmethod
+    def get_low_stock_alerts(user_id, threshold=10):
+        """Return list of items with stock below threshold"""
+        try:
+            with DB_ENGINE.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT name, sku, current_stock, reorder_level
+                    FROM inventory_items
+                    WHERE user_id = :user_id
+                      AND is_active = TRUE
+                      AND current_stock <= :threshold
+                    ORDER BY current_stock ASC
+                """), {"user_id": user_id, "threshold": threshold})
+
+                alerts = []
+                for row in result:
+                    alerts.append({
+                        'name': row.name,
+                        'sku': row.sku or 'N/A',
+                        'current_stock': row.current_stock,
+                        'reorder_level': row.reorder_level or threshold,
+                    })
+                return alerts
+        except Exception as e:
+            current_app.logger.error(f"Error fetching low stock alerts: {e}")
+            return []
+
+    @staticmethod
     def get_product_by_sku(user_id, sku):
         """Get product by SKU"""
         try:

@@ -58,7 +58,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ nonce }}">
         function downloadPDF() {
             const docType = window.location.pathname.includes('po') ? 'purchase_order' : 'invoice';
             const docNumber = '{{ data.invoice_number or data.po_number }}';
