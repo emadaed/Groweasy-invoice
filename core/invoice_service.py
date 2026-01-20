@@ -1,92 +1,88 @@
-# core/invoice_service.py - FINAL FIXED VERSION
+# core/invoice_service.py - FINAL PROFESSIONAL VERSION
 
 import logging
-from datetime import datetime
-from sqlalchemy import text
 from core.db import DB_ENGINE
 from core.number_generator import NumberGenerator
 from core.auth import save_user_invoice
+from core.purchases import save_purchase_order
 from core.inventory import InventoryManager
-from core.invoice_logic import prepare_invoice_data  # ← Use the perfect logic
+from core.invoice_logic import prepare_invoice_data
 
 logger = logging.getLogger(__name__)
 
 class InvoiceService:
-    """Service layer for invoice operations"""
-
     def __init__(self, user_id):
         self.user_id = user_id
         self.errors = []
         self.warnings = []
 
     def create_invoice(self, form_data, files=None):
-        """Create invoice using prepare_invoice_data - supports user logo"""
         try:
-            # Use the robust prepare_invoice_data from invoice_logic.py
             invoice_data = prepare_invoice_data(form_data, files=files)
 
-            # Generate invoice number if not present
-            if 'invoice_number' not in invoice_data:
-                invoice_data['invoice_number'] = NumberGenerator.generate_invoice_number(self.user_id)
+            # Generate number
+            invoice_data['invoice_number'] = NumberGenerator.generate_invoice_number(self.user_id)
 
-            # Save to DB
+            # Save
             save_user_invoice(self.user_id, invoice_data)
 
-            # Update stock for sales
-            if invoice_data.get('invoice_type', 'S') != 'P':  # Not purchase
-                self._update_stock(invoice_data['items'], 'sale', invoice_data['invoice_number'])
+            # Update stock - decrease for sales
+            movement_type = 'sale'
+            quantity_multiplier = -1
 
-            logger.info(f"Invoice {invoice_data['invoice_number']} created for user {self.user_id}")
-            return invoice_data, None
+            for item in invoice_data.get('items', []):
+                if item.get('product_id'):
+                    success = InventoryManager.update_stock_delta(
+                        self.user_id,
+                        item['product_id'],
+                        quantity_multiplier * item['qty'],
+                        movement_type,
+                        invoice_data['invoice_number'],
+                        f"Sale via invoice {invoice_data['invoice_number']}"
+                    )
+                    if not success:
+                        self.warnings.append(f"Stock update failed for {item['name']}")
 
-        except ValueError as e:
-            self.errors.append(str(e))
-            return None, self.errors
+            return invoice_data, self.errors or self.warnings
+
         except Exception as e:
             logger.error(f"Invoice creation failed: {e}", exc_info=True)
-            self.errors.append("An unexpected error occurred")
+            self.errors.append("System error during invoice creation")
             return None, self.errors
 
     def create_purchase_order(self, form_data, files=None):
-        """Create purchase order"""
         try:
-            # For PO, we can reuse prepare_invoice_data or customize
             po_data = prepare_invoice_data(form_data, files=files)
 
-            # Generate PO number
             po_data['po_number'] = NumberGenerator.generate_po_number(self.user_id)
             po_data['invoice_type'] = 'P'
 
-            # Save to purchases table (your existing function)
-            from core.purchases import save_purchase_order
             save_purchase_order(self.user_id, po_data)
 
-            logger.info(f"PO {po_data['po_number']} created for user {self.user_id}")
-            return po_data, None
+            # Update stock - increase for purchase
+            movement_type = 'purchase'
+            quantity_multiplier = 1
 
-        except ValueError as e:
-            self.errors.append(str(e))
-            return None, self.errors
-        except Exception as e:
-            logger.error(f"PO creation failed: {e}", exc_info=True)
-            self.errors.append("An unexpected error occurred")
-            return None, self.errors
-
-    def _update_stock(self, items, movement_type, reference_number):
-        """Update inventory stock"""
-        for item in items:
-            if item.get('product_id'):
-                try:
-                    InventoryManager.update_stock(
+            for item in po_data.get('items', []):
+                if item.get('product_id'):
+                    success = InventoryManager.update_stock_delta(
                         self.user_id,
                         item['product_id'],
-                        item['qty'],
+                        quantity_multiplier * item['qty'],
                         movement_type,
-                        reference_number,
-                        f"{movement_type.title()} {reference_number}"
+                        po_data['po_number'],
+                        f"Purchase via PO {po_data['po_number']}"
                     )
-                except Exception as e:
-                    self.warnings.append(f"Stock update failed for {item['name']}: {e}")
+                    if not success:
+                        self.warnings.append(f"Stock update failed for {item['name']}")
+
+            return po_data, self.errors or self.warnings
+
+        except Exception as e:
+            logger.error(f"PO creation failed: {e}", exc_info=True)
+            self.errors.append("System error during PO creation")
+            return None, self.errors
+
 
     def get_invoice(self, invoice_number):
         try:

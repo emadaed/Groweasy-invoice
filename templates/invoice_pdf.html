@@ -4,57 +4,51 @@
     <meta charset="UTF-8">
     <title>Invoice {{ data.get('invoice_number', '') }}</title>
     <style>
-        @page { size: A4; margin: 1cm; }
+        @page { size: A4; margin: 0.8cm; }
         body { font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #333; }
         .container { max-width: 100%; }
-        .header { margin-bottom: 20px; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px; }
-        .header table { width: 100%; }
-        .company-info { width: 50%; vertical-align: top; }
-        .invoice-info { width: 50%; text-align: right; vertical-align: top; }
-        .bill-to { margin: 20px 0; background: #f8f9fa; padding: 15px; border-left: 5px solid #2c5aa0; }
+        .header { margin-bottom: 15px; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .company-info { flex: 1; }
+        .company-info img { max-height: 80px; margin-bottom: 10px; display: block; }
+        .invoice-info { flex: 1; text-align: right; }
+        .bill-to { margin: 20px 0; padding: 15px; background: #f8f9fa; border-left: 5px solid #2c5aa0; }
         table.items { width: 100%; border-collapse: collapse; margin: 20px 0; page-break-inside: avoid; }
-        table.items th, table.items td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        table.items th, table.items td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 9pt; }
         table.items thead { background: #2c5aa0; color: white; }
-        .totals { width: 40%; float: right; background: #f8f9fa; border: 1px solid #ddd; }
-        .totals td { padding: 8px; }
-        .grand-total { background: #2c5aa0; color: white; font-weight: bold; }
-        .qr-section { text-align: center; margin: 40px 0; clear: both; }
+        .totals { width: 40%; float: right; background: #f8f9fa; border: 1px solid #ddd; margin-top: 20px; }
+        .totals td { padding: 8px; font-size: 10pt; }
+        .grand-total { background: #2c5aa0; color: white; font-weight: bold; font-size: 11pt; }
+        .payment-info { margin: 30px 0; padding: 15px; background: #e8f5e8; border-left: 5px solid #28a745; }
+        .notes { margin: 20px 0; padding: 15px; background: #f0f0f0; border: 1px dashed #ccc; }
+        .qr-section { text-align: center; margin: 30px 0; }
         .qr-section img { width: 180px; height: 180px; border: 2px solid #2c5aa0; padding: 10px; background: white; }
-        .footer { text-align: center; margin-top: 50px; font-size: 9pt; color: #666; clear: both; }
+        .footer { text-align: center; margin-top: 40px; font-size: 9pt; color: #666; }
         .clear { clear: both; }
         .text-right { text-align: right; }
-        h1, h2, h3, h4 { color: #2c5aa0; margin: 0 0 5px 0; }
-        .no-print { display: none; }
-        @media screen {
-            .no-print { display: block !important; text-align: center; margin: 40px 0; }
-        }
+        h1, h2, h3 { color: #2c5aa0; margin: 0 0 5px 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <table>
-                <tr>
-                    <td class="company-info">
-                        {% if logo_b64 %}
-                        <img src="data:image/png;base64,{{ logo_b64 }}" alt="Logo" style="max-height: 90px; margin-bottom: 15px;">
-                        {% endif %}
-                        <h2>{{ data.get('company_name', 'Your Company') }}</h2>
-                        <p>{{ data.get('company_address', '') }}<br>
-                        Phone: {{ data.get('company_phone', '') }}<br>
-                        Email: {{ data.get('company_email', '') }}</p>
-                    </td>
-                    <td class="invoice-info">
-                        <h1>INVOICE</h1>
-                        <p><strong>#:</strong> {{ data.get('invoice_number', '') }}<br>
-                        <strong>Date:</strong> {{ data.get('invoice_date', '') }}<br>
-                        {% if data.get('due_date', '') %}
-                        <strong>Due:</strong> {{ data.get('due_date', '') }}<br>
-                        {% endif %}
-                        <strong>Status:</strong> {{ data.get('status', 'Pending')|upper }}</p>
-                    </td>
-                </tr>
-            </table>
+            <div class="company-info">
+                {% if data.get('logo_b64') %}
+                <img src="data:image/png;base64,{{ data.get('logo_b64') }}" alt="Company Logo">
+                {% endif %}
+                <h2>{{ data.get('company_name', 'Your Company') }}</h2>
+                <p>{{ data.get('company_address', '') }}<br>
+                Phone: {{ data.get('company_phone', '') }}<br>
+                Email: {{ data.get('company_email', '') }}</p>
+            </div>
+            <div class="invoice-info">
+                <h1>INVOICE</h1>
+                <p><strong>#:</strong> {{ data.get('invoice_number', '') }}<br>
+                <strong>Date:</strong> {{ data.get('invoice_date', '') }}<br>
+                {% if data.get('due_date', '') %}
+                <strong>Due:</strong> {{ data.get('due_date', '') }}<br>
+                {% endif %}
+                <strong>Status:</strong> {{ data.get('status', 'Pending')|upper }}</p>
+            </div>
         </div>
 
         <div class="bill-to">
@@ -102,7 +96,7 @@
                 <tr><td>Tax:</td><td class="text-right">{{ currency_symbol }}{{ "%.2f"|format(data.get('tax_amount', 0)) }}</td></tr>
                 {% endif %}
                 <tr class="grand-total">
-                    <td><strong>TOTAL:</strong></td>
+                    <td><strong>TOTAL DUE:</strong></td>
                     <td class="text-right"><strong>{{ currency_symbol }}{{ "%.2f"|format(data.get('grand_total', 0)) }}</strong></td>
                 </tr>
             </table>
@@ -110,10 +104,32 @@
 
         <div class="clear"></div>
 
+        <!-- Payment Information -->
+        {% if data.get('payment_terms') or data.get('payment_methods') %}
+        <div class="payment-info">
+            <h3>PAYMENT INFORMATION</h3>
+            {% if data.get('payment_terms') %}
+            <p><strong>Terms:</strong> {{ data.get('payment_terms') }}</p>
+            {% endif %}
+            {% if data.get('payment_methods') %}
+            <p><strong>Methods:</strong> {{ data.get('payment_methods') }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Notes -->
+        {% if data.get('notes') %}
+        <div class="notes">
+            <h3>NOTES</h3>
+            <p>{{ data.get('notes') }}</p>
+        </div>
+        {% endif %}
+
+        <!-- QR -->
         {% if custom_qr_b64 %}
         <div class="qr-section">
             <h3>PAYMENT QR</h3>
-            <img src="data:image/png;base64,{{ custom_qr_b64 }}" alt="QR">
+            <img src="data:image/png;base64,{{ custom_qr_b64 }}" alt="Payment QR">
             <p>Scan to pay</p>
         </div>
         {% endif %}
@@ -122,22 +138,6 @@
             <p><strong>Thank you for your business!</strong></p>
             <p>Generated via GrowEasy Invoice • FBR Compliant • www.groweasy.com</p>
         </div>
-
-        <div class="no-print">
-            <button id="printBtn" style="padding:12px 30px; font-size:18px; background:#007bff; color:white; border:none; border-radius:8px; margin:20px; cursor:pointer;">
-                🖨️ Print
-            </button>
-            <button id="downloadBtn" style="padding:12px 30px; font-size:18px; background:#28a745; color:white; border:none; border-radius:8px; margin:20px; cursor:pointer;">
-                📥 Download PDF
-            </button>
-        </div>
     </div>
-
-    <script nonce="{{ nonce }}">
-        document.getElementById('printBtn')?.addEventListener('click', () => window.print());
-        document.getElementById('downloadBtn')?.addEventListener('click', () => {
-            window.location.href = '/invoice/download/{{ data.get('invoice_number', '') }}';
-        });
-    </script>
 </body>
 </html>
