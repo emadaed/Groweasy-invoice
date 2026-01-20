@@ -30,23 +30,35 @@ def _generate_pdf(service_data, template):
             back_color="white"
         )
 
-        # Company logo as base64 for PDF
-        logo_b64 = None
-        if Path(logo_path).exists():
-            with open(logo_path, "rb") as f:
-                logo_b64 = base64.b64encode(f.read()).decode('utf-8')
 
-        # Context for template
-        context = {
-            "data": service_data,
-            "custom_qr_b64": custom_qr_b64,
-            "logo_b64": logo_b64,
-            "fbr_qr_code": None,  # Add if you have FBR QR
-            "fbr_compliant": bool(service_data.get('seller_ntn')),
-            "currency_symbol": service_data.get('currency_symbol', 'Rs.'),
-            "preview": False,
-        }
+        # Robust logo
+            logo_b64 = None
+            logo_paths = [
+                "static/images/logo.png",
+                "static/img/logo.png",
+                "static/assets/logo.png"
+            ]
+            for path in logo_paths:
+                if Path(path).exists():
+                    with open(path, "rb") as f:
+                        logo_b64 = base64.b64encode(f.read()).decode('utf-8')
+                    break
 
+            # Ensure items is list (critical fix for multiple items)
+            items = service_data.get('items', [])
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except:
+                    items = []
+            service_data['items'] = items  # override
+
+            context = {
+                "data": service_data,
+                "custom_qr_b64": custom_qr_b64,
+                "logo_b64": logo_b64,
+                "currency_symbol": service_data.get('currency_symbol', 'Rs.'),
+            }
         # Render HTML
         rendered_html = render_template(template, **context)
 

@@ -47,7 +47,7 @@
                 <tr>
                     <td class="company-info">
                         {% if logo_b64 %}
-                        <img src="data:image/png;base64,{{ logo_b64 }}" alt="Company Logo" style="max-height: 80px; margin-bottom: 10px;">
+                        <img src="data:image/png;base64,{{ logo_b64 }}" alt="Company Logo" style="max-height: 90px; margin-bottom: 15px; display: block;">
                         {% endif %}
                         <h2>{{ data.get('company_name', 'Your Company') }}</h2>
                         <p>{{ data.get('company_address', '') }}<br>
@@ -55,8 +55,7 @@
                         Email: {{ data.get('company_email', '') }}<br>
                         {% if data.get('seller_ntn', '') %}
                         NTN: {{ data.get('seller_ntn', '') }}
-                        {% endif %}
-                        </p>
+                        {% endif %}</p>
                     </td>
                     <td class="invoice-info">
                         <h1>INVOICE</h1>
