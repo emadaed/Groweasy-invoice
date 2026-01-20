@@ -4,79 +4,25 @@
     <meta charset="UTF-8">
     <title>Invoice Preview</title>
     <style nonce="{{ nonce }}">
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; }
+        body { background: #f8f9fa; margin: 0; padding: 20px; }
         .preview-container {
             max-width: 900px;
             margin: 0 auto;
-            border: 3px solid #28a745;
-            padding: 30px;
             background: white;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 40px;
             border-radius: 12px;
-        }
-        .actions {
-            margin-top: 40px;
-            text-align: center;
-        }
-        .print-btn, .download-btn {
-            padding: 12px 30px;
-            font-size: 18px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            margin: 0 15px;
-        }
-        .print-btn {
-            background: #007bff;
-            color: white;
-        }
-        .download-btn {
-            background: #28a745;
-            color: white;
-        }
-        .print-btn:hover, .download-btn:hover {
-            opacity: 0.9;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
         @media print {
-            body { background: white; }
-            .preview-container { border: none; box-shadow: none; padding: 0; }
-            .actions { display: none; }
+            body { background: white; padding: 0; }
+            .preview-container { box-shadow: none; border-radius: 0; }
         }
     </style>
 </head>
 <body>
     <div class="preview-container">
-        <h2 style="text-align: center; color: #28a745; margin-bottom: 30px;">
-            Document Preview
-        </h2>
-
-        <!-- The actual invoice HTML - now directly rendered -->
+        <h2 style="text-align:center; color:#28a745; margin-bottom:30px;">Document Preview</h2>
         {{ html | safe }}
-
-        <div class="actions">
-            <button class="print-btn" id="printBtn">🖨️ Print</button>
-            <button class="download-btn" id="downloadBtn">📥 Download PDF</button>
-        </div>
     </div>
-
-    <!-- Safe script with nonce - no inline onclick -->
-    <script nonce="{{ nonce }}">
-        document.addEventListener('DOMContentLoaded', function() {
-            // Print button
-            document.getElementById('printBtn').addEventListener('click', function() {
-                window.print();
-            });
-
-            // Download button
-            document.getElementById('downloadBtn').addEventListener('click', function() {
-                const docType = window.location.pathname.includes('po') ? 'purchase_order' : 'invoice';
-                const docNumber = {{ data.invoice_number or data.po_number | tojson }};
-                window.location.href = `/invoice/download/${docNumber}?type=${docType}`;
-            });
-
-            // Debug data
-            console.log('Preview data:', {{ data | tojson }});
-        });
-    </script>
 </body>
 </html>
