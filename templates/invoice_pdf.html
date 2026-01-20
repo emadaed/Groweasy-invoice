@@ -15,29 +15,68 @@
             color: #333;
         }
         .container { max-width: 100%; }
+        .header { margin-bottom: 20px; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px; }
+        .header-table { width: 100%; }
+        .company-info { text-align: left; }
+        .invoice-info { text-align: right; }
+        .bill-to { margin: 20px 0; background: #f8f9fa; padding: 15px; border-left: 4px solid #2c5aa0; }
         table { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         thead { background: #2c5aa0; color: white; }
-        .totals-table { background: #f8f9fa; width: 50%; float: right; }
-        .grand-total-row { background: #2c5aa0; color: white; font-weight: bold; }
-        .qr-section { text-align: center; margin: 20px 0; }
-        .qr-section img { width: 150px; height: 150px; border: 1px solid #ddd; padding: 10px; }
+        .totals { width: 50%; float: right; background: #f8f9fa; }
+        .totals td { padding: 6px; }
+        .grand-total { background: #2c5aa0; color: white; font-weight: bold; }
+        .qr-section { text-align: center; margin: 30px 0; }
+        .qr-section img { width: 180px; height: 180px; border: 2px solid #2c5aa0; padding: 10px; background: white; }
+        .footer { text-align: center; margin-top: 40px; font-size: 9pt; color: #666; }
+        .clear { clear: both; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        h1, h2, h3, h4 { margin: 0; color: #2c5aa0; }
         .no-print { display: none; }
-        @media print {
-            .no-print { display: none !important; }
-        }
         @media screen {
-            .no-print { display: block !important; }
+            .no-print { display: block !important; text-align: center; margin: 30px 0; }
         }
     </style>
 </head>
 <body>
     <div class="container">
 
-        <!-- Your full invoice header from preview -->
-        <!-- Copy the exact HTML structure from your preview -->
+        <!-- Header: Company + Invoice Info -->
+        <div class="header">
+            <table class="header-table">
+                <tr>
+                    <td class="company-info">
+                        <h2>{{ data.get('company_name', 'Your Company') }}</h2>
+                        <p>{{ data.get('company_address', '') }}<br>
+                        Phone: {{ data.get('company_phone', '') }} | Email: {{ data.get('company_email', '') }}</p>
+                        {% if data.get('seller_ntn', '') %}
+                        <p><strong>NTN:</strong> {{ data.get('seller_ntn', '') }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="invoice-info">
+                        <h1>INVOICE</h1>
+                        <p><strong>Invoice #:</strong> {{ data.get('invoice_number', '') }}<br>
+                        <strong>Date:</strong> {{ data.get('invoice_date', '') }}<br>
+                        {% if data.get('due_date', '') %}
+                        <strong>Due Date:</strong> {{ data.get('due_date', '') }}<br>
+                        {% endif %}
+                        <strong>Status:</strong> {{ data.get('status', 'Pending')|upper }}</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
 
-        <!-- Items Table - wrapped to avoid break -->
+        <!-- Bill To -->
+        <div class="bill-to">
+            <h3>BILL TO</h3>
+            <p><strong>{{ data.get('client_name', 'Customer') }}</strong><br>
+            {{ data.get('client_address', '') }}<br>
+            Phone: {{ data.get('client_phone', '') }}<br>
+            Email: {{ data.get('client_email', '') }}</p>
+        </div>
+
+        <!-- Items Table -->
         <div style="page-break-inside: avoid;">
             <table>
                 <thead>
@@ -61,56 +100,50 @@
             </table>
         </div>
 
-        <!-- Totals & QR -->
+        <!-- Totals -->
+        <div class="clear"></div>
         <div style="page-break-inside: avoid;">
-            <table class="totals-table">
-                <tr><td>Subtotal:</td><td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('subtotal', 0)) }}</td></tr>
+            <table class="totals">
+                <tr><td>Subtotal:</td><td class="text-right">{{ currency_symbol }}{{ "%.2f"|format(data.get('subtotal', 0)) }}</td></tr>
                 {% if data.get('discount_amount', 0)|float > 0 %}
-                <tr><td>Discount:</td><td align="right">-{{ currency_symbol }}{{ "%.2f"|format(data.get('discount_amount', 0)) }}</td></tr>
+                <tr><td>Discount:</td><td class="text-right">-{{ currency_symbol }}{{ "%.2f"|format(data.get('discount_amount', 0)) }}</td></tr>
                 {% endif %}
                 {% if data.get('tax_amount', 0)|float > 0 %}
-                <tr><td>Tax:</td><td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('tax_amount', 0)) }}</td></tr>
+                <tr><td>Tax:</td><td class="text-right">{{ currency_symbol }}{{ "%.2f"|format(data.get('tax_amount', 0)) }}</td></tr>
                 {% endif %}
-                <tr class="grand-total-row"><td>TOTAL DUE:</td><td align="right">{{ currency_symbol }}{{ "%.2f"|format(data.get('grand_total', 0)) }}</td></tr>
+                <tr class="grand-total"><td><strong>TOTAL DUE:</strong></td><td class="text-right"><strong>{{ currency_symbol }}{{ "%.2f"|format(data.get('grand_total', 0)) }}</strong></td></tr>
             </table>
-
-            <div style="clear: both;"></div>
-
-            <div style="display: flex; justify-content: space-around; margin-top: 30px;">
-                {% if custom_qr_b64 %}
-                <div class="qr-section">
-                    <h4>PAYMENT QR</h4>
-                    <img src="data:image/png;base64,{{ custom_qr_b64 }}" alt="Payment QR">
-                    <p>Scan to pay</p>
-                </div>
-                {% endif %}
-                {% if fbr_compliant and fbr_qr_code %}
-                <div class="qr-section">
-                    <h4 style="color: green;">FBR QR</h4>
-                    <img src="data:image/png;base64,{{ fbr_qr_code }}" alt="FBR QR">
-                    <p>Verify with FBR</p>
-                </div>
-                {% endif %}
-            </div>
         </div>
 
-        <!-- Preview buttons -->
-        {% if preview %}
-        <div class="text-center my-5 no-print">
-            <button onclick="window.print()" class="btn btn-secondary btn-lg">Print</button>
-            <button id="downloadBtn" class="btn btn-success btn-lg ms-3">Download PDF</button>
+        <div class="clear"></div>
+
+        <!-- QR Code -->
+        {% if custom_qr_b64 %}
+        <div class="qr-section">
+            <h3>PAYMENT QR</h3>
+            <img src="data:image/png;base64,{{ custom_qr_b64 }}" alt="Payment QR Code">
+            <p>Scan to pay</p>
         </div>
         {% endif %}
 
-        <div class="text-center mt-5">
-            <p>Thank you for your business!</p>
-            <p><small>Generated via GrowEasy Invoice • FBR Compliant • www.groweasy.com</small></p>
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Thank you for your business!</strong></p>
+            <p>Generated via GrowEasy Invoice • FBR Compliant Format • www.groweasy.com</p>
         </div>
+
+        <!-- Preview Buttons (only in browser) -->
+        <div class="no-print">
+            <button onclick="window.print()" style="padding:12px 30px; font-size:18px; background:#007bff; color:white; border:none; border-radius:8px; margin:0 15px; cursor:pointer;">🖨️ Print</button>
+            <button id="downloadBtn" style="padding:12px 30px; font-size:18px; background:#28a745; color:white; border:none; border-radius:8px; margin:0 15px; cursor:pointer;">📥 Download PDF</button>
+        </div>
+
     </div>
 
     <script nonce="{{ nonce }}">
         document.getElementById('downloadBtn')?.addEventListener('click', function() {
-            window.location.href = '/invoice/download/{{ data.invoice_number }}';
+            const invoiceNumber = '{{ data.get('invoice_number', '') }}';
+            window.location.href = '/invoice/download/' + invoiceNumber;
         });
     </script>
 </body>
