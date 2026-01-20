@@ -1405,7 +1405,7 @@ class InvoiceView(MethodView):
 
             if invoice_type == 'P':
                 # Create purchase order
-                po_data, errors = service.create_purchase_order(request.form.to_dict())
+                po_data, errors = service.create_purchase_order(request.form, request.files)
 
                 if errors:
                     for error in errors:
@@ -1422,7 +1422,7 @@ class InvoiceView(MethodView):
                     return redirect(url_for('po_preview', po_number=po_data['po_number']))
             else:
                 # Create sales invoice
-                invoice_data, errors = service.create_invoice(request.form.to_dict())
+                invoice_data, errors = service.create_invoice(request.form, request.files)
 
                 if errors:
                     for error in errors:
