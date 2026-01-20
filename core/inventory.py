@@ -170,10 +170,12 @@ class InventoryManager:
     @staticmethod
     def get_low_stock_alerts(user_id, threshold=10):
         """Return list of items with stock below threshold"""
+        from flask import current_app  # ← Add this import at top of file or here
+
         try:
             with DB_ENGINE.connect() as conn:
                 result = conn.execute(text("""
-                    SELECT name, sku, current_stock, reorder_level
+                    SELECT name, sku, current_stock, min_stock_level
                     FROM inventory_items
                     WHERE user_id = :user_id
                       AND is_active = TRUE
@@ -187,7 +189,7 @@ class InventoryManager:
                         'name': row.name,
                         'sku': row.sku or 'N/A',
                         'current_stock': row.current_stock,
-                        'reorder_level': row.reorder_level or threshold,
+                        'reorder_level': row.min_stock_level or threshold,  # Use correct column
                     })
                 return alerts
         except Exception as e:

@@ -9,7 +9,7 @@
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
     <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
 
-    <!-- PWA Meta Tags -->
+    <!-- PWA Meta Tags (no service worker) -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#28a745">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,17 +22,16 @@
     <!-- Custom Invoice CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/invoice.min.css') }}?v=8">
 
-    <!-- Strict Content Security Policy with dynamic nonce -->
+    <!-- Correct CSP - frame-ancestors removed (it's ignored in meta anyway) -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self';
                    script-src 'self' 'nonce-{{ nonce }}' https://cdn.jsdelivr.net;
                    style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
                    img-src 'self' data: blob:;
                    font-src 'self' https://cdn.jsdelivr.net;
-                   connect-src 'self';
-                   frame-ancestors 'none';">
+                   connect-src 'self';">
 
-    <!-- Inline styles with nonce -->
+    <!--original inline styles with nonce -->
     <style nonce="{{ nonce }}">
         .container-main {
             max-width: 980px;
@@ -63,12 +62,10 @@
             color: #28a745;
         }
     </style>
-
-    {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-light">
 
-    <!-- Navigation -->
+    <!-- Navigation -ORIGINAL full version restored -->
     <nav class="user-nav">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center flex-wrap">
@@ -91,23 +88,38 @@
                                 <i class="bi bi-plus-circle"></i> Create
                             </button>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{{ url_for('create_invoice') }}"><i class="bi bi-file-earmark-text"></i> New Invoice</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('create_purchase_order') }}"><i class="bi bi-cart-plus"></i> New Purchase Order</a></li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('create_invoice') }}">
+                                        <i class="bi bi-file-earmark-text"></i> New Invoice
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('create_purchase_order') }}">
+                                        <i class="bi bi-cart-plus"></i> New Purchase Order
+                                    </a>
+                                </li>
                             </ul>
                         </div>
 
-                        <!-- Manage Dropdown -->
-                        <div class="btn-group me-1 mb-1" role="group">
-                            <button type="button" class="btn btn-outline-light btn-sm dropdown-toggle"
-                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-folder"></i> Manage
-                            </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{{ url_for('invoice_history') }}"><i class="bi bi-receipt"></i> Invoices</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('purchase_orders') }}"><i class="bi bi-cart-check"></i> Purchase Orders</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('inventory') }}"><i class="bi bi-box"></i> Inventory</a></li>
-                            </ul>
-                        </div>
+                        <!-- All original links -->
+                        <a href="{{ url_for('invoice_history') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-receipt"></i> Invoices
+                        </a>
+                        <a href="{{ url_for('purchase_orders') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-cart-check"></i> POs
+                        </a>
+                        <a href="{{ url_for('inventory') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-box"></i> Inventory
+                        </a>
+                        <a href="{{ url_for('expenses') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-wallet2"></i> Expenses
+                        </a>
+                        <a href="{{ url_for('customers') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-people"></i> Customers
+                        </a>
+                        <a href="{{ url_for('suppliers') }}" class="btn btn-outline-light btn-sm me-1 mb-1">
+                            <i class="bi bi-truck"></i> Suppliers
+                        </a>
 
                         <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm mb-1">
                             <i class="bi bi-box-arrow-right"></i> Logout
@@ -177,9 +189,10 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS + Cookie Consent Script (both with nonce) -->
+    <!-- Bootstrap JS -->
     <script nonce="{{ nonce }}" src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 
+    <!-- Cookie Consent Script -->
     <script nonce="{{ nonce }}">
     (function() {
         var CONSENT_KEY = 'groweasy_cookie_consent';
@@ -191,16 +204,23 @@
         function acceptCookies() {
             localStorage.setItem(CONSENT_KEY, 'accepted');
             var banner = document.getElementById('cookieConsent');
-            if (banner) banner.style.display = 'none';
+            if (banner) {
+                banner.style.display = 'none';
+            }
         }
 
         function init() {
             if (!hasConsent()) {
                 var banner = document.getElementById('cookieConsent');
-                if (banner) banner.style.display = 'block';
+                if (banner) {
+                    banner.style.display = 'block';
+                }
             }
+
             var btn = document.getElementById('acceptCookiesBtn');
-            if (btn) btn.addEventListener('click', acceptCookies);
+            if (btn) {
+                btn.addEventListener('click', acceptCookies);
+            }
         }
 
         if (document.readyState === 'loading') {
