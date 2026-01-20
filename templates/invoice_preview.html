@@ -3,84 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <title>Invoice Preview</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .preview-container { border: 2px solid #ddd; padding: 20px; }
-        .actions { margin-top: 20px; }
+    <style nonce="{{ nonce }}">
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; }
+        .preview-container {
+            max-width: 900px;
+            margin: 0 auto;
+            border: 3px solid #28a745;
+            padding: 30px;
+            background: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 12px;
+        }
+        .actions {
+            margin-top: 40px;
+            text-align: center;
+        }
+        .print-btn, .download-btn {
+            padding: 12px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 0 15px;
+        }
         .print-btn {
             background: #007bff;
             color: white;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
-            margin-right: 10px;
         }
         .download-btn {
             background: #28a745;
             color: white;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
         }
-
-        /* Ensure all sections are visible */
-        .invoice-preview * {
-            visibility: visible !important;
-            display: block !important;
+        .print-btn:hover, .download-btn:hover {
+            opacity: 0.9;
         }
-
-        /* Force show hidden elements */
-        [style*="display:none"],
-        [style*="display: none"],
-        [hidden] {
-            display: block !important;
-            visibility: visible !important;
+        @media print {
+            body { background: white; }
+            .preview-container { border: none; box-shadow: none; padding: 0; }
+            .actions { display: none; }
         }
     </style>
 </head>
 <body>
     <div class="preview-container">
-        <h2>Document Preview</h2>
+        <h2 style="text-align: center; color: #28a745; margin-bottom: 30px;">
+            Document Preview
+        </h2>
 
-        <!-- Embed the actual invoice/PO HTML -->
-        <div class="invoice-preview" id="preview-content">
-            {{ html|safe }}
-        </div>
-
-        <!-- Hidden div with raw data for debugging -->
-        <div style="display: none;" id="debug-data">
-            {{ data|tojson }}
-        </div>
+        <!-- The actual invoice HTML - now directly rendered -->
+        {{ html | safe }}
 
         <div class="actions">
-            <button class="print-btn" onclick="window.print()">🖨️ Print</button>
-            <button class="download-btn" onclick="downloadPDF()">📥 Download PDF</button>
+            <button class="print-btn" id="printBtn">🖨️ Print</button>
+            <button class="download-btn" id="downloadBtn">📥 Download PDF</button>
         </div>
     </div>
 
+    <!-- Safe script with nonce - no inline onclick -->
     <script nonce="{{ nonce }}">
-        function downloadPDF() {
-            const docType = window.location.pathname.includes('po') ? 'purchase_order' : 'invoice';
-            const docNumber = '{{ data.invoice_number or data.po_number }}';
-
-            window.location.href = `/invoice/download/${docNumber}?type=${docType}`;
-        }
-
-        // Fix any hidden elements in preview
         document.addEventListener('DOMContentLoaded', function() {
-            // Force show all elements
-            const allElements = document.querySelectorAll('#preview-content *');
-            allElements.forEach(el => {
-                el.style.visibility = 'visible';
-                el.style.display = 'block';
-                el.style.opacity = '1';
-
-                // Remove any hiding classes
-                el.classList.remove('d-none', 'hidden', 'collapse');
+            // Print button
+            document.getElementById('printBtn').addEventListener('click', function() {
+                window.print();
             });
 
-            // Log preview data for debugging
-            console.log('Preview data:', JSON.parse(document.getElementById('debug-data').textContent));
+            // Download button
+            document.getElementById('downloadBtn').addEventListener('click', function() {
+                const docType = window.location.pathname.includes('po') ? 'purchase_order' : 'invoice';
+                const docNumber = {{ data.invoice_number or data.po_number | tojson }};
+                window.location.href = `/invoice/download/${docNumber}?type=${docType}`;
+            });
+
+            // Debug data
+            console.log('Preview data:', {{ data | tojson }});
         });
     </script>
 </body>

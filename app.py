@@ -1360,35 +1360,33 @@ class InvoiceView(MethodView):
     """Handles invoice creation and preview - RESTful design"""
 
     def get(self):
-        """
-        GET /invoice/process - Show preview or redirect
-        SAFE: No side effects, idempotent
-        """
         if 'user_id' not in session:
             return redirect(url_for('login'))
 
-        # If coming from a successful creation, show preview
         if 'last_invoice_ref' in session and request.args.get('preview'):
             from core.session_storage import SessionStorage
             invoice_data = SessionStorage.get_data(session['user_id'], session['last_invoice_ref'])
-
             if not invoice_data:
                 flash("Invoice preview expired or not found", "error")
                 return redirect(url_for('create_invoice'))
 
-            # Generate QR for preview
-            qr_b64 = generate_simple_qr(invoice_data)
+            # Generate QR
+            qr_b64 = generate_simple_qr(invoice_data)  # or generate_qr_base64 if you have it
+
+            # Render the PDF template directly for preview
             html = render_template('invoice_pdf.html',
                                  data=invoice_data,
-                                 preview=True,
-                                 custom_qr_b64=qr_b64)
+                                 custom_qr_b64=qr_b64,
+                                 fbr_qr_code=None,  # add if you have
+                                 fbr_compliant=True,
+                                 currency_symbol="Rs.",
+                                 preview=True)  # optional flag if you want preview buttons
 
             return render_template('invoice_preview.html',
                                  html=html,
                                  data=invoice_data,
                                  nonce=g.nonce)
 
-        # Otherwise redirect to create form
         return redirect(url_for('create_invoice'))
 
     def post(self):
