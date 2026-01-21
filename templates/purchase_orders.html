@@ -154,10 +154,9 @@
                                             <li><hr class="dropdown-divider"></li>
                                             {% if order.status == 'pending' %}
                                             <li>
-                                                <button class="dropdown-item text-success mark-completed"
-                                                        data-po-number="{{ order.po_number }}">
-                                                    <i class="bi bi-check-circle"></i> Mark as Completed
-                                                </button>
+                                                <a href="{{ url_for('mark_po_received', po_number=order.po_number) }}" class="btn btn-success">
+                                                    <i class="bi bi-truck"></i> Receive Goods
+                                                </a>
                                             </li>
                                             <li>
                                                 <button class="dropdown-item text-danger cancel-po"

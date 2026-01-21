@@ -183,3 +183,18 @@ def get_suppliers(user_id):
             'order_count': supplier[7]
         })
     return result
+
+def get_purchase_order(user_id, po_number):
+    """Get single purchase order by number"""
+    try:
+        with DB_ENGINE.connect() as conn:
+            result = conn.execute(text('''
+                SELECT order_data FROM purchase_orders
+                WHERE user_id = :user_id AND po_number = :po_number
+            '''), {"user_id": user_id, "po_number": po_number}).fetchone()
+            if result:
+                return json.loads(result[0])
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching PO: {e}")
+        return None
