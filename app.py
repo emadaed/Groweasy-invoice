@@ -925,16 +925,15 @@ def add_product():
     product_id = InventoryManager.add_product(session['user_id'], product_data)
 
     if product_id:
-        # 🆕 CREATE AUDIT TRAIL - Initial stock entry
-        initial_stock = product_data['current_stock']
+        # If initial stock > 0, use delta to log it (already logged in add_product, but safe)
+        initial_stock = int(product_data.get('current_stock', 0))
         if initial_stock > 0:
-            InventoryManager.update_stock(
+            InventoryManager.update_stock_delta(
                 session['user_id'],
                 product_id,
                 initial_stock,
-                'initial_stock',
-                None,
-                f"Product created with initial stock: {initial_stock} units"
+                'initial',
+                notes='Initial stock on product creation'
             )
         flash(random_success_message('product_added'), 'success')
     else:
@@ -1018,7 +1017,8 @@ def adjust_stock_audit():
         currency_symbol = CURRENCY_SYMBOLS.get(currency_code, 'Rs.')
 
         # Get product info
-        product = InventoryManager.get_product_details(product_id, user_id)
+        #product = InventoryManager.get_product_details(product_id, user_id)
+        product = InventoryManager.get_product_by_id(session['user_id'], product_id)
         if not product:
             flash('Product not found', 'error')
             return redirect(url_for('inventory'))
