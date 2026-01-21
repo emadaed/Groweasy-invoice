@@ -65,11 +65,12 @@ class InvoiceService:
 
             for item in po_data.get('items', []):
                 if item.get('product_id'):
+                    qty = int(item.get('qty', 0))
                     success = InventoryManager.update_stock_delta(
                         self.user_id,
                         item['product_id'],
-                        quantity_multiplier * int(item['qty']),
-                        movement_type,
+                        qty,  # positive for purchase
+                        'purchase',
                         po_data['po_number'],
                         f"Purchase via PO {po_data['po_number']}"
                     )

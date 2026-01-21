@@ -1007,9 +1007,10 @@ def adjust_stock_audit():
 
     try:
         from core.inventory import InventoryManager
+        from flask import current_app as app  # ← Fix logger
 
-        # Get product
-        product = InventoryManager.get_product_by_id(user_id, product_id)
+        # Get product - use your existing method
+        product = InventoryManager.get_product_details(user_id, product_id)
         if not product:
             flash('❌ Product not found', 'error')
             return redirect(url_for('inventory'))
@@ -1017,7 +1018,7 @@ def adjust_stock_audit():
         current_stock = product['current_stock']
         product_name = product['name']
 
-        # Calculate delta based on type
+        # Calculate delta
         if adjustment_type == 'add_stock':
             delta = +quantity
             movement_type = 'stock_in'
@@ -1037,7 +1038,7 @@ def adjust_stock_audit():
             flash('❌ Invalid adjustment type', 'error')
             return redirect(url_for('inventory'))
 
-        # Update using delta method
+        # Update stock using delta
         success = InventoryManager.update_stock_delta(
             user_id=user_id,
             product_id=product_id,
@@ -1047,7 +1048,7 @@ def adjust_stock_audit():
             notes=f"{reason}: {notes}".strip()
         )
 
-        # Update prices if provided
+        # Update prices
         if success and (new_cost_price or new_selling_price):
             updates = {}
             if new_cost_price and new_cost_price.strip():
@@ -1066,15 +1067,14 @@ def adjust_stock_audit():
             new_stock = current_stock + delta
             flash(f'✅ {product_name} adjusted! Stock: {current_stock} → {new_stock}', 'success')
         else:
-            flash('❌ Failed to update stock (possibly negative)', 'error')
+            flash('❌ Failed to update stock (negative not allowed)', 'error')
 
         return redirect(url_for('inventory'))
 
     except Exception as e:
-        logger.error(f"Stock adjustment error: {e}", exc_info=True)
+        app.logger.error(f"Stock adjustment error: {e}", exc_info=True)
         flash('❌ Error updating product', 'error')
         return redirect(url_for('inventory'))
-
 
 # inventory report
 @app.route("/download_inventory_report")
