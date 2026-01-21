@@ -12,11 +12,12 @@
             <p>This action will:
                 <ul>
                     <li>Change status to <strong>Received</strong></li>
-                    <li>Add items to inventory</li>
+                    <li>Add items to inventory stock</li>
                     <li>Log stock movement</li>
+                    <li>Cannot be undone</li>
                 </ul>
             </p>
-            <p><strong>{{ po_data.items|length }} items</strong> will be added to stock.</p>
+            <p><strong>{{ po_data.get('items', [])|length }} items</strong> will be added to stock.</p>
 
             <form method="POST">
                 <button type="submit" class="btn btn-success btn-lg">Yes, Receive Goods</button>
