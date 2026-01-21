@@ -989,7 +989,7 @@ def get_inventory_items_api():
 
     return jsonify(inventory_data)
 
-# stock adjustment
+# stock adjustment - FINAL WORKING VERSION
 @app.route("/adjust_stock_audit", methods=['POST'])
 @limiter.limit("10 per minute")
 def adjust_stock_audit():
@@ -1002,87 +1002,79 @@ def adjust_stock_audit():
     quantity = int(request.form.get('quantity', 0))
     new_cost_price = request.form.get('new_cost_price')
     new_selling_price = request.form.get('new_selling_price')
-    reason = request.form.get('reason', '')
+    reason = request.form.get('reason', 'Stock adjustment')
     notes = request.form.get('notes', '')
 
     try:
         from core.inventory import InventoryManager
-        from core.db import DB_ENGINE
-        from sqlalchemy import text
-        from core.auth import get_user_profile
 
-        # Get user's currency
-        user_profile = get_user_profile(user_id)
-        currency_code = user_profile.get('preferred_currency', 'PKR') if user_profile else 'PKR'
-        currency_symbol = CURRENCY_SYMBOLS.get(currency_code, 'Rs.')
-
-        # Get product info
-        #product = InventoryManager.get_product_details(product_id, user_id)
-        product = InventoryManager.get_product_by_id(session['user_id'], product_id)
+        # Get product
+        product = InventoryManager.get_product_by_id(user_id, product_id)
         if not product:
-            flash('Product not found', 'error')
+            flash('❌ Product not found', 'error')
             return redirect(url_for('inventory'))
 
-        # Calculate new stock
         current_stock = product['current_stock']
+        product_name = product['name']
+
+        # Calculate delta based on type
         if adjustment_type == 'add_stock':
-            new_stock = current_stock + quantity
-            movement_type = 'stock_adjustment_add'
+            delta = +quantity
+            movement_type = 'stock_in'
         elif adjustment_type == 'remove_stock':
-            new_stock = current_stock - quantity
-            movement_type = 'stock_adjustment_remove'
-        elif adjustment_type == 'set_stock':
-            new_stock = quantity
-            movement_type = 'stock_adjustment_set'
+            delta = -quantity
+            movement_type = 'stock_out'
         elif adjustment_type == 'damaged':
-            new_stock = current_stock - quantity
-            movement_type = 'damaged_goods'
+            delta = -quantity
+            movement_type = 'damaged'
         elif adjustment_type == 'found_stock':
-            new_stock = current_stock + quantity
-            movement_type = 'found_stock'
+            delta = +quantity
+            movement_type = 'found'
+        elif adjustment_type == 'set_stock':
+            delta = quantity - current_stock
+            movement_type = 'adjustment'
         else:
-            flash('Invalid adjustment type', 'error')
+            flash('❌ Invalid adjustment type', 'error')
             return redirect(url_for('inventory'))
 
-        # Update stock
-        success = InventoryManager.update_stock(
+        # Update using delta method
+        success = InventoryManager.update_stock_delta(
             user_id=user_id,
             product_id=product_id,
-            new_quantity=new_stock,
+            quantity_delta=delta,
             movement_type=movement_type,
             reference_id=f"ADJ-{int(time.time())}",
-            notes=f"{reason}. {notes}"
+            notes=f"{reason}: {notes}".strip()
         )
 
-        # Update prices
+        # Update prices if provided
         if success and (new_cost_price or new_selling_price):
-            with DB_ENGINE.begin() as conn:
-                updates = []
-                params = {"product_id": product_id, "user_id": user_id}
+            updates = {}
+            if new_cost_price and new_cost_price.strip():
+                updates['cost_price'] = float(new_cost_price)
+            if new_selling_price and new_selling_price.strip():
+                updates['selling_price'] = float(new_selling_price)
 
-                if new_cost_price and new_cost_price.strip():
-                    updates.append("cost_price = :cost_price")
-                    params["cost_price"] = float(new_cost_price)
-
-                if new_selling_price and new_selling_price.strip():
-                    updates.append("selling_price = :selling_price")
-                    params["selling_price"] = float(new_selling_price)
-
-                if updates:
-                    sql = f"UPDATE inventory_items SET {', '.join(updates)} WHERE id = :product_id AND user_id = :user_id"
-                    conn.execute(text(sql), params)
+            if updates:
+                with DB_ENGINE.begin() as conn:
+                    set_clause = ', '.join(f"{k} = :{k}" for k in updates)
+                    params = updates.copy()
+                    params.update({"product_id": product_id, "user_id": user_id})
+                    conn.execute(text(f"UPDATE inventory_items SET {set_clause} WHERE id = :product_id AND user_id = :user_id"), params)
 
         if success:
-            flash(f'✅ {product["name"]} updated! Stock: {current_stock}→{new_stock}', 'success')
+            new_stock = current_stock + delta
+            flash(f'✅ {product_name} adjusted! Stock: {current_stock} → {new_stock}', 'success')
         else:
-            flash('Error updating product', 'error')
+            flash('❌ Failed to update stock (possibly negative)', 'error')
 
         return redirect(url_for('inventory'))
 
     except Exception as e:
-        print(f"Stock adjustment error: {e}")
-        flash('Error updating product', 'error')
+        logger.error(f"Stock adjustment error: {e}", exc_info=True)
+        flash('❌ Error updating product', 'error')
         return redirect(url_for('inventory'))
+
 
 # inventory report
 @app.route("/download_inventory_report")
