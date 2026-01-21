@@ -534,25 +534,65 @@ def create_purchase_order():
                          suppliers=suppliers,
                          nonce=g.nonce)
 
-
-@app.route('/po/mark_completed/<po_number>', methods=['POST'])
+#GRN
+@app.route("/po/mark_completed/<po_number>", methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def mark_po_completed(po_number):
-    """Mark PO as completed"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    try:
-        with DB_ENGINE.begin() as conn:
-            conn.execute(text("""
-                UPDATE purchase_orders
-                SET status = 'completed'
-                WHERE user_id = :user_id AND po_number = :po_number
-            """), {"user_id": session['user_id'], "po_number": po_number})
+    user_id = session['user_id']
 
-        flash(f"✅ PO {po_number} marked as completed", "success")
-        return redirect(url_for('purchase_orders'))
+    try:
+        from core.purchases import get_purchase_order
+        from core.inventory import InventoryManager
+
+        po_data = get_purchase_order(user_id, po_number)
+        if not po_data:
+            flash("❌ Purchase Order not found", "error")
+            return redirect(url_for('purchase_orders'))
+
+        if po_data.get('status', '').lower() in ['received', 'completed']:
+            flash("⚠️ Purchase Order already received", "warning")
+            return redirect(url_for('purchase_orders'))
+
+        if request.method == 'POST' or request.args.get('confirm') == 'yes':
+            # Update status
+            po_data['status'] = 'Received'
+            po_data['received_date'] = datetime.now().strftime('%Y-%m-%d')
+
+            # Save updated PO
+            from core.purchases import save_purchase_order
+            save_purchase_order(user_id, po_data)
+
+            # ADD STOCK
+            for item in po_data.get('items', []):
+                if item.get('product_id'):
+                    qty = int(item.get('qty', 0))
+                    if qty > 0:
+                        success = InventoryManager.update_stock_delta(
+                            user_id,
+                            item['product_id'],
+                            qty,  # increase
+                            'purchase_receive',
+                            po_number,
+                            f"Goods received via PO {po_number}"
+                        )
+                        if not success:
+                            flash(f"⚠️ Stock update failed for {item.get('name', 'item')}", "warning")
+
+            flash(f"✅ Purchase Order {po_number} marked as Received! Stock updated.", "success")
+            return redirect(url_for('purchase_orders'))
+
+        # GET request - show confirmation
+        return render_template("po_receive_confirm.html",
+                             po_data=po_data,
+                             po_number=po_number,
+                             nonce=g.nonce)
+
     except Exception as e:
-        flash(f"❌ Error updating PO: {e}", "error")
+        current_app.logger.error(f"PO receive error: {e}", exc_info=True)
+        flash("❌ Error processing receipt", "error")
         return redirect(url_for('purchase_orders'))
 
 
