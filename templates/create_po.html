@@ -1,246 +1,142 @@
 {% extends "base.html" %}
+
 {% block title %}Create Purchase Order{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="card">
-        <div class="card-header bg-primary text-white">
-            <h4><i class="bi bi-cart-plus"></i> Create Purchase Order</h4>
+<div class="container py-5">
+    <h2 class="text-center mb-4">Create Purchase Order</h2>
+
+    <form method="POST" action="{{ url_for('create_po_process') }}" id="poForm">
+        <div class="row">
+            <div class="col-md-6">
+                <h5>Supplier</h5>
+                <select class="form-select mb-3" name="supplier_id">
+                    <option value="">Select Supplier</option>
+                    {% for supplier in suppliers %}
+                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#supplierModal">
+                    + Add New Supplier
+                </button>
+            </div>
+            <div class="col-md-6">
+                <h5>PO Details</h5>
+                <input type="date" class="form-control mb-3" name="po_date" value="{{ today }}" required>
+                <input type="date" class="form-control mb-3" name="delivery_date">
+                <select class="form-select mb-3" name="delivery_method">
+                    <option>Pickup</option>
+                    <option>Courier</option>
+                    <option>Supplier Delivery</option>
+                </select>
+            </div>
         </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('create_po_process') }}" id="poForm">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5>Supplier Information</h5>
-                        <div class="mb-3">
-                            <label class="form-label">Supplier Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="supplier_name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Contact Person</label>
-                            <input type="text" class="form-control" name="contact_person">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Phone</label>
-                            <input type="text" class="form-control" name="supplier_phone">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control" name="supplier_email">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Address</label>
-                            <textarea class="form-control" name="supplier_address" rows="3"></textarea>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h5>PO Details</h5>
-                        <div class="mb-3">
-                            <label class="form-label">PO Date <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" name="po_date" value="{{ today }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Expected Delivery Date</label>
-                            <input type="date" class="form-control" name="delivery_date">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Delivery Method</label>
-                            <select class="form-control" name="delivery_method">
-                                <option value="">Select</option>
-                                <option>Courier</option>
-                                <option>Self Pickup</option>
-                                <option>Supplier Delivery</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Payment Terms</label>
-                            <input type="text" class="form-control" name="supplier_payment_terms" placeholder="e.g. Net 30">
-                        </div>
-                    </div>
-                </div>
 
-                <hr>
+        <hr>
 
-                <h5>Items from Inventory</h5>
-                <div class="table-responsive">
-                    <table class="table table-bordered" id="itemsTable">
-                        <thead class="table-primary">
-                            <tr>
-                                <th>#</th>
-                                <th>Product <span class="text-danger">*</span></th>
-                                <th>Available Stock</th>
-                                <th>Qty <span class="text-danger">*</span></th>
-                                <th>Unit Price</th>
-                                <th>Total</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>1</td>
-                                <td>
-                                    <select class="form-select product-select" name="item_id[]" required>
-                                        <option value="">-- Select Product --</option>
-                                        {% for item in inventory_items %}
-                                        <option value="{{ item.id }}"
-                                                data-price="{{ item.selling_price }}"
-                                                data-stock="{{ item.current_stock }}">
-                                            {{ item.name }} (Stock: {{ item.current_stock }})
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                </td>
-                                <td class="stock-display">0</td>
-                                <td><input type="number" class="form-control qty-input" name="item_qty[]" min="1" value="1" required></td>
-                                <td><input type="number" class="form-control price-input" name="item_price[]" step="0.01" required></td>
-                                <td class="total-display">0.00</td>
-                                <td><button type="button" class="btn btn-danger btn-sm remove-row">Remove</button></td>
-                            </tr>
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="7">
-                                    <button type="button" class="btn btn-secondary" id="addRow">+ Add Item</button>
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+        <h5>Items</h5>
+        <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#inventoryModal">
+            Add from Inventory
+        </button>
 
-                <div class="row mt-4">
-                    <div class="col-md-6 offset-md-6">
-                        <table class="table table-bordered">
-                            <tr>
-                                <td><strong>Subtotal</strong></td>
-                                <td id="subtotal" class="text-end">Rs. 0.00</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Tax (17%)</strong></td>
-                                <td id="tax" class="text-end">Rs. 0.00</td>
-                            </tr>
-                            <tr class="table-success">
-                                <td><strong>Grand Total</strong></td>
-                                <td id="grandtotal" class="text-end">Rs. 0.00</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
+        <table class="table" id="itemsTable">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Items added here -->
+            </tbody>
+        </table>
 
-                <div class="mb-3">
-                    <label class="form-label">Internal Notes</label>
-                    <textarea class="form-control" name="internal_notes" rows="3"></textarea>
-                </div>
+        <div class="text-center">
+            <button type="submit" class="btn btn-success btn-lg">Create PO</button>
+        </div>
+    </form>
+</div>
 
-                <div class="text-center">
-                    <button type="submit" class="btn btn-primary btn-lg">Create Purchase Order</button>
-                    <a href="{{ url_for('purchase_orders') }}" class="btn btn-secondary btn-lg ms-3">Cancel</a>
-                </div>
-            </form>
+<!-- Inventory Modal -->
+<div class="modal fade" id="inventoryModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Add from Inventory</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Select</th>
+                            <th>Name</th>
+                            <th>Stock</th>
+                            <th>Cost Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inventory_items %}
+                        <tr>
+                            <td><input type="checkbox" class="item-check" data-id="{{ item.id }}" data-name="{{ item.name }}" data-price="{{ item.cost_price }}"></td>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.current_stock }}</td>
+                            <td>{{ item.cost_price }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="addInventoryItems">Add Selected</button>
+            </div>
         </div>
     </div>
 </div>
 
 <script nonce="{{ nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
-    const table = document.getElementById('itemsTable').querySelector('tbody');
+    const tbody = document.querySelector('#itemsTable tbody');
 
-    function updateRow(row) {
-        const select = row.querySelector('.product-select');
-        const qtyInput = row.querySelector('.qty-input');
-        const priceInput = row.querySelector('.price-input');
-        const totalDisplay = row.querySelector('.total-display');
-        const stockDisplay = row.querySelector('.stock-display');
+    document.getElementById('addInventoryItems').addEventListener('click', function() {
+        document.querySelectorAll('.item-check:checked').forEach(cb => {
+            const id = cb.dataset.id;
+            const name = cb.dataset.name;
+            const price = cb.dataset.price;
 
-        if (select && qtyInput && priceInput && totalDisplay) {
-            const price = parseFloat(priceInput.value) || 0;
-            const qty = parseFloat(qtyInput.value) || 0;
-            const total = price * qty;
-            totalDisplay.textContent = 'Rs. ' + total.toFixed(2);
-
-            // Update stock display
-            const selectedOption = select.options[select.selectedIndex];
-            if (selectedOption && selectedOption.dataset.stock) {
-                stockDisplay.textContent = selectedOption.dataset.stock;
-            }
-        }
-        updateTotals();
-    }
-
-    function updateTotals() {
-        let subtotal = 0;
-        document.querySelectorAll('.total-display').forEach(td => {
-            const text = td.textContent.replace('Rs. ', '');
-            subtotal += parseFloat(text) || 0;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="hidden" name="item_id[]" value="${id}">
+                    ${name}
+                </td>
+                <td><input type="number" name="item_qty[]" value="1" min="1" class="form-control"></td>
+                <td><input type="number" name="item_price[]" value="${price}" step="0.01" class="form-control"></td>
+                <td class="total">0.00</td>
+                <td><button type="button" class="btn btn-danger btn-sm remove-row">Remove</button></td>
+            `;
+            tbody.appendChild(row);
         });
-        const tax = subtotal * 0.17;
-        const grand = subtotal + tax;
-
-        document.getElementById('subtotal').textContent = 'Rs. ' + subtotal.toFixed(2);
-        document.getElementById('tax').textContent = 'Rs. ' + tax.toFixed(2);
-        document.getElementById('grandtotal').textContent = 'Rs. ' + grand.toFixed(2);
-    }
-
-    // Add row
-    document.getElementById('addRow').addEventListener('click', function() {
-        const rowCount = table.rows.length + 1;
-        const newRow = table.insertRow();
-        newRow.innerHTML = `
-            <td>${rowCount}</td>
-            <td>
-                <select class="form-select product-select" name="item_id[]" required>
-                    <option value="">-- Select Product --</option>
-                    {% for item in inventory_items %}
-                    <option value="{{ item.id }}" data-price="{{ item.selling_price }}" data-stock="{{ item.current_stock }}">
-                        {{ item.name }} (Stock: {{ item.current_stock }})
-                    </option>
-                    {% endfor %}
-                </select>
-            </td>
-            <td class="stock-display">0</td>
-            <td><input type="number" class="form-control qty-input" name="item_qty[]" min="1" value="1" required></td>
-            <td><input type="number" class="form-control price-input" name="item_price[]" step="0.01" required></td>
-            <td class="total-display">0.00</td>
-            <td><button type="button" class="btn btn-danger btn-sm remove-row">Remove</button></td>
-        `;
-        attachRowEvents(newRow);
-        updateTotals();
+        bootstrap.Modal.getInstance(document.getElementById('inventoryModal')).hide();
     });
 
-    function attachRowEvents(row) {
-        row.querySelector('.product-select').addEventListener('change', function() {
-            const selected = this.options[this.selectedIndex];
-            const priceInput = row.querySelector('.price-input');
-            const stockDisplay = row.querySelector('.stock-display');
-            if (selected.value) {
-                priceInput.value = selected.dataset.price || 0;
-                stockDisplay.textContent = selected.dataset.stock || 0;
-            } else {
-                priceInput.value = '';
-                stockDisplay.textContent = '0';
-            }
-            updateRow(row);
-        });
+    tbody.addEventListener('input', function(e) {
+        if (e.target.name === 'item_qty[]' || e.target.name === 'item_price[]') {
+            const row = e.target.closest('tr');
+            const qty = parseFloat(row.querySelector('[name="item_qty[]"]').value) || 0;
+            const price = parseFloat(row.querySelector('[name="item_price[]"]').value) || 0;
+            row.querySelector('.total').textContent = (qty * price).toFixed(2);
+        }
+    });
 
-        row.querySelector('.qty-input').addEventListener('input', () => updateRow(row));
-        row.querySelector('.price-input').addEventListener('input', () => updateRow(row));
-        row.querySelector('.remove-row').addEventListener('click', () => {
-            if (table.rows.length > 1) {
-                row.remove();
-                updateRowNumbers();
-                updateTotals();
-            }
-        });
-    }
-
-    function updateRowNumbers() {
-        table.querySelectorAll('tr').forEach((row, index) => {
-            row.cells[0].textContent = index + 1;
-        });
-    }
-
-    // Initial setup
-    document.querySelectorAll('#itemsTable tbody tr').forEach(attachRowEvents);
-    updateTotals();
+    tbody.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-row')) {
+            e.target.closest('tr').remove();
+        }
+    });
 });
 </script>
 {% endblock %}
