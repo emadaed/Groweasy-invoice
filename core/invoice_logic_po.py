@@ -1,65 +1,63 @@
 # core/invoice_logic_po.py
-"""
-Purchase Order data preparation - NO stock validation
-"""
-
-def prepare_po_data(form_data, files):
-    """Prepare PO data without stock validation"""
+def prepare_po_data(form_data, files=None):
+    """Prepare PO data - supports item_id[], item_qty[], item_price[] format"""
     from datetime import datetime
 
     # Basic info
     po_data = {
-        'client_name': form_data.get('client_name', ''),
-        'client_email': form_data.get('client_email', ''),
-        'client_phone': form_data.get('client_phone', ''),
-        'client_address': form_data.get('client_address', ''),
-        'company_name': form_data.get('company_name', ''),
-        'company_address': form_data.get('company_address', ''),
-        'company_phone': form_data.get('company_phone', ''),
-        'invoice_date': form_data.get('invoice_date', datetime.now().strftime('%Y-%m-%d')),
-        'due_date': form_data.get('due_date', ''),
-        'subtotal': float(form_data.get('subtotal', 0)),
-        'tax_rate': float(form_data.get('tax_rate', 0)),
-        'tax_amount': float(form_data.get('tax_amount', 0)),
-        'grand_total': float(form_data.get('grand_total', 0)),
-        'notes': form_data.get('notes', ''),
-        'invoice_type': 'P',
+        'supplier_name': form_data.get('supplier_name', '') or 'Unknown Supplier',
+        'contact_person': form_data.get('contact_person', ''),
+        'supplier_phone': form_data.get('supplier_phone', ''),
+        'supplier_email': form_data.get('supplier_email', ''),
+        'supplier_address': form_data.get('supplier_address', ''),
+        'supplier_tax_id': form_data.get('supplier_tax_id', ''),
+        'supplier_payment_terms': form_data.get('supplier_payment_terms', 'Net 30'),
+        'po_date': form_data.get('po_date') or datetime.now().strftime('%Y-%m-%d'),
+        'delivery_date': form_data.get('delivery_date') or '',
+        'delivery_method': form_data.get('delivery_method', 'Pickup'),
+        'shipping_terms': form_data.get('shipping_terms', 'FOB Destination'),
+        'po_notes': form_data.get('po_notes', ''),
+        'internal_notes': form_data.get('internal_notes', ''),
         'buyer_ntn': form_data.get('buyer_ntn', ''),
         'seller_ntn': form_data.get('seller_ntn', ''),
+        'shipping_cost': float(form_data.get('shipping_cost', 0)),
+        'insurance_cost': float(form_data.get('insurance_cost', 0)),
+        'invoice_type': 'P',
         'items': []
     }
 
-    # Extract items
-    i = 1
-    while True:
-        product_name = form_data.get(f'item_product_{i}')
-        if not product_name:
-            break
+    # Extract items from new format
+    items = []
+    item_ids = form_data.getlist('item_id[]')
+    item_qtys = form_data.getlist('item_qty[]')
+    item_prices = form_data.getlist('item_price[]')
 
-        qty = float(form_data.get(f'item_qty_{i}', 0))
-        price = float(form_data.get(f'item_price_{i}', 0))
+    for i in range(len(item_ids)):
+        if item_ids[i]:  # Only if product selected
+            qty = int(item_qtys[i]) if i < len(item_qtys) else 1
+            price = float(item_prices[i]) if i < len(item_prices) else 0.0
+            items.append({
+                'product_id': item_ids[i],
+                'name': f"Product {item_ids[i]}",  # Will be replaced in template if needed
+                'qty': qty,
+                'price': price,
+                'total': qty * price
+            })
 
-        # Find product_id if exists
-        product_id = None
-        from core.db import DB_ENGINE
-        from sqlalchemy import text
-        with DB_ENGINE.connect() as conn:
-            result = conn.execute(text("""
-                SELECT id FROM inventory_items
-                WHERE name = :name AND is_active = TRUE
-                LIMIT 1
-            """), {"name": product_name}).fetchone()
-            if result:
-                product_id = result[0]
+    if not items:
+        raise ValueError("At least one item is required for purchase order")
 
-        po_data['items'].append({
-            'product_id': product_id,
-            'name': product_name,
-            'qty': qty,
-            'price': price,
-            'total': qty * price
-        })
+    subtotal = sum(item['total'] for item in items)
+    tax_rate = float(form_data.get('sales_tax', 17))
+    tax_amount = subtotal * (tax_rate / 100)
+    grand_total = subtotal + tax_amount + po_data['shipping_cost'] + po_data['insurance_cost']
 
-        i += 1
+    po_data.update({
+        'items': items,
+        'subtotal': subtotal,
+        'tax_rate': tax_rate,
+        'tax_amount': tax_amount,
+        'grand_total': grand_total
+    })
 
     return po_data
