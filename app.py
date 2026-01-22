@@ -523,7 +523,7 @@ def create_purchase_order():
     # Today date
     today_str = datetime.today().strftime('%Y-%m-%d')
 
-    return render_template("create_purchase_order.html",
+    return render_template("create_po.html",
                          inventory_items=inventory_items,
                          suppliers=suppliers,
                          today=today_str,
