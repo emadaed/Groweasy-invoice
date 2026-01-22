@@ -24,6 +24,7 @@ import redis
 from fbr_integration import FBRInvoice
 from core.inventory import InventoryManager
 from core.invoice_logic import prepare_invoice_data
+from core.invoice_logic_po import prepare_po_data
 from core.qr_engine import generate_qr_base64
 from core.pdf_engine import generate_pdf, HAS_WEASYPRINT
 from core.auth import create_user, verify_user, get_user_profile, update_user_profile, change_user_password, save_user_invoice
@@ -518,7 +519,7 @@ def create_purchase_order():
     inventory_items = InventoryManager.get_inventory_items(user_id)
 
     # Get suppliers (adjust if you have a supplier manager)
-    suppliers = get_suppliers(user_id)  # or your existing function
+    suppliers = get_suppliers(user_id)
 
     # Today date
     today_str = datetime.today().strftime('%Y-%m-%d')
