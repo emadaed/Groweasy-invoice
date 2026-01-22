@@ -530,7 +530,7 @@ def create_purchase_order():
                          today=today_str,
                          nonce=g.nonce)
 
-# create po process
+#create po process
 @app.route('/create_po_process', methods=['POST'])
 @limiter.limit("10 per minute")
 def create_po_process():
@@ -540,98 +540,30 @@ def create_po_process():
     user_id = session['user_id']
 
     try:
-        # Extract PO-specific data - ADD DATE VALIDATION
-        po_data = {
-            'document_type': 'purchase_order',
-            'supplier_name': request.form.get('supplier_name') or 'Unknown Supplier',
-            'contact_person': request.form.get('contact_person', ''),
-            'supplier_phone': request.form.get('supplier_phone', ''),
-            'supplier_email': request.form.get('supplier_email', ''),
-            'supplier_address': request.form.get('supplier_address', ''),
-            'supplier_tax_id': request.form.get('supplier_tax_id', ''),
-            'supplier_payment_terms': request.form.get('supplier_payment_terms', 'Net 30'),
-            # FIX: Ensure dates are never None
-            'po_date': request.form.get('po_date') or datetime.now().strftime('%Y-%m-%d'),
-            'delivery_date': request.form.get('delivery_date') or '',
-            'delivery_method': request.form.get('delivery_method', 'Pickup'),
-            'shipping_terms': request.form.get('shipping_terms', 'FOB Destination'),
-            'po_status': request.form.get('po_status', 'draft'),
-            'po_notes': request.form.get('po_notes', ''),
-            'buyer_ntn': request.form.get('buyer_ntn', ''),
-            'seller_ntn': request.form.get('seller_ntn', ''),
-            'withholding_tax': float(request.form.get('withholding_tax', 0)),
-            'sales_tax': float(request.form.get('sales_tax', 17)),
-            'shipping_address': request.form.get('shipping_address', ''),
-            'shipping_cost': float(request.form.get('shipping_cost', 0)),
-            'insurance_cost': float(request.form.get('insurance_cost', 0)),
-            'approved_by': request.form.get('approved_by', ''),
-            'department': request.form.get('department', ''),
-            'internal_notes': request.form.get('internal_notes', ''),
-            'action': request.form.get('action', 'submit')
-        }
+        from core.invoice_service import InvoiceService
 
-        # Process items
-        items = []
-        total_amount = 0
+        service = InvoiceService(user_id)
+        po_data, errors = service.create_purchase_order(request.form, request.files)
 
-        # Extract items from form data
-        item_index = 0
-        while True:
-            name = request.form.get(f'items[{item_index}][name]')
-            if not name:
-                break
-
-            items.append({
-                'name': name,
-                'sku': request.form.get(f'items[{item_index}][sku]'),
-                'qty': int(request.form.get(f'items[{item_index}][qty]', 1)),
-                'price': float(request.form.get(f'items[{item_index}][price]', 0)),
-                'total': float(request.form.get(f'items[{item_index}][total]', 0)),
-                'supplier': request.form.get(f'items[{item_index}][supplier]'),
-                'notes': request.form.get(f'items[{item_index}][notes]')
-            })
-            total_amount += float(request.form.get(f'items[{item_index}][total]', 0))
-            item_index += 1
-
-        if not items:
-            flash('❌ At least one item is required for purchase order', 'error')
+        if errors:
+            for error in errors:
+                flash(f"❌ {error}", "error")
             return redirect(url_for('create_purchase_order'))
 
-        po_data['items'] = items
-        po_data['subtotal'] = total_amount
+        if po_data:
+            from core.session_storage import SessionStorage
+            session_ref = SessionStorage.store_large_data(user_id, 'last_po', po_data)
+            session['last_po_ref'] = session_ref
 
-        # Calculate taxes
-        tax_amount = total_amount * (po_data['sales_tax'] / 100)
-        po_data['tax_amount'] = tax_amount
+            flash(f"✅ Purchase Order {po_data['po_number']} created successfully!", "success")
+            return redirect(url_for('po_preview', po_number=po_data['po_number']))
 
-        # Calculate grand total
-        po_data['grand_total'] = total_amount + tax_amount + po_data['shipping_cost'] + po_data['insurance_cost']
-
-        # Generate PO number
-        from core.number_generator import NumberGenerator
-        po_number = NumberGenerator.generate_po_number(user_id)
-        po_data['invoice_number'] = po_number
-        po_data['po_number'] = po_number
-
-        # Save to database
-        save_purchase_order(user_id, po_data)
-
-        # If submitted (not draft), update stock
-        if po_data['action'] == 'submit' and po_data['po_status'] in ['approved', 'ordered']:
-            from core.inventory import InventoryManager
-
-
-        # Store for preview
-        from core.session_storage import SessionStorage
-        session_ref = SessionStorage.store_large_data(session['user_id'], 'last_po', po_data)
-        session['last_po_ref'] = session_ref
-
-        # Redirect to PO preview
-        return redirect(url_for('po_preview', po_number=po_number))
+        flash("❌ Failed to create purchase order", "error")
+        return redirect(url_for('create_purchase_order'))
 
     except Exception as e:
         current_app.logger.error(f"PO creation error: {str(e)}", exc_info=True)
-        flash(f"❌ Error creating purchase order: {str(e)}", 'error')
+        flash("❌ An unexpected error occurred", "error")
         return redirect(url_for('create_purchase_order'))
 
 @app.route('/po/preview/<po_number>')

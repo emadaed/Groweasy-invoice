@@ -60,23 +60,23 @@ class InvoiceService:
 
             save_purchase_order(self.user_id, po_data)
 
-            # === STOCK INCREASE ON PO CREATION ===
-            for item in po_data.get('items', []):
-                if item.get('product_id'):
-                    qty = int(item.get('qty', 0))
-                    if qty > 0:
-                        success = InventoryManager.update_stock_delta(
-                            self.user_id,
-                            item['product_id'],
-                            qty,
-                            'purchase',
-                            po_data['po_number'],
-                            f"Goods received via PO {po_data['po_number']}"
-                        )
-                        if not success:
-                            self.warnings.append(f"Failed to add stock for {item.get('name', 'item')}")
-
-            logger.info(f"PO {po_data['po_number']} created and stock updated for user {self.user_id}")
+##            # === STOCK INCREASE ON PO CREATION ===
+##            for item in po_data.get('items', []):
+##                if item.get('product_id'):
+##                    qty = int(item.get('qty', 0))
+##                    if qty > 0:
+##                        success = InventoryManager.update_stock_delta(
+##                            self.user_id,
+##                            item['product_id'],
+##                            qty,
+##                            'purchase',
+##                            po_data['po_number'],
+##                            f"Goods received via PO {po_data['po_number']}"
+##                        )
+##                        if not success:
+##                            self.warnings.append(f"Failed to add stock for {item.get('name', 'item')}")
+##
+##            logger.info(f"PO {po_data['po_number']} created and stock updated for user {self.user_id}")
             return po_data, self.errors or self.warnings
 
         except Exception as e:
