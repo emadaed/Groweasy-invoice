@@ -542,27 +542,44 @@ def create_po_process():
     try:
         from core.invoice_service import InvoiceService
 
+        print("DEBUG: Starting PO creation for user", user_id)
+        print("DEBUG: Form keys:", list(request.form.keys()))
+        print("DEBUG: File keys:", list(request.files.keys()))
+
         service = InvoiceService(user_id)
+
+        print("DEBUG: Calling service.create_purchase_order...")
         po_data, errors = service.create_purchase_order(request.form, request.files)
+
+        print("DEBUG: Service returned po_data keys:", list(po_data.keys()) if po_data else "None")
+        print("DEBUG: Service returned items count:", len(po_data.get('items', [])) if po_data else 0)
+        print("DEBUG: Service returned errors:", errors)
 
         if errors:
             for error in errors:
                 flash(f"❌ {error}", "error")
+                print("DEBUG: Flashed error:", error)
             return redirect(url_for('create_purchase_order'))
 
         if po_data:
+            print("DEBUG: PO data before save:", po_data)
+            print("DEBUG: Items in po_data:", po_data.get('items', []))
+
             from core.session_storage import SessionStorage
             session_ref = SessionStorage.store_large_data(user_id, 'last_po', po_data)
             session['last_po_ref'] = session_ref
 
             flash(f"✅ Purchase Order {po_data['po_number']} created successfully!", "success")
+            print("DEBUG: Redirecting to preview for", po_data['po_number'])
             return redirect(url_for('po_preview', po_number=po_data['po_number']))
 
         flash("❌ Failed to create purchase order", "error")
+        print("DEBUG: Failed - no po_data")
         return redirect(url_for('create_purchase_order'))
 
     except Exception as e:
         current_app.logger.error(f"PO creation error: {str(e)}", exc_info=True)
+        print("DEBUG: Exception in PO creation:", str(e))
         flash("❌ An unexpected error occurred", "error")
         return redirect(url_for('create_purchase_order'))
 
