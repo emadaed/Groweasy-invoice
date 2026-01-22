@@ -505,33 +505,28 @@ def create_invoice():
                          nonce=g.nonce)
 
 #create po
-@app.route('/create_purchase_order')
+@app.route("/create_purchase_order")
 def create_purchase_order():
-    """Dedicated route for creating purchase orders"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    prefill_data = {}
-    user_profile = get_user_profile_cached(session['user_id'])
+    user_id = session['user_id']
 
-    # Get suppliers for dropdown
-    from core.purchases import get_suppliers
-    suppliers = get_suppliers(session['user_id'])
+    from core.inventory import InventoryManager
 
-    if user_profile:
-        prefill_data = {
-            'company_name': user_profile.get('company_name', ''),
-            'company_address': user_profile.get('company_address', ''),
-            'company_phone': user_profile.get('company_phone', ''),
-            'company_email': user_profile.get('email', ''),
-            'company_tax_id': user_profile.get('company_tax_id', ''),
-            'seller_ntn': user_profile.get('seller_ntn', ''),
-            'seller_strn': user_profile.get('seller_strn', ''),
-        }
+    # Get inventory items for dropdown/modal
+    inventory_items = InventoryManager.get_inventory_items(user_id)
 
-    return render_template('create_po.html',
-                         prefill_data=prefill_data,
+    # Get suppliers (adjust if you have a supplier manager)
+    suppliers = get_suppliers(user_id)  # or your existing function
+
+    # Today date
+    today_str = datetime.today().strftime('%Y-%m-%d')
+
+    return render_template("create_purchase_order.html",
+                         inventory_items=inventory_items,
                          suppliers=suppliers,
+                         today=today_str,
                          nonce=g.nonce)
 
 # create po process
