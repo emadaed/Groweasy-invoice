@@ -90,10 +90,10 @@ def save_purchase_order(user_id, order_data):
         # Auto-save supplier - FIXED: Use correct supplier fields
         supplier_data = {
             'name': supplier_name,
-            'email': order_data.get('supplier_email', ''),  # FIXED
-            'phone': order_data.get('supplier_phone', ''),  # FIXED
-            'address': order_data.get('supplier_address', ''),  # FIXED
-            'tax_id': order_data.get('supplier_tax_id', '')  # FIXED
+            'email': order_data.get('supplier_email', ''),
+            'phone': order_data.get('supplier_phone', ''),
+            'address': order_data.get('supplier_address', ''),
+            'tax_id': order_data.get('supplier_tax_id', '')
         }
 
         result = conn.execute(text("SELECT id FROM suppliers WHERE user_id = :user_id AND name = :name"),
