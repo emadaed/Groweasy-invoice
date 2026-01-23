@@ -646,7 +646,7 @@ def po_preview(po_number):
 
 #GRN
 @app.route("/po/mark_received/<po_number>", methods=['GET', 'POST'])
-def po_receive_goods(po_number):  # ← UNIQUE NAME
+def mark_po_received(po_number):  # back to original name, no conflict now
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
