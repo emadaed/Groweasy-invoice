@@ -646,7 +646,7 @@ def po_preview(po_number):
 
 #GRN
 @app.route("/po/mark_received/<po_number>", methods=['GET', 'POST'])
-def mark_po_received(po_number):
+def po_receive_goods(po_number):  # ← UNIQUE NAME
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -687,7 +687,6 @@ def mark_po_received(po_number):
             flash(f"✅ PO {po_number} marked as Received! {added} units added to stock.", "success")
             return redirect(url_for('purchase_orders'))
 
-        # GET - confirmation
         return render_template("po_receive_confirm.html", po_data=po_data, po_number=po_number)
 
     except Exception as e:
@@ -706,25 +705,7 @@ def email_po_to_supplier(po_number):
     flash(f'PO {po_number} email functionality coming soon!', 'info')
     return jsonify({'success': True, 'message': 'Email queued'})
 
-### Mark as received
-##@app.route('/po/mark_received/<po_number>', methods=['POST'])
-##def mark_po_received(po_number):
-##    """Mark PO as received"""
-##    if 'user_id' not in session:
-##        return jsonify({'error': 'Unauthorized'}), 401
-##
-##    try:
-##        with DB_ENGINE.begin() as conn:
-##            conn.execute(text("""
-##                UPDATE purchase_orders
-##                SET status = 'received'
-##                WHERE user_id = :user_id AND po_number = :po_number
-##            """), {"user_id": session['user_id'], "po_number": po_number})
-##
-##        flash(f'PO {po_number} marked as received!', 'success')
-##        return jsonify({'success': True})
-##    except Exception as e:
-##        return jsonify({'error': str(e)}), 500
+
 
 # Print preview
 @app.route('/po/print/<po_number>')
