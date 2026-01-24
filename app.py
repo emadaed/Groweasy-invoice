@@ -618,13 +618,9 @@ def po_preview(po_number):
 
         inventory_items = InventoryManager.get_inventory_items(user_id)
 
-        # DEBUG: Print what fields are available in inventory
         if inventory_items:
-            sample_product = inventory_items[0]
-            print("🔍 INVENTORY SAMPLE KEYS:", list(sample_product.keys()))
-            print("🔍 SAMPLE PRODUCT:", sample_product)
+            print("🔍 INVENTORY SAMPLE KEYS:", list(inventory_items[0].keys()))
 
-        # Create lookup
         product_lookup = {}
         for product in inventory_items:
             pid = product.get('id')
@@ -632,31 +628,19 @@ def po_preview(po_number):
                 product_lookup[str(pid)] = product
                 product_lookup[int(pid)] = product
 
-        # Enhance each item
         enriched_count = 0
         for item in po_data.get('items', []):
             pid = item.get('product_id')
             if pid is not None and pid in product_lookup:
                 real = product_lookup[pid]
 
-                # Try multiple possible field names for SKU
-                sku = (real.get('code') or
-                       real.get('sku') or
-                       real.get('product_code') or
-                       real.get('barcode') or
-                       real.get('item_code') or
-                       'N/A')
-                item['sku'] = sku
-
-                # Force real product name (override placeholder)
-                item['name'] = real.get('name') or item.get('name', 'Unknown Product')
-
-                # Optional extras
-                item['unit'] = real.get('unit', '')
+                item['sku'] = real.get('sku', 'N/A')                    # ← Correct field
+                item['name'] = real.get('name', 'Unknown Product')     # ← Force real name
+                item['supplier'] = real.get('supplier', po_data.get('supplier_name', 'Unknown Supplier'))
 
                 enriched_count += 1
 
-        print(f"✅ Enriched {enriched_count} out of {len(po_data.get('items', []))} items")
+        print(f"✅ Enriched {enriched_count} items with real SKU, name & supplier")
 
         # Generate QR
         qr_b64 = generate_simple_qr(po_data)
