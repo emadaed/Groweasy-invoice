@@ -694,18 +694,21 @@ def mark_po_received(po_number):
                         ):
                             added_units += qty
 
-            # Step 2: Update the ORIGINAL PO status in database (NO new PO created)
-            with DB_ENGINE.begin() as conn:  # Safe transaction
-                conn.execute(text("""
-                    UPDATE purchase_orders
-                    SET status = 'Received',
-                        received_at = NOW()
-                    WHERE user_id = :user_id
-                      AND po_number = :po_number
-                """), {"user_id": user_id, "po_number": po_number})
+            # Step 2: Update status only — updated_at will be set automatically to NOW()
+            try:
+                with DB_ENGINE.begin() as conn:
+                    conn.execute(text("""
+                        UPDATE purchase_orders
+                        SET status = 'Received'
+                        WHERE user_id = :user_id
+                          AND po_number = :po_number
+                    """), {"user_id": user_id, "po_number": po_number})
 
-            flash(f"✅ PO {po_number} successfully marked as Received! "
-                  f"{added_units} units added to inventory.", "success")
+                flash(f"✅ PO {po_number} successfully marked as Received! "
+                      f"{added_units} units added to stock.", "success")
+            except Exception as e:
+                current_app.logger.error(f"Error updating PO status: {e}")
+                flash("⚠️ Stock added, but status update failed. Please contact support.", "warning")
 
             return redirect(url_for('purchase_orders'))
 
