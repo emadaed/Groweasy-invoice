@@ -1467,6 +1467,26 @@ def download_document(document_number):
 
             document_type_name = "Purchase Order"
 
+            # === ENRICH PO ITEMS WITH REAL PRODUCT DATA (same as preview) ===
+            from core.inventory import InventoryManager
+            inventory_items = InventoryManager.get_inventory_items(user_id)
+
+            product_lookup = {}
+            for product in inventory_items:
+                pid = product.get('id')
+                if pid is not None:
+                    product_lookup[str(pid)] = product
+                    product_lookup[int(pid)] = product
+
+            for item in service_data.get('items', []):
+                pid = item.get('product_id')
+                if pid is not None and pid in product_lookup:
+                    real = product_lookup[pid]
+                    item['sku'] = real.get('sku', 'N/A')
+                    item['name'] = real.get('name', item.get('name', 'Unknown Product'))
+                    item['supplier'] = real.get('supplier', service_data.get('supplier_name', 'Unknown Supplier'))
+
+
             # Generate PDF
             from core.pdf_generator import generate_purchase_order_pdf
             pdf_bytes = generate_purchase_order_pdf(service_data)
