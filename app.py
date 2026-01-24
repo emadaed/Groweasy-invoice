@@ -583,9 +583,10 @@ def create_po_process():
         flash("❌ An unexpected error occurred", "error")
         return redirect(url_for('create_purchase_order'))
 
+# po preview
 @app.route('/po/preview/<po_number>')
 def po_preview(po_number):
-    """Preview purchase order - FIXED"""
+    """Preview purchase order - FIXED with real product SKU & name"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -606,13 +607,42 @@ def po_preview(po_number):
 
         po_data = json.loads(result[0])
 
-        # Ensure po_data has required fields for template
+        # Ensure required fields
         if 'po_number' not in po_data:
             po_data['po_number'] = po_number
         if 'invoice_number' not in po_data:
-            po_data['invoice_number'] = po_number  # Template expects this
+            po_data['invoice_number'] = po_number
+
+        # === ENRICH ITEMS WITH REAL PRODUCT DETAILS (SKU, NAME, UNIT) ===
+        from core.inventory import InventoryManager
+
+        # Get all inventory items for this user
+        inventory_items = InventoryManager.get_inventory_items(user_id)
+
+        # Create fast lookup: product_id (str or int) → full product dict
+        product_lookup = {}
+        for product in inventory_items:
+            pid = product.get('id')
+            if pid is not None:
+                product_lookup[str(pid)] = product
+                product_lookup[int(pid)] = product  # Safe for both string/int keys
+
+        # Enhance each item in the PO
+        for item in po_data.get('items', []):
+            pid = item.get('product_id')
+            if pid is not None and pid in product_lookup:
+                real_product = product_lookup[pid]
+                # Use 'code' field from inventory as SKU (change if your field is named differently e.g. 'sku')
+                item['sku'] = real_product.get('code', 'N/A')
+                # Use real product name instead of placeholder
+                item['name'] = real_product.get('name', item.get('name', 'Unknown Product'))
+                # Optional: add unit, category, etc.
+                item['unit'] = real_product.get('unit', '')
+
+        # === End of enrichment ===
 
         print(f"📄 PO Data keys: {list(po_data.keys())}")
+        print(f"📦 Enriched {len(po_data.get('items', []))} items with real SKU & name")
 
         # Generate QR for PO
         qr_b64 = generate_simple_qr(po_data)
@@ -620,24 +650,23 @@ def po_preview(po_number):
         # Render PO-specific template
         try:
             html = render_template('purchase_order_pdf.html',
-                                 data=po_data,
-                                 preview=True,
-                                 custom_qr_b64=qr_b64,
-                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
+                                   data=po_data,
+                                   preview=True,
+                                   custom_qr_b64=qr_b64,
+                                   currency_symbol=g.get('currency_symbol', 'Rs.'))
         except Exception as template_error:
             print(f"⚠️ PO template error, falling back: {template_error}")
-            # Fallback to invoice template
             html = render_template('invoice_pdf.html',
-                                 data=po_data,
-                                 preview=True,
-                                 custom_qr_b64=qr_b64,
-                                 currency_symbol=g.get('currency_symbol', 'Rs.'))
+                                   data=po_data,
+                                   preview=True,
+                                   custom_qr_b64=qr_b64,
+                                   currency_symbol=g.get('currency_symbol', 'Rs.'))
 
         return render_template('po_preview.html',
-                             html=html,
-                             data=po_data,
-                             po_number=po_number,
-                             nonce=g.nonce)
+                               html=html,
+                               data=po_data,
+                               po_number=po_number,
+                               nonce=g.nonce)
 
     except Exception as e:
         current_app.logger.error(f"PO preview error: {str(e)}")
