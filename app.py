@@ -286,7 +286,7 @@ def generate_simple_qr(data):
 def clear_pending_invoice(user_id):
     """Clear pending invoice data"""
     try:
-        # This function should be in your services module
+        # This function should be in services module
         # For now, implementing a simple version
         from core.session_storage import SessionStorage
         SessionStorage.clear_data(user_id, 'last_invoice')
@@ -365,7 +365,7 @@ def update_stock_on_invoice(user_id, invoice_items, invoice_type='S', invoice_nu
                         movement_type = 'sale'
                         notes = f"Sold {quantity} units via Invoice: {invoice_number}" if invoice_number else f"Sold {quantity} units"
 
-                    success = InventoryManager.update_stock(
+                    success = InventoryManager.update_stock_delta(
                         user_id, product_id, new_stock, movement_type, invoice_number, notes
                     )
 
