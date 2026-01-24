@@ -586,14 +586,13 @@ def create_po_process():
 # po preview
 @app.route('/po/preview/<po_number>')
 def po_preview(po_number):
-    """Preview purchase order - FINAL FIX: real SKU, name & debug"""
+    """Final Preview & Print - with full product enrichment"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     user_id = session['user_id']
 
     try:
-        # Fetch PO data
         with DB_ENGINE.connect() as conn:
             result = conn.execute(text("""
                 SELECT order_data FROM purchase_orders
@@ -607,58 +606,37 @@ def po_preview(po_number):
 
         po_data = json.loads(result[0])
 
-        # Ensure required fields
-        if 'po_number' not in po_data:
-            po_data['po_number'] = po_number
-        if 'invoice_number' not in po_data:
-            po_data['invoice_number'] = po_number
+        po_data['po_number'] = po_number
+        po_data['invoice_number'] = po_number
 
-        # === ENRICH ITEMS WITH REAL PRODUCT DETAILS ===
+        # === FULL ENRICHMENT ===
         from core.inventory import InventoryManager
-
         inventory_items = InventoryManager.get_inventory_items(user_id)
 
-        if inventory_items:
-            print("🔍 INVENTORY SAMPLE KEYS:", list(inventory_items[0].keys()))
+        product_lookup = {str(p['id']): p for p in inventory_items}
+        product_lookup.update({int(k): v for k, v in product_lookup.items() if k.isdigit()})
 
-        product_lookup = {}
-        for product in inventory_items:
-            pid = product.get('id')
-            if pid is not None:
-                product_lookup[str(pid)] = product
-                product_lookup[int(pid)] = product
-
-        enriched_count = 0
         for item in po_data.get('items', []):
             pid = item.get('product_id')
-            if pid is not None and pid in product_lookup:
-                real = product_lookup[pid]
+            if pid and pid in product_lookup:
+                p = product_lookup[pid]
+                item['sku'] = p.get('sku', 'N/A')
+                item['name'] = p.get('name', item.get('name', 'Unknown'))
+                item['supplier'] = p.get('supplier', po_data.get('supplier_name', 'Unknown Supplier'))
 
-                item['sku'] = real.get('sku', 'N/A')                    # ← Correct field
-                item['name'] = real.get('name', 'Unknown Product')     # ← Force real name
-                item['supplier'] = real.get('supplier', po_data.get('supplier_name', 'Unknown Supplier'))
+        # DEBUG LOGS
+        print("✅ PO PREVIEW ENRICHED DATA:")
+        for i, item in enumerate(po_data.get('items', []), 1):
+            print(f"  Item {i}: name='{item.get('name')}', sku='{item.get('sku')}', supplier='{item.get('supplier')}'")
 
-                enriched_count += 1
-
-        print(f"✅ Enriched {enriched_count} items with real SKU, name & supplier")
-
-        # Generate QR
         qr_b64 = generate_simple_qr(po_data)
 
-        # Render template
-        try:
-            html = render_template('purchase_order_pdf.html',
-                                   data=po_data,
-                                   preview=True,
-                                   custom_qr_b64=qr_b64,
-                                   currency_symbol=g.get('currency_symbol', 'Rs.'))
-        except Exception as template_error:
-            print(f"⚠️ PO template error: {template_error}")
-            html = render_template('invoice_pdf.html',
-                                   data=po_data,
-                                   preview=True,
-                                   custom_qr_b64=qr_b64,
-                                   currency_symbol=g.get('currency_symbol', 'Rs.'))
+        # Use same enriched data for both preview and PDF
+        html = render_template('purchase_order_pdf.html',
+                               data=po_data,
+                               preview=True,
+                               custom_qr_b64=qr_b64,
+                               currency_symbol=g.get('currency_symbol', 'Rs.'))
 
         return render_template('po_preview.html',
                                html=html,
