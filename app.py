@@ -644,33 +644,42 @@ def po_preview(po_number):
         flash("Error loading purchase order", "error")
         return redirect(url_for('purchase_orders'))
 
-#GRN
+# GRN - Goods Received Note (Receive Purchase Order)
 @app.route("/po/mark_received/<po_number>", methods=['GET', 'POST'])
-def mark_po_received(po_number):  # back to original name, no conflict now
+def mark_po_received(po_number):
+    """Handle receiving goods for an existing Purchase Order"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     user_id = session['user_id']
 
     try:
-        from core.purchases import get_purchase_order, save_purchase_order
+        from core.purchases import get_purchase_order
         from core.inventory import InventoryManager
 
+        # Load the existing PO data
         po_data = get_purchase_order(user_id, po_number)
         if not po_data:
             flash("❌ Purchase Order not found", "error")
             return redirect(url_for('purchase_orders'))
 
+        # Prevent double-receiving
         if po_data.get('status', '').lower() == 'received':
-            flash("⚠️ Purchase Order already received", "warning")
+            flash("⚠️ This Purchase Order has already been received", "warning")
             return redirect(url_for('purchase_orders'))
 
-        if request.method == 'POST':
-            po_data['status'] = 'Received'
-            po_data['received_date'] = datetime.now().strftime('%Y-%m-%d')
-            save_purchase_order(user_id, po_data)
+        # GET request → Show confirmation page
+        if request.method == 'GET':
+            return render_template("po_receive_confirm.html",
+                                   po_data=po_data,
+                                   po_number=po_number,
+                                   nonce=g.nonce)
 
-            added = 0
+        # POST request → User confirmed "Yes, Receive Goods"
+        if request.method == 'POST':
+            added_units = 0
+
+            # Step 1: Add items to inventory stock
             for item in po_data.get('items', []):
                 if item.get('product_id'):
                     qty = int(item.get('qty', 0))
@@ -678,20 +687,31 @@ def mark_po_received(po_number):  # back to original name, no conflict now
                         if InventoryManager.update_stock_delta(
                             user_id,
                             item['product_id'],
-                            qty,
+                            qty,  # positive = increase stock
                             'purchase_receive',
-                            po_number
+                            po_number,
+                            f"Goods received via PO {po_number}"
                         ):
-                            added += qty
+                            added_units += qty
 
-            flash(f"✅ PO {po_number} marked as Received! {added} units added to stock.", "success")
+            # Step 2: Update the ORIGINAL PO status in database (NO new PO created)
+            with DB_ENGINE.begin() as conn:  # Safe transaction
+                conn.execute(text("""
+                    UPDATE purchase_orders
+                    SET status = 'Received',
+                        received_at = NOW()
+                    WHERE user_id = :user_id
+                      AND po_number = :po_number
+                """), {"user_id": user_id, "po_number": po_number})
+
+            flash(f"✅ PO {po_number} successfully marked as Received! "
+                  f"{added_units} units added to inventory.", "success")
+
             return redirect(url_for('purchase_orders'))
 
-        return render_template("po_receive_confirm.html", po_data=po_data, po_number=po_number)
-
     except Exception as e:
-        current_app.logger.error(f"PO receive error: {e}", exc_info=True)
-        flash("❌ Error", "error")
+        current_app.logger.error(f"Error receiving PO {po_number}: {e}", exc_info=True)
+        flash("❌ An error occurred while receiving goods. Please try again.", "error")
         return redirect(url_for('purchase_orders'))
 
 # Email to supplier
